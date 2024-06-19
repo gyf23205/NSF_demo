@@ -96,7 +96,7 @@ listener.start()
 
 
 # Set up world - the World object comes with sane defaults
-world = World()
+world = World(speed_limit=1.0)
 
 
 # Prepare for liftoff
