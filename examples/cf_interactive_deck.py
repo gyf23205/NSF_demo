@@ -15,12 +15,12 @@ from qfly import ParallelContexts, Pose, QualisysCrazyflie, QualisysDeck, World
 
 
 # SETTINGS
-cf_body_name = 'E7E7E7E701'  # QTM rigid body name
-cf_uri = 'radio://0/80/2M/E7E7E7E701'  # Crazyflie address
-cf_marker_ids = [11, 12, 13, 14]
-deck_body_name = 'E7E7E7E7E7'
-deck_uri = 'radio://0/80/2M/E7E7E7E7E7'
-deck_marker_ids = [1, 2, 3, 4]
+cf_body_name = 'nsf1'  # QTM rigid body name
+cf_uri = 'radio://0/80/2M/E7E7E7E711'  # Crazyflie address
+cf_marker_ids = [1, 2, 3, 4]
+deck_body_name = 'nsf11'
+deck_uri = 'radio://0/80/2M/E7E7E7E731'
+deck_marker_ids = [11, 12, 13, 14]
 
 
 # Watch key presses with a global variable
@@ -48,11 +48,13 @@ world = World()
 qcf = QualisysCrazyflie(cf_body_name,
                         cf_uri,
                         world,
-                        marker_ids=cf_marker_ids)
+                        marker_ids=cf_marker_ids,
+                        qtm_ip="192.168.123.2")
 
 deck = QualisysDeck(deck_body_name,
                     deck_uri,
-                    deck_marker_ids)
+                    deck_marker_ids,
+                    qtm_ip="192.168.123.2")
 
 with ParallelContexts(*[qcf, deck]):
 
