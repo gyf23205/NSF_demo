@@ -29,7 +29,7 @@ circle_radius = 0.5                     # Radius of the circular flight path
 circle_speed_factor = 0.12              # How fast the Crazyflie should move along circle
 
 # World Setting: the World object comes with sane defaults
-world = World()
+world = World(expanse=2.0)
 
 # Log Setting: Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
@@ -90,13 +90,32 @@ pygame.init()
 pygame.joystick.init()
 joystick = pygame.joystick.Joystick(0)
 
-# Joystick range
-range_roll = 30     # -X to X, deg
-range_pitch = 30    # -X to X, deg
-range_yaw = 200     # -X to X, deg/s
-range_thrust = [10000, 60000]
 
-# Joystick range transform function (TBD)
+def joystick_to_command(joystick_, rr=30, rp=30, ry=200, rt=None):
+    """
+    - Axes mapping depends on your joystick!
+    - .get_axis method required (from pygame)
+    Joystick range is given
+    rr: range_roll = 30     # -X to X, deg
+    rp: range_pitch = 30    # -X to X, deg
+    ry: range_yaw (rate) = 200     # -X to X, deg/s
+    rt: range_thrust = [10000, 60000]
+    """
+    if rt is None:
+        rt = [10000, 60000]
+
+    # Axis mapping
+    roll = joystick_.get_axis(2)
+    pitch = joystick_.get_axis(3)
+    yaw = joystick_.get_axis(0)
+    thrust = joystick_.get_axis(1)
+
+    # Axis to command transform
+    roll = rr * roll
+    pitch = -rp * pitch
+    yaw = ry * yaw
+    thrust = int(max((rt[0] - rt[1]) * thrust + rt[0], rt[0]))
+    return roll, pitch, yaw, thrust
 
 
 # Prepare for liftoff
@@ -113,16 +132,13 @@ with QualisysCrazyflie(cf_body_name,
     print("Beginning maneuvers...")
 
     ######################
+    # Logging start
     qcf.cf.log.add_config(lg_stab)
     lg_stab.data_received_cb.add_callback(log_stab_callback)
     lg_stab.start()
     print("Logging Start...")
     sleep(1.0)
     ######################
-
-    # Unlock startup thrust protection
-    qcf.cf.commander.send_setpoint(0.0, 0.0, 0.0, 0)
-    sleep(1)
 
     # MAIN LOOP WITH SAFETY CHECK
     while qcf.is_safe():
@@ -132,17 +148,7 @@ with QualisysCrazyflie(cf_body_name,
 
         # Joystick input
         pygame.event.get()
-        cmd_yaw = joystick.get_axis(0)
-        cmd_thrust = joystick.get_axis(1)
-        cmd_roll = joystick.get_axis(2)
-        cmd_pitch = joystick.get_axis(3)
-
-        # Temporary transform
-        cmd_roll = range_roll * cmd_roll
-        cmd_pitch = -range_pitch * cmd_pitch
-        cmd_yaw = range_yaw * cmd_yaw
-        cmd_thrust = int(max((range_thrust[0] - range_thrust[1]) * cmd_thrust + range_thrust[0], range_thrust[0]))
-        # print([cmd_roll, cmd_pitch, cmd_yaw, cmd_thrust])
+        [cmd_roll, cmd_pitch, cmd_yaw, cmd_thrust] = joystick_to_command(joystick)
 
         # Mind the clock
         dt = time() - t
@@ -150,100 +156,12 @@ with QualisysCrazyflie(cf_body_name,
         # Calculate Crazyflie's angular position in circle, based on time
         phi = circle_speed_factor * dt * 360
 
-        # Take off and hover in the center of safe airspace for 5 seconds
-        # if dt < 5:
-        #     # print(f'[t={int(dt)}] Maneuvering - Center...')
-        #     # Set target
-        #     target = Pose(world.origin.x, world.origin.y, world.expanse)
-        #     # Engage
-        #     qcf.safe_position_setpoint(target)
-
-        # Thrust input initialization (documented in user-guides/python_api)
-        # qcf.cf.commander.send_setpoint(0.0, 0.0, 0.0, 0)
-
-        # Take off and hover in the center of safe airspace for 5 seconds
-        # if dt < 10:
-        #     target = Pose(0.0, 0.0, 0.5)
-        #     qcf.safe_position_setpoint(target)
-
-        # Manual control temporary test
-        # if dt < 10:
-        #     target = Pose(0.0, 0.0, 0.0)
-        #     qcf.safe_position_setpoint(target)
-
+        # Unlock startup thrust protection (what is the minimum required time? current 3 secs)
         if dt < 3:
-            # target = Pose(0.0, 0.0, 0.2)
-            # qcf.safe_position_setpoint(target)
             qcf.cf.commander.send_setpoint(0, 0, 0, 0)
 
-        elif dt < 30:
+        elif dt < 60:
             qcf.cf.commander.send_setpoint(cmd_roll, cmd_pitch, cmd_yaw, cmd_thrust)
-
-        # elif dt < 20:
-        #     if qcf.pose.z < 0.9:
-        #         print(f'[z={int(dt)}] Thrust!')
-        #         qcf.cf.commander.send_setpoint(0.0, 0.0, 0.0, 50000)
-        #     else:
-        #         target = Pose(0.0, 0.0, 0.8)
-        #         qcf.safe_position_setpoint(target)
-
-
-        # # Move out and circle around Z axis
-        # elif dt < 20:
-        #     # print(f'[t={int(dt)}] Maneuvering - Circle around Z...')
-        #     # Set target
-        #     _x, _y = utils.pol2cart(circle_radius, phi)
-        #     target = Pose(world.origin.x + _x,
-        #                   world.origin.y + _y,
-        #                   world.expanse)
-        #     # Engage
-        #     qcf.safe_position_setpoint(target)
-        #
-        # # Back to center
-        # elif dt < 25:
-        #     # print(f'[t={int(dt)}] Maneuvering - Center...')
-        #     # Set target
-        #     target = Pose(world.origin.x, world.origin.y, world.expanse)
-        #     # Engage
-        #     qcf.safe_position_setpoint(target)
-        #
-        # # Move out and circle around Y axis
-        # elif dt < 40:
-        #     # print(f'[t={int(dt)}] Maneuvering - Circle around Y...')
-        #     # Set target
-        #     _x, _z = utils.pol2cart(circle_radius, phi)
-        #     target = Pose(world.origin.x + _x,
-        #                   world.origin.y,
-        #                   world.expanse + _z)
-        #     # Engage
-        #     qcf.safe_position_setpoint(target)
-        #
-        # # Back to center
-        # elif dt < 45:
-        #     # print(f'[t={int(dt)}] Maneuvering - Center...')
-        #     # Set target
-        #     target = Pose(world.origin.x, world.origin.y, world.expanse)
-        #     # Engage
-        #     qcf.safe_position_setpoint(target)
-        #
-        # # Move and circle around X axis
-        # elif dt < 60:
-        #     # print(f'[t={int(dt)}] Maneuvering - Circle around X...')
-        #     # Set target
-        #     _y, _z = utils.pol2cart(circle_radius, phi)
-        #     target = Pose(world.origin.x,
-        #                   world.origin.y + _y,
-        #                   world.expanse + _z)
-        #     # Engage
-        #     qcf.safe_position_setpoint(target)
-        #
-        # # Back to center
-        # elif dt < 65:
-        #     # print(f'[t={int(dt)}] Maneuvering - Center...')
-        #     # Set target
-        #     target = Pose(world.origin.x, world.origin.y, world.expanse)
-        #     # Engage
-        #     qcf.safe_position_setpoint(target)
 
         else:
             break
@@ -256,5 +174,6 @@ with QualisysCrazyflie(cf_body_name,
     lg_stab.stop()
     print('Logging Finished.')
 
-    # Joystick quit
+    # Joystick/PyGame quit
     pygame.quit()
+    print('Quit PyGame.')
