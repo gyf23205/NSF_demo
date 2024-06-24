@@ -29,7 +29,7 @@ circle_radius = 0.5                     # Radius of the circular flight path
 circle_speed_factor = 0.12              # How fast the Crazyflie should move along circle
 
 # World Setting: the World object comes with sane defaults
-world = World(expanse=2.0)
+world = World()
 
 # Log Setting: Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
@@ -155,6 +155,10 @@ with QualisysCrazyflie(cf_body_name,
 
         # Calculate Crazyflie's angular position in circle, based on time
         phi = circle_speed_factor * dt * 360
+
+        # Safety check
+        if not qcf.is_safe():
+            print(f'Unsafe! {str(qcf.pose)}')
 
         # Unlock startup thrust protection (what is the minimum required time? current 3 secs)
         if dt < 3:

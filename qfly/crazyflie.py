@@ -140,11 +140,11 @@ class QualisysCrazyflie(Thread):
         # Is the drone inside the safe volume?
         if not (
             # x direction
-            world.origin.x - world.expanse < self.pose.x < world.origin.x + world.expanse
+            world.origin.x - world.expanse[0] < self.pose.x < world.origin.x + world.expanse[0]
             # y direction
-            and world.origin.y - world.expanse < self.pose.y < world.origin.y + world.expanse
+            and world.origin.y - world.expanse[1] < self.pose.y < world.origin.y + world.expanse[1]
             # z direction
-                and 0 < self.pose.z < world.origin.z + (2 * world.expanse)):
+                and 0 < self.pose.z < world.origin.z + world.expanse[2]):
             # Respond
             print(f'''[{self.cf_body_name}@{self.cf_uri}] !!! SAFETY VIOLATION !!!
                 DRONE OUTSIDE SAFE VOLUME AT ({str(self.pose)})!''')

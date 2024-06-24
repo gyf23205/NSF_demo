@@ -8,7 +8,7 @@ class World:
 
     def __init__(self,
                  origin=Pose(0, 0, 0),  # x, y, z in m
-                 expanse=1.0,  # in m
+                 expanse=None,  # in [m, m, m]
                  padding=0.15,  # in m
                  speed_limit=0.5,  # in m/s
                  tracking_tolerance=100  # in frames
@@ -20,7 +20,7 @@ class World:
         ----------
         origin : Pose
             Pose object containing x, y, z coordinates of origin.
-        expanse : float
+        expanse : float (3D array, modified by SY)
             Edge dimension of cubic "safe" airspace extending from origin.
             (Unit: m)
         padding : float
@@ -34,6 +34,8 @@ class World:
             Max allowed mocap frame loss.
             (Unit: frames)
         """
+        if expanse is None:
+            expanse = [2.5, 1.5, 2.0]
 
         self.origin = origin
         self.expanse = expanse
