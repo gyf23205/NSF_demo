@@ -45,12 +45,12 @@ class Pose:
         world : World
             World object defining airspace rules.
         """
-        self.x = max(world.origin.x - world.expanse + world.padding,
-                     min(self.x, world.origin.x + world.expanse - world.padding))
-        self.y = max(world.origin.y - world.expanse + world.padding,
-                     min(self.y, world.origin.y + world.expanse - world.padding))
+        self.x = max(world.origin.x - world.expanse[0] + world.padding,
+                     min(self.x, world.origin.x + world.expanse[0] - world.padding))
+        self.y = max(world.origin.y - world.expanse[1] + world.padding,
+                     min(self.y, world.origin.y + world.expanse[1] - world.padding))
         self.z = max(0,
-                     min(self.z, world.origin.z + (2 * world.expanse) - world.padding))
+                     min(self.z, world.origin.z + world.expanse[2] - world.padding))
 
     def distance_to(self, other_pose):
         """

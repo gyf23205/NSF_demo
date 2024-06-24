@@ -16,8 +16,8 @@ from qfly import Pose, QualisysCrazyflie, World, utils
 import logging
 from cflib.crazyflie.log import LogConfig
 import csv
-import pygame
 
+from rrt_2D import rrt_star
 
 # Drone Setting: name and address
 cf_body_name = 'nsf11'                  # QTM rigid body name
@@ -85,38 +85,6 @@ last_key_pressed = None
 listener = pynput.keyboard.Listener(on_press=on_press)
 listener.start()
 
-# Joystick input
-pygame.init()
-pygame.joystick.init()
-joystick = pygame.joystick.Joystick(0)
-
-
-def joystick_to_command(joystick_, rr=30, rp=30, ry=200, rt=None):
-    """
-    - Axes mapping depends on your joystick!
-    - .get_axis method required (from pygame)
-    Joystick range is given
-    rr: range_roll = 30     # -X to X, deg
-    rp: range_pitch = 30    # -X to X, deg
-    ry: range_yaw (rate) = 200     # -X to X, deg/s
-    rt: range_thrust = [10000, 60000]
-    """
-    if rt is None:
-        rt = [10000, 60000]
-
-    # Axis mapping
-    roll = joystick_.get_axis(2)
-    pitch = joystick_.get_axis(3)
-    yaw = joystick_.get_axis(0)
-    thrust = joystick_.get_axis(1)
-
-    # Axis to command transform
-    roll = rr * roll
-    pitch = -rp * pitch
-    yaw = ry * yaw
-    thrust = int(max((rt[0] - rt[1]) * thrust + rt[0], rt[0]))
-    return roll, pitch, yaw, thrust
-
 
 # Prepare for liftoff
 with QualisysCrazyflie(cf_body_name,
@@ -124,12 +92,21 @@ with QualisysCrazyflie(cf_body_name,
                        world,
                        marker_ids=cf_marker_ids,
                        qtm_ip="192.168.123.2") as qcf:
+    sleep(1.0)
+    print("Beginning maneuvers...")
+
+    ######################
+    # Path planning: RRT*
+    x_start = (qcf.pose.x, qcf.pose.y)  # Starting node
+    x_goal = (1.8, 0.9)  # Goal node
+    rrt_star = rrt_star.RrtStar(x_start, x_goal, 1, 0.10, 2, 6000)
+    rrt_star.planning()
+    n_point = len(rrt_star.path)
+    ######################
 
     # Let there be time
     t = time()
     dt = 0
-
-    print("Beginning maneuvers...")
 
     ######################
     # Logging start
@@ -146,26 +123,22 @@ with QualisysCrazyflie(cf_body_name,
         if last_key_pressed == pynput.keyboard.Key.esc:
             break
 
-        # Joystick input
-        pygame.event.get()
-        [cmd_roll, cmd_pitch, cmd_yaw, cmd_thrust] = joystick_to_command(joystick)
-
         # Mind the clock
         dt = time() - t
-
-        # Calculate Crazyflie's angular position in circle, based on time
-        phi = circle_speed_factor * dt * 360
 
         # Safety check
         if not qcf.is_safe():
             print(f'Unsafe! {str(qcf.pose)}')
 
         # Unlock startup thrust protection (what is the minimum required time? current 3 secs)
-        if dt < 3:
-            qcf.cf.commander.send_setpoint(0, 0, 0, 0)
-
-        elif dt < 60:
-            qcf.cf.commander.send_setpoint(cmd_roll, cmd_pitch, cmd_yaw, cmd_thrust)
+        if dt < 5:
+            # Set target
+            target = Pose(qcf.pose.x, qcf.pose.y, 1.0)
+            # Engage
+            qcf.safe_position_setpoint(target)
+            # Temporary time stamp
+            n_count = 0
+            n_current = 0
 
         else:
             break
@@ -177,7 +150,3 @@ with QualisysCrazyflie(cf_body_name,
     # Data logging close
     lg_stab.stop()
     print('Logging Finished.')
-
-    # Joystick/PyGame quit
-    pygame.quit()
-    print('Quit PyGame.')
