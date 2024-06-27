@@ -116,11 +116,11 @@ with ParallelContexts(*_qcfs) as qcfs:
                 x = np.interp(idx,
                               [0,
                                len(qcfs) - 1],
-                              [world.origin.x - world.expanse / 2,
-                                  world.origin.x + world.expanse / 2])
+                              [world.origin.x - world.expanse[0] / 2,
+                                  world.origin.x + world.expanse[0] / 2])
                 target = Pose(x,
                               world.origin.y,
-                              world.expanse)
+                              world.expanse[2] * 0.5)
                 # Engage
                 qcf.safe_position_setpoint(target)
                 sleep(0.02)
@@ -135,7 +135,7 @@ with ParallelContexts(*_qcfs) as qcfs:
                 _x, _y = utils.pol2cart(0.6, phi)
                 target = Pose(world.origin.x + _x,
                               world.origin.y + _y,
-                              world.expanse * (idx + 1.0) * 0.5)
+                              world.expanse[2] * 0.5 * (idx + 1.0) * 0.5)
                 # Engage
                 qcf.safe_position_setpoint(target)
                 sleep(0.02)
@@ -147,11 +147,11 @@ with ParallelContexts(*_qcfs) as qcfs:
                 x = np.interp(idx,
                               [0,
                                len(qcfs) - 1],
-                              [world.origin.x - world.expanse / 2,
-                                  world.origin.x + world.expanse / 2])
+                              [world.origin.x - world.expanse[0] / 2,
+                                  world.origin.x + world.expanse[0] / 2])
                 target = Pose(x,
                               world.origin.y,
-                              world.expanse * (idx + 1.0) * 0.5)
+                              world.expanse[2] * 0.5 * (idx + 1.0) * 0.5)
                 # Engage
                 qcf.safe_position_setpoint(target)
                 sleep(0.02)

@@ -17,7 +17,7 @@ import logging
 from cflib.crazyflie.log import LogConfig
 import csv
 
-from rrt_2D import rrt_star
+from rrt_2D import rrt_star, rrt_connect
 
 # Drone Setting: name and address
 cf_body_name = 'nsf11'                  # QTM rigid body name
@@ -25,8 +25,7 @@ cf_uri = 'radio://0/80/2M/E7E7E7E711'   # Crazyflie address
 cf_marker_ids = [11, 12, 13, 14]        # Active marker IDs
 
 # Drone Setting: Physical constraints
-circle_radius = 0.5                     # Radius of the circular flight path
-circle_speed_factor = 0.12              # How fast the Crazyflie should move along circle
+hover_time = 10
 
 # World Setting: the World object comes with sane defaults
 world = World()
@@ -98,10 +97,13 @@ with QualisysCrazyflie(cf_body_name,
     ######################
     # Path planning: RRT*
     x_start = (qcf.pose.x, qcf.pose.y)  # Starting node
-    x_goal = (1.8, 0.9)  # Goal node
-    rrt_star = rrt_star.RrtStar(x_start, x_goal, 1, 0.10, 2, 6000)
+    x_goal = (1.7, 0.9)  # Goal node
+    # rrt_star = rrt_star.RrtStar(x_start, x_goal, 0.1, 0.10, 0.2, 5000)
+    rrt_star = rrt_connect.RrtConnect(x_start, x_goal, 0.08, 0.05, 5000)
     rrt_star.planning()
-    n_point = len(rrt_star.path)
+    rrt_star.smoothing()
+    path_point = len(rrt_star.path)
+    path_index = 0
     ######################
 
     # Let there be time
@@ -117,6 +119,9 @@ with QualisysCrazyflie(cf_body_name,
     sleep(1.0)
     ######################
 
+    # Take-off position
+    take_off_position = [qcf.pose.x, qcf.pose.y]
+
     # MAIN LOOP WITH SAFETY CHECK
     while qcf.is_safe():
         # Terminate upon Esc command
@@ -126,21 +131,26 @@ with QualisysCrazyflie(cf_body_name,
         # Mind the clock
         dt = time() - t
 
-        # Safety check
-        if not qcf.is_safe():
-            print(f'Unsafe! {str(qcf.pose)}')
-
         # Unlock startup thrust protection (what is the minimum required time? current 3 secs)
-        if dt < 5:
+        if dt < hover_time:
             # Set target
-            target = Pose(qcf.pose.x, qcf.pose.y, 1.0)
+            target = Pose(take_off_position[0], take_off_position[1], 1.0)
             # Engage
             qcf.safe_position_setpoint(target)
-            # Temporary time stamp
-            n_count = 0
-            n_current = 0
+            sleep(0.02)
+
+        elif dt < 90:
+            path_index = int(3.0 * (dt - hover_time) + 1)
+            if path_index < path_point + 1:
+                target = Pose(rrt_star.path[-path_index][0], rrt_star.path[-path_index][1], 1.0)
+                qcf.safe_position_setpoint(target)
+                sleep(0.02)
+            else:
+                print(f'[t={int(dt)}] Target Reached.')
+                break
 
         else:
+            print(f'[t={int(dt)}] Time-out.')
             break
 
     # Land

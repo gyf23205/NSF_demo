@@ -35,7 +35,7 @@ class World:
             (Unit: frames)
         """
         if expanse is None:
-            expanse = [2.5, 1.5, 2.0]
+            expanse = [2.5, 1.3, 2.0]
 
         self.origin = origin
         self.expanse = expanse

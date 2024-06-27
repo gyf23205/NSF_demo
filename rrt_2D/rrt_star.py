@@ -7,6 +7,8 @@ import os
 import sys
 import math
 import numpy as np
+from scipy.interpolate import splprep, splev
+from scipy.spatial.distance import euclidean
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
                 "/../rrt_2D/")
@@ -64,6 +66,63 @@ class RrtStar:
         index = self.search_goal_parent()
         self.path = self.extract_path(self.vertex[index])
 
+        # self.plotting.animation(self.vertex, self.path, "rrt*, N = " + str(self.iter_max))
+
+    def smoothing(self):
+        if not self.path:
+            return []
+
+        # 1) Eliminate redundant waypoints, note: path is reversed!
+        # Initialize
+        non_redundant_path = [self.path[-1]]
+
+        # Iterate through the path in reversed order
+        for i in range(len(self.path) - 2, -1, -1):
+            if self.utils.is_collision(Node(non_redundant_path[-1]), Node(self.path[i])):
+                non_redundant_path.append(self.path[i+1])
+
+        # Add the first point in the list (=last point in physical world) to the non-redundant path
+        non_redundant_path.append(self.path[0])
+
+        # Reverse
+        non_redundant_path.reverse()
+
+        # 2) Generate smooth trajectory using B-spline
+        path = np.array(non_redundant_path)
+
+        # Desired distance between points
+        dist = 0.05
+
+        # Fit a B-spline
+        tck, u = splprep([path[:, 0], path[:, 1]], k=1, s=0)
+
+        # Compute the total arc length of the B-spline
+        num_points = 1000
+        u_fine = np.linspace(0, 1, num_points)
+        x_fine, y_fine = splev(u_fine, tck)
+        points = np.vstack((x_fine, y_fine)).T
+
+        # Sample points along the B-spline
+        sampled_points = [points[0]]
+        accumulated_dist = 0
+        for i in range(1, len(points)):
+            segment_dist = euclidean(points[i - 1], points[i])
+            accumulated_dist += segment_dist
+            if accumulated_dist >= dist:
+                sampled_points.append(points[i])
+                accumulated_dist = 0
+
+        sampled_points.append(points[-1])
+        sampled_points = np.array(sampled_points)
+
+        # Ensure the trajectory starts and ends at the exact positions
+        sampled_points[0] = path[0]
+        sampled_points[-1] = path[-1]
+
+        # Return
+        self.path = sampled_points
+
+        # 3) Plotting, if necessary
         self.plotting.animation(self.vertex, self.path, "rrt*, N = " + str(self.iter_max))
 
     def new_state(self, node_start, node_goal):

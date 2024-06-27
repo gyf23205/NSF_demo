@@ -144,7 +144,7 @@ with QualisysCrazyflie(cf_body_name,
         if dt < 5:
             # print(f'[t={int(dt)}] Maneuvering - Center...')
             # Set target
-            target = Pose(world.origin.x, world.origin.y, world.expanse)
+            target = Pose(world.origin.x, world.origin.y, 0.5 * world.expanse[2])
             # Engage
             qcf.safe_position_setpoint(target)
 
@@ -155,7 +155,7 @@ with QualisysCrazyflie(cf_body_name,
             _x, _y = utils.pol2cart(circle_radius, phi)
             target = Pose(world.origin.x + _x,
                           world.origin.y + _y,
-                          world.expanse)
+                          0.5 * world.expanse[2])
             # Engage
             qcf.safe_position_setpoint(target)
 
@@ -163,7 +163,7 @@ with QualisysCrazyflie(cf_body_name,
         elif dt < 25:
             # print(f'[t={int(dt)}] Maneuvering - Center...')
             # Set target
-            target = Pose(world.origin.x, world.origin.y, world.expanse)
+            target = Pose(world.origin.x, world.origin.y, 0.5 * world.expanse[2])
             # Engage
             qcf.safe_position_setpoint(target)
 
@@ -174,7 +174,7 @@ with QualisysCrazyflie(cf_body_name,
             _x, _z = utils.pol2cart(circle_radius, phi)
             target = Pose(world.origin.x + _x,
                           world.origin.y,
-                          world.expanse + _z)
+                          0.5 * world.expanse[2] + _z)
             # Engage
             qcf.safe_position_setpoint(target)
 
@@ -182,7 +182,7 @@ with QualisysCrazyflie(cf_body_name,
         elif dt < 45:
             # print(f'[t={int(dt)}] Maneuvering - Center...')
             # Set target
-            target = Pose(world.origin.x, world.origin.y, world.expanse)
+            target = Pose(world.origin.x, world.origin.y, 0.5 * world.expanse[2])
             # Engage
             qcf.safe_position_setpoint(target)
 
@@ -193,7 +193,7 @@ with QualisysCrazyflie(cf_body_name,
             _y, _z = utils.pol2cart(circle_radius, phi)
             target = Pose(world.origin.x,
                           world.origin.y + _y,
-                          world.expanse + _z)
+                          0.5 * world.expanse[2] + _z)
             # Engage
             qcf.safe_position_setpoint(target)
 
@@ -201,7 +201,7 @@ with QualisysCrazyflie(cf_body_name,
         elif dt < 65:
             # print(f'[t={int(dt)}] Maneuvering - Center...')
             # Set target
-            target = Pose(world.origin.x, world.origin.y, world.expanse)
+            target = Pose(world.origin.x, world.origin.y, 0.5 * world.expanse[2])
             # Engage
             qcf.safe_position_setpoint(target)
 
