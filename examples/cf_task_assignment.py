@@ -73,6 +73,27 @@ def call_log_function_period(period, stop, *args):
         threading.Timer(period, call_log_function_period, [period, stop] + list(args)).start()
 
 
+def distance(point1, point2):
+    return np.linalg.norm(np.array(point1) - np.array(point2))
+
+
+def assign_targets_to_drones(drones, targets):
+    # Initialize paths for each drone
+    paths = {i: [drones[i]] for i in range(len(drones))}
+    remaining_targets = targets.copy()
+
+    while remaining_targets:
+        # Find the nearest target for each drone
+        for i in range(len(drones)):
+            if remaining_targets:
+                current_position = paths[i][-1]
+                nearest_target = min(remaining_targets, key=lambda p: distance(current_position, p))
+                paths[i].append(nearest_target)
+                remaining_targets.remove(nearest_target)
+
+    return paths
+
+
 # Set up keyboard callback
 def on_press(key):
     """React to keyboard."""
@@ -108,6 +129,13 @@ with ParallelContexts(*_qcfs) as qcfs:
     stop_event = threading.Event()
     call_log_function_period(0.1, stop_event, qcfs)
 
+    #################################################################
+    # Task allocation example
+    target_positions = [[2.0, -0.7], [-0.1, -0.9], [-2.0, -1.0], [-1.0, 0.7], [2.0, 1.0]]
+    drone_positions = [[qcfs[0].pose.x, qcfs[0].pose.y], [qcfs[1].pose.x, qcfs[1].pose.y]]
+    drone_paths = assign_targets_to_drones(drone_positions, target_positions)
+    #################################################################
+
     # MAIN LOOP WITH SAFETY CHECK
     while fly and all(qcf.is_safe() for qcf in qcfs):
 
@@ -121,50 +149,12 @@ with ParallelContexts(*_qcfs) as qcfs:
         # Cycle all drones
         for idx, qcf in enumerate(qcfs):
 
-            # Take off and hover in the center of safe airspace
-            if dt < 3:
-                # print(f'[t={int(dt)}] Maneuvering - Center...')
-                # Set target
-                x = np.interp(idx,
-                              [0,
-                               len(qcfs) - 1],
-                              [world.origin.x - world.expanse[0] / 2,
-                                  world.origin.x + world.expanse[0] / 2])
-                target = Pose(x,
-                              world.origin.y,
-                              world.expanse[2] * 0.5)
-                # Engage
-                qcf.safe_position_setpoint(target)
-                sleep(0.01)
-
-            # Move out half of the safe airspace in the X direction and circle around Z axis
-            elif dt < 30:
-                # print(f'[t={int(dt)}] Maneuvering - Circle around Z...')
-                # Set target
-                phi = (dt * 90) % 360  # Calculate angle based on time
-                # Offset angle based on array
-                phi = phi + 360 * (idx / len(qcfs))
-                _x, _y = utils.pol2cart(0.6, phi)
-                target = Pose(world.origin.x + _x,
-                              world.origin.y + _y,
-                              world.expanse[2] * 0.5 * (idx + 1.0) * 0.5)
-                # Engage
-                qcf.safe_position_setpoint(target)
-                sleep(0.01)
-
-            # Back to center
-            elif dt < 33:
-                # print(f'[t={int(dt)}] Maneuvering - Center...')
-                # Set target
-                x = np.interp(idx,
-                              [0,
-                               len(qcfs) - 1],
-                              [world.origin.x - world.expanse[0] / 2,
-                                  world.origin.x + world.expanse[0] / 2])
-                target = Pose(x,
-                              world.origin.y,
-                              world.expanse[2] * 0.5 * (idx + 1.0) * 0.5)
-                # Engage
+            if dt < 40:
+                # Determine the current index based on elapsed time
+                t_idx = min(int(dt // 10), len(drone_paths[idx]) - 1)
+                # Process the current position
+                position = drone_paths[idx][t_idx]
+                target = Pose(position[0], position[1], 0.5 * world.expanse[2] * (idx + 1.0) * 0.5)
                 qcf.safe_position_setpoint(target)
                 sleep(0.01)
 
