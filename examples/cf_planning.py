@@ -2,11 +2,10 @@
 qfly | Qualisys Drone SDK based Code
 https://github.com/qualisys/qualisys_drone_sdk
 
-Manual Control and Data Logging - Crazyflie
+Path Planning with RRT* Variations - Crazyflie
 Edited by Sooyung Byeon, Purdue University
 June, 2024
 
-Xbox controller required
 ESC to land at any time.
 """
 import pynput
@@ -26,6 +25,7 @@ cf_marker_ids = [11, 12, 13, 14]        # Active marker IDs
 
 # Drone Setting: Physical constraints
 hover_time = 10
+speed_constant = 3.0
 
 # World Setting: the World object comes with sane defaults
 world = World()
@@ -102,6 +102,7 @@ with QualisysCrazyflie(cf_body_name,
     rrt_star = rrt_connect.RrtConnect(x_start, x_goal, 0.08, 0.05, 5000)
     rrt_star.planning()
     rrt_star.smoothing()
+    print(rrt_star.path)
     path_point = len(rrt_star.path)
     path_index = 0
     ######################
@@ -140,7 +141,7 @@ with QualisysCrazyflie(cf_body_name,
             sleep(0.02)
 
         elif dt < 90:
-            path_index = int(3.0 * (dt - hover_time) + 1)
+            path_index = int(speed_constant * (dt - hover_time) + 1)
             if path_index < path_point + 1:
                 target = Pose(rrt_star.path[-path_index][0], rrt_star.path[-path_index][1], 1.0)
                 qcf.safe_position_setpoint(target)

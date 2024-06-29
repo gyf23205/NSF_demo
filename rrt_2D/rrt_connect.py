@@ -74,6 +74,10 @@ class RrtConnect:
 
                 if self.is_node_same(node_new_prim, node_new):
                     self.path = self.extract_path(node_new, node_new_prim)
+                    # Set right direction of path: AD-HOC! Should be revised!
+                    if np.linalg.norm(np.array(self.path[-1]) - np.array([self.s_goal.x, self.s_goal.y])) < 1e-2:
+                        self.path.reverse()
+                        print('Path reversed for correction.')
                     return self.path
 
             if len(self.V2) < len(self.V1):
@@ -87,7 +91,7 @@ class RrtConnect:
         if not self.path:
             return []
 
-        # 1) Eliminate redundant waypoints, note: path is reversed!
+        # 1) Eliminate redundant waypoints
         # Initialize
         non_redundant_path = [self.path[0]]
 
