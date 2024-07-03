@@ -41,6 +41,7 @@ cf_marker_ids = [
 hover_duration = 5
 stay_duration = 5
 stay_distance = 0.1
+separation_distance = 0.5
 total_duration = 60
 speed_constant = 3.0
 
@@ -102,8 +103,15 @@ def assign_targets_to_drones(drones, targets, go_back=True):
     return paths
 
 
-def avoid_altitude_control():
-    return None
+# Current version cannot be extended for 3+ drones cases
+def avoid_altitude_control(drones, proximity=separation_distance):
+    altitude = [0, 0]
+    # If they are too close, ...
+    if distance(drones[0], drones[1]) < proximity:
+        altitude[0] = 0.3
+        altitude[1] = -0.3
+
+    return altitude
 
 
 # Set up keyboard callback
@@ -142,9 +150,9 @@ with ParallelContexts(*_qcfs) as qcfs:
 
     #################################################################
     # Task allocation: mission and computation
-    target_positions = [[2.0, -0.7], [-0.1, -0.9], [-2.0, -1.0], [-1.0, 0.7], [2.0, 1.0]]
-    drone_positions = [[qcfs[0].pose.x, qcfs[0].pose.y], [qcfs[1].pose.x, qcfs[1].pose.y]]
-    drone_paths = assign_targets_to_drones(drone_positions, target_positions)
+    target_positions = [[2.0, -0.7], [-0.1, -0.9], [-2.0, -1.0], [-1.0, 0.7], [2.0, 1.0], [-0.5, -0.5]]
+    takeoff_positions = [[qcfs[0].pose.x, qcfs[0].pose.y], [qcfs[1].pose.x, qcfs[1].pose.y]]
+    drone_paths = assign_targets_to_drones(takeoff_positions, target_positions)
     #################################################################
 
     # Initialize
@@ -156,8 +164,7 @@ with ParallelContexts(*_qcfs) as qcfs:
     stay_time = [0, 0]
     start_time = [0, 0]
 
-    # Landing?
-    landing = [1, 1]
+    # Mission completion
     mission_complete = [False, False]
 
     # MAIN LOOP WITH SAFETY CHECK
@@ -172,15 +179,14 @@ with ParallelContexts(*_qcfs) as qcfs:
 
         # Mission completed
         if all(mission_complete):
-            print(f'[t={int(dt)}] Mission completed!')
+            print(f'[t={int(dt)}] All missions completed!')
             break
 
         # Time out for safety
         for idx, qcf in enumerate(qcfs):
             # Initial hover
             if dt < hover_duration:
-                target = Pose(drone_positions[idx][0], drone_positions[idx][1],
-                              0.5 * world.expanse[2] * (idx + 1.0) * 0.5)
+                target = Pose(takeoff_positions[idx][0], takeoff_positions[idx][1], 0.5 * world.expanse[2])
                 # Engage
                 qcf.safe_position_setpoint(target)
                 sleep(0.01)
@@ -189,10 +195,19 @@ with ParallelContexts(*_qcfs) as qcfs:
             elif dt < total_duration:
                 # Move to the current target
                 target_current = drone_paths[idx][target_index[idx]]
-                target = Pose(target_current[0], target_current[1],
-                              0.5 * world.expanse[2] * (idx + 1.0) * 0.5 * landing[idx])
-                qcf.safe_position_setpoint(target)
-                sleep(0.01)
+                # Mission completed?
+                if mission_complete[idx]:
+                    qcf.land_in_place()
+                    sleep(0.01)
+                    continue
+                else:
+                    # Current position check for mutual avoidance
+                    drone_positions = [[qcfs[0].pose.x, qcfs[0].pose.y], [qcfs[1].pose.x, qcfs[1].pose.y]]
+                    altitude_adjust = avoid_altitude_control(drone_positions)
+                    # Go to target with adjusted altitude
+                    target = Pose(target_current[0], target_current[1], 0.5 * world.expanse[2] + altitude_adjust[idx])
+                    qcf.safe_position_setpoint(target)
+                    sleep(0.01)
 
                 # Check distance
                 target_distance[idx] = distance(target_current, [qcf.pose.x, qcf.pose.y])
@@ -211,14 +226,13 @@ with ParallelContexts(*_qcfs) as qcfs:
                         stay_flag[idx] = True
                         stay_time[idx] = 0
                     else:
-                        landing[idx] = 0.5 / (idx + 1.0)
                         mission_complete[idx] = True
 
             else:
                 fly = False
 
-    # Land (why qcf.pose.z not qcfs?)
-    while qcf.pose.z > 0.1:
+    # Land till the end
+    while max(qcfs[0].pose.z, qcfs[1].pose.z) > 0.1:
         for idx, qcf in enumerate(qcfs):
             qcf.land_in_place()
             sleep(0.01)
