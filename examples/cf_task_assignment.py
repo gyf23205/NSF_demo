@@ -2,7 +2,7 @@
 qfly | Qualisys Drone SDK based Code
 https://github.com/qualisys/qualisys_drone_sdk
 
-Task Allocations with Multiple Drones
+Task Allocations with Multiple Drones: nearest neighbor algorithm
 Including Motion Planning by RRT* Variations - Crazyflie
 Edited by Sooyung Byeon, Purdue University
 June, 2024
@@ -38,7 +38,10 @@ cf_marker_ids = [
 ]
 
 # Drone Setting: Physical constraints
-hover_time = 10
+hover_duration = 5
+stay_duration = 5
+stay_distance = 0.1
+total_duration = 60
 speed_constant = 3.0
 
 # Set up world - the World object comes with sane defaults (geofencing)
@@ -58,6 +61,7 @@ with open(log_name, 'w', newline='') as file:
 
 
 def log_function(qcfs_):
+    # Compute yaw angles
     yaw1 = -math.atan2(qcfs_[0].pose.rotmatrix[1][0], qcfs_[0].pose.rotmatrix[0][0])
     yaw2 = -math.atan2(qcfs_[1].pose.rotmatrix[1][0], qcfs_[1].pose.rotmatrix[0][0])
     with open(log_name, 'a', newline='') as file_:
@@ -77,7 +81,7 @@ def distance(point1, point2):
     return np.linalg.norm(np.array(point1) - np.array(point2))
 
 
-def assign_targets_to_drones(drones, targets):
+def assign_targets_to_drones(drones, targets, go_back=True):
     # Initialize paths for each drone
     paths = {i: [drones[i]] for i in range(len(drones))}
     remaining_targets = targets.copy()
@@ -91,7 +95,15 @@ def assign_targets_to_drones(drones, targets):
                 paths[i].append(nearest_target)
                 remaining_targets.remove(nearest_target)
 
+    if go_back:
+        for i in range(len(drones)):
+            paths[i].append(drones[i])
+
     return paths
+
+
+def avoid_altitude_control():
+    return None
 
 
 # Set up keyboard callback
@@ -115,7 +127,6 @@ _qcfs = [QualisysCrazyflie(cf_body_name,
          in zip(cf_body_names, cf_uris, cf_marker_ids)]
 
 with ParallelContexts(*_qcfs) as qcfs:
-
     # Let there be time
     t = time()
     dt = 0
@@ -130,11 +141,24 @@ with ParallelContexts(*_qcfs) as qcfs:
     call_log_function_period(0.1, stop_event, qcfs)
 
     #################################################################
-    # Task allocation example
+    # Task allocation: mission and computation
     target_positions = [[2.0, -0.7], [-0.1, -0.9], [-2.0, -1.0], [-1.0, 0.7], [2.0, 1.0]]
     drone_positions = [[qcfs[0].pose.x, qcfs[0].pose.y], [qcfs[1].pose.x, qcfs[1].pose.y]]
     drone_paths = assign_targets_to_drones(drone_positions, target_positions)
     #################################################################
+
+    # Initialize
+    target_index = [0, 0]
+    target_distance = [0, 0]
+
+    # Stay flag
+    stay_flag = [True, True]
+    stay_time = [0, 0]
+    start_time = [0, 0]
+
+    # Landing?
+    landing = [1, 1]
+    mission_complete = [False, False]
 
     # MAIN LOOP WITH SAFETY CHECK
     while fly and all(qcf.is_safe() for qcf in qcfs):
@@ -146,17 +170,49 @@ with ParallelContexts(*_qcfs) as qcfs:
         # Mind the clock
         dt = time() - t
 
-        # Cycle all drones
-        for idx, qcf in enumerate(qcfs):
+        # Mission completed
+        if all(mission_complete):
+            print(f'[t={int(dt)}] Mission completed!')
+            break
 
-            if dt < 40:
-                # Determine the current index based on elapsed time
-                t_idx = min(int(dt // 10), len(drone_paths[idx]) - 1)
-                # Process the current position
-                position = drone_paths[idx][t_idx]
-                target = Pose(position[0], position[1], 0.5 * world.expanse[2] * (idx + 1.0) * 0.5)
+        # Time out for safety
+        for idx, qcf in enumerate(qcfs):
+            # Initial hover
+            if dt < hover_duration:
+                target = Pose(drone_positions[idx][0], drone_positions[idx][1],
+                              0.5 * world.expanse[2] * (idx + 1.0) * 0.5)
+                # Engage
                 qcf.safe_position_setpoint(target)
                 sleep(0.01)
+
+            # Proceed target acquisition
+            elif dt < total_duration:
+                # Move to the current target
+                target_current = drone_paths[idx][target_index[idx]]
+                target = Pose(target_current[0], target_current[1],
+                              0.5 * world.expanse[2] * (idx + 1.0) * 0.5 * landing[idx])
+                qcf.safe_position_setpoint(target)
+                sleep(0.01)
+
+                # Check distance
+                target_distance[idx] = distance(target_current, [qcf.pose.x, qcf.pose.y])
+
+                # Check stay start time
+                if target_distance[idx] < stay_distance:
+                    if stay_flag[idx]:
+                        start_time[idx] = time()
+                        stay_flag[idx] = False
+                    stay_time[idx] = time() - start_time[idx]
+
+                # Check stay duration
+                if stay_time[idx] > stay_duration:
+                    if target_index[idx] < len(drone_paths[idx]) - 1:
+                        target_index[idx] += 1
+                        stay_flag[idx] = True
+                        stay_time[idx] = 0
+                    else:
+                        landing[idx] = 0.5 / (idx + 1.0)
+                        mission_complete[idx] = True
 
             else:
                 fly = False
