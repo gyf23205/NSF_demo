@@ -102,7 +102,7 @@ with QualisysCrazyflie(cf_body_name,
     rrt_star = rrt_connect.RrtConnect(x_start, x_goal, 0.08, 0.05, 5000)
     rrt_star.planning()
     rrt_star.smoothing()
-    print(rrt_star.path)
+    # print(rrt_star.path)
     path_point = len(rrt_star.path)
     path_index = 0
     ######################

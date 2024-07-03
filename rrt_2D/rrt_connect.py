@@ -135,7 +135,7 @@ class RrtConnect:
         sampled_points[0] = path[0]
         sampled_points[-1] = path[-1]
 
-        # Return
+        # Return (np.array not list)
         self.path = sampled_points
 
         # 3) Plotting, if necessary

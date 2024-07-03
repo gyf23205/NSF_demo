@@ -13,7 +13,7 @@ from qfly import Pose, QualisysCrazyflie, World, utils
 
 # SETTINGS
 cf_body_name = 'nsf11'  # QTM rigid body name
-cf_uri = 'radio://0/80/2M/E7E7E7E711'  # Crazyflie address
+cf_uri = 'radio://0/81/2M/E7E7E7E740'  # Crazyflie address
 cf_marker_ids = [11, 12, 13, 14] # Active marker IDs
 circle_radius = 0.5 # Radius of the circular flight path
 circle_speed_factor = 0.12 # How fast the Crazyflie should move along circle
@@ -51,7 +51,7 @@ logging.basicConfig(level=logging.ERROR)
 
 
 def log_stab_callback(timestamp, data, logconf):
-    print('[%d][%s]: %s' % (timestamp, logconf.name, data))
+    # print('[%d][%s]: %s' % (timestamp, logconf.name, data))
     with open(log_name, 'a', newline='') as file_:
         writer_line = csv.writer(file_)
         writer_line.writerow([timestamp, data['kalman.stateX'], data['kalman.stateY'], data['kalman.stateZ']])
