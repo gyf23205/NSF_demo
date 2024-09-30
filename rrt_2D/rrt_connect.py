@@ -139,7 +139,7 @@ class RrtConnect:
         self.path = sampled_points
 
         # 3) Plotting, if necessary
-        self.plotting.animation_connect(self.V1, self.V2, self.path, "RRT_CONNECT")
+        # self.plotting.animation_connect(self.V1, self.V2, self.path, "RRT_CONNECT")
 
     @staticmethod
     def change_node(node_new_prim, node_new_prim2):

@@ -13,8 +13,11 @@ from qfly import Pose, QualisysCrazyflie, World, utils
 
 # SETTINGS
 cf_body_name = 'nsf11'  # QTM rigid body name
-cf_uri = 'radio://0/81/2M/E7E7E7E740'  # Crazyflie address
+# cf_uri = 'radio://0/80/2M/E7E7E7E711'  # Crazyflie address
 cf_marker_ids = [11, 12, 13, 14] # Active marker IDs
+# cf_body_name = 'nsf2'  # QTM rigid body name
+cf_uri = 'radio://0/81/2M/E7E7E7E740'  # Crazyflie address
+# cf_marker_ids = [5, 6, 7, 8] # Active marker IDs
 circle_radius = 0.5 # Radius of the circular flight path
 circle_speed_factor = 0.12 # How fast the Crazyflie should move along circle
 
@@ -41,7 +44,7 @@ from cflib.crazyflie.log import LogConfig
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 import csv
-log_name = 'test_log.csv'
+log_name = '../logs/log/test_log.csv'
 with open(log_name, 'w', newline='') as file:
     writer = csv.writer(file)
     writer.writerow(['time', 'x', 'y', 'z'])

@@ -70,7 +70,7 @@ with ParallelContexts(*qcfs, deck):
     print("Beginning maneuvers...")
 
     # MAIN LOOP WITH SAFETY CHECK
-    while qcfs[0].is_safe():
+    while all(qcf.is_safe() for qcf in qcfs):
 
         # Terminate upon Esc command
         if last_key_pressed == pynput.keyboard.Key.esc:
@@ -93,3 +93,4 @@ with ParallelContexts(*qcfs, deck):
 
     # Land calmly
     qcfs[0].land_in_place()
+    qcfs[1].land_in_place()
