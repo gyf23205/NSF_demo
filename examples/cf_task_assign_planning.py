@@ -21,6 +21,8 @@ import matplotlib.pyplot as plt
 
 from rrt_2D import rrt_star, rrt_connect
 
+import game
+
 # Drone setups
 # QTM rigid body names
 cf_body_names = [
@@ -187,6 +189,10 @@ with ParallelContexts(*_qcfs) as qcfs:
     # Mission completion
     mission_complete = [False, False]
 
+    # Load game environment
+    game_mgr = game.GameMgr()
+    game_mgr.update()
+
     # Let there be time (This should be right before the while loop)
     t = time()
     dt = 0
@@ -208,6 +214,15 @@ with ParallelContexts(*_qcfs) as qcfs:
 
         # Time out for safety
         for idx, qcf in enumerate(qcfs):
+            # GUI
+            game_mgr.objects[idx].position[0] = -qcfs[idx].pose.x * 312.5 + 750
+            game_mgr.objects[idx].position[1] = -qcfs[idx].pose.y * 312.5 + 500
+            yaw = -math.atan2(qcfs[idx].pose.rotmatrix[1][0], qcfs[idx].pose.rotmatrix[0][0])
+            game_mgr.objects[idx].rt = yaw * 180 / np.pi
+            # GUI - multi-drone blinking / y-flip / click-error / landing display issues
+            game_mgr.update_single(idx)
+            game_mgr.render()
+
             # Initial hover
             if dt < hover_duration:
                 target = Pose(takeoff_positions[idx][0], takeoff_positions[idx][1], 0.5 * world.expanse[2])
