@@ -3,8 +3,8 @@ import os
 from drone import *
 
 
-BOUND_X_MAX = 1500
-BOUND_Y_MAX = 1000
+BOUND_X_MAX = 1920
+BOUND_Y_MAX = 900
 IMAGE_PATH = 'images/'
 
 BLACK = (0, 0, 0)
@@ -23,10 +23,8 @@ class GameMgr:
         # Game screen initialization
         pygame.font.init()
 
-        # Controller initialization
-
         # Window position
-        os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (10, 50)
+        os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (0, 30)
         self.screen = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX), 0)
 
         # Game title on the window
@@ -35,23 +33,22 @@ class GameMgr:
         # game clock initialization
         self.clock = pygame.time.Clock()
         self.obstacle_counter = 0
-        # pygame.time.set_timer(record_Sign, time_delta * 25)
 
         # object queue initialization
         self.objects = []
         self.collides = []
 
-        # Initial position and transformation
-        # x_init_real = 25
-        # y_init_real = 30
-        # init_pixel = quadrotor.position_meter_to_pixel(np.array([x_init_real, y_init_real]))
-        x_init_pixel = 900
-        y_init_pixel = 700
+        # Targets
+        self.target = []
+
+        # Takeoff positions
+        self.takeoff_position = []
 
         # Drone image
-        main_drone = Drone(file_name=IMAGE_PATH + 'drone2.png', pos_x=x_init_pixel, pos_y=y_init_pixel, sc=0.1, rt=0.0)
-        self.objects.append(main_drone)
-        self.objects.append(main_drone)
+        drone1 = Drone(file_name=IMAGE_PATH + 'drone1.png', sc=0.1, rt=0.0)
+        drone2 = Drone(file_name=IMAGE_PATH + 'drone2.png', sc=0.1, rt=0.0)
+        self.objects.append(drone1)
+        self.objects.append(drone2)
 
         # Background and text interface init
         # self.background = Background(file_name=IMAGE_PATH + 'Purdue_blurred.png', moving_name=IMAGE_PATH + 'road.png',
@@ -72,6 +69,12 @@ class GameMgr:
         self.desired_pos_meter = [0, 0]
         self.desired_alt_meter = 1
 
+    def set_target(self, target):
+        self.target = target
+
+    def set_takeoff_positions(self, position):
+        self.takeoff_position = position
+
     def input(self):
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
@@ -89,8 +92,8 @@ class GameMgr:
                     self.desired_alt_meter = 1
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                desired_pos_x = -(mouse_pos[0] - 0.5 * BOUND_X_MAX) / 312.5
-                desired_pos_y = (mouse_pos[1] - 0.5 * BOUND_Y_MAX) / 312.5
+                desired_pos_x = -(mouse_pos[0] - 0.5 * BOUND_X_MAX) / 300.0
+                desired_pos_y = (mouse_pos[1] - 0.5 * BOUND_Y_MAX) / 300.0
                 desired_pos_meter = [desired_pos_x, desired_pos_y]
                 print(desired_pos_meter)
                 self.desired_pos_meter = desired_pos_meter
@@ -99,9 +102,6 @@ class GameMgr:
         # Update object status
         for i, obj in enumerate(self.objects):
             obj.update()
-
-    def update_single(self, idx):
-        self.objects[idx].update()
 
     def render(self):
         # Background
@@ -113,10 +113,18 @@ class GameMgr:
 
         # Rotate
         # self.objects[0].rt = self.objects[0].attitude * 180.0 / np.pi
-        self.objects[0].load(IMAGE_PATH + 'drone2.png')
+        self.objects[0].load(IMAGE_PATH + 'drone1.png')
         self.objects[1].load(IMAGE_PATH + 'drone2.png')
 
-        # Objects
+        # Targets
+        for i, pos in enumerate(self.target):
+            pygame.draw.circle(self.screen, BLUE, pos, 10)
+
+        # Takeoff positions
+        for i, pos in enumerate(self.takeoff_position):
+            pygame.draw.circle(self.screen, BLACK, pos, 10)
+
+        # Objects (drones)
         for i, obj in enumerate(self.objects):
             self.screen.blit(obj.surface, obj.rect)
 

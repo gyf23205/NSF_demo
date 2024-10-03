@@ -19,7 +19,7 @@ import math
 import threading
 import matplotlib.pyplot as plt
 
-from rrt_2D import rrt_star, rrt_connect
+from rrt_2D import rrt_connect
 
 import game
 
@@ -193,6 +193,11 @@ with ParallelContexts(*_qcfs) as qcfs:
     game_mgr = game.GameMgr()
     game_mgr.update()
 
+    # Testing
+    target_gui = np.array(target_positions)
+    target_gui = -300.0 * target_gui + np.array([750, 450])
+    game_mgr.set_target(target_gui)
+
     # Let there be time (This should be right before the while loop)
     t = time()
     dt = 0
@@ -215,13 +220,10 @@ with ParallelContexts(*_qcfs) as qcfs:
         # Time out for safety
         for idx, qcf in enumerate(qcfs):
             # GUI
-            game_mgr.objects[idx].position[0] = -qcfs[idx].pose.x * 312.5 + 750
-            game_mgr.objects[idx].position[1] = -qcfs[idx].pose.y * 312.5 + 500
+            game_mgr.objects[idx].position[0] = -qcfs[idx].pose.x * 300.0 + 750
+            game_mgr.objects[idx].position[1] = -qcfs[idx].pose.y * 300.0 + 450
             yaw = -math.atan2(qcfs[idx].pose.rotmatrix[1][0], qcfs[idx].pose.rotmatrix[0][0])
             game_mgr.objects[idx].rt = yaw * 180 / np.pi
-            # GUI - multi-drone blinking / y-flip / click-error / landing display issues
-            game_mgr.update_single(idx)
-            game_mgr.render()
 
             # Initial hover
             if dt < hover_duration:
@@ -279,6 +281,10 @@ with ParallelContexts(*_qcfs) as qcfs:
 
             else:
                 fly = False
+
+        # GUI rendering
+        game_mgr.update()
+        game_mgr.render()
 
     # Land till the end
     while max(qcfs[0].pose.z, qcfs[1].pose.z) > 0.1:

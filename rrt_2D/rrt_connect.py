@@ -96,9 +96,10 @@ class RrtConnect:
         non_redundant_path = [self.path[0]]
 
         # Iterate through the path in reversed order
-        for i in range(1, len(self.path)):
-            if self.utils.is_collision(Node(non_redundant_path[-1]), Node(self.path[i])):
-                non_redundant_path.append(self.path[i-1])
+        # Testing: no obstacle case
+        # for i in range(1, len(self.path)):
+        #     if self.utils.is_collision(Node(non_redundant_path[-1]), Node(self.path[i])):
+        #         non_redundant_path.append(self.path[i-1])
 
         # Add the last point in the path
         non_redundant_path.append(self.path[-1])

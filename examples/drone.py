@@ -3,7 +3,7 @@ import pygame
 
 
 class Drone:
-    def __init__(self, file_name, pos_x=512, pos_y=384, sc=0.4, rt=0.0):
+    def __init__(self, file_name, pos_x=750, pos_y=450, sc=0.1, rt=0.0):
         self.position = [pos_x, pos_y]
         self.sc = sc
         self.rect = []
@@ -11,6 +11,7 @@ class Drone:
         self.rt = rt
         self.figure = []
         self.rect = []
+        self.surface = None
         self.load(file_name)
 
     def load(self, file_name):
