@@ -166,15 +166,15 @@ with ParallelContexts(*_qcfs) as qcfs:
             drone_trajectory[d_inx].append(rrt_conn.path)
 
     # Temporary: verification plot
-    colors = ['blue', 'green', 'red', 'yellow', 'cyan', 'black', 'magenta']
-    markers = ['o', 'x']
-    for i in range(2):
-        for j, sublist in enumerate(drone_trajectory[i]):
-            x_values = [pair[0] for pair in sublist]
-            y_values = [pair[1] for pair in sublist]
-            plt.scatter(x_values, y_values, color=colors[j], marker=markers[i], label=f't[{i}]')
-            print(f'[Drone {int(i + 1)}]: Trajectory {int(j + 1)}: Length {len(sublist)}.')
-    plt.show()
+    # colors = ['blue', 'green', 'red', 'yellow', 'cyan', 'black', 'magenta']
+    # markers = ['o', 'x']
+    # for i in range(2):
+    #     for j, sublist in enumerate(drone_trajectory[i]):
+    #         x_values = [pair[0] for pair in sublist]
+    #         y_values = [pair[1] for pair in sublist]
+    #         plt.scatter(x_values, y_values, color=colors[j], marker=markers[i], label=f't[{i}]')
+    #         print(f'[Drone {int(i + 1)}]: Trajectory {int(j + 1)}: Length {len(sublist)}.')
+    # plt.show()
     #################################################################
 
     # Initialize

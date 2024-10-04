@@ -14,11 +14,49 @@ SEE = (0, 119, 190)
 YELLOW = (255, 255, 0)
 BLUE = (0, 0, 255)
 
+FONT = 'Helvetica'
+FONT_SIZE = 20
+line_width = 1.5
+
+base_altitude = 200
+range_altitude = 150
+min_altitude = 0
+max_altitude = 2
+
+
+class Font:
+    def __init__(self, font_name, size, pos):
+        self.font = pygame.font.SysFont(font_name, size)
+        self.font_name = font_name
+        self.size = size
+        self.pos = pos
+        self.texts = []
+
+    def update(self, content):
+        text = self.font.render(content, True, BLACK)
+        posx = self.pos[0]
+        posy = self.pos[1] + len(self.texts) * self.size * line_width
+        self.texts.append((text, (posx, posy)))
+
+    def clear(self):
+        self.texts = []
+
+
+class Background:
+    def __init__(self, file_name, bound_x_min, bound_x_max, bound_y_min, bound_y_max):
+        self.figure = pygame.image.load(file_name)
+        self.surface = self.figure
+        self.surface = pygame.transform.scale(self.surface, (bound_x_max, bound_y_max))
+        self.rect = self.surface.get_rect()
+        self.min_bound = np.array([bound_x_min, bound_y_min])
+        self.max_bound = np.array([bound_x_max, bound_y_max])
+
 
 class GameMgr:
     def __init__(self, mode=1):
         self.initial = True
         self.mode = mode
+        self.t0 = 0
 
         # Game screen initialization
         pygame.font.init()
@@ -44,20 +82,33 @@ class GameMgr:
         # Takeoff positions
         self.takeoff_position = []
 
-        # Drone image
+        # Drone image: Main drones
         drone1 = Drone(file_name=IMAGE_PATH + 'drone1.png', sc=0.1, rt=0.0)
         drone2 = Drone(file_name=IMAGE_PATH + 'drone2.png', sc=0.1, rt=0.0)
         self.objects.append(drone1)
         self.objects.append(drone2)
 
+        # Drone image: side view - altitude
+        drone_side1 = Drone(file_name=IMAGE_PATH + 'drone_side1.png', pos_x=1630, pos_y=base_altitude, sc=0.8, rt=0.0)
+        drone_side2 = Drone(file_name=IMAGE_PATH + 'drone_side2.png', pos_x=1780, pos_y=base_altitude, sc=0.8, rt=0.0)
+        self.objects.append(drone_side1)
+        self.objects.append(drone_side2)
+
         # Background and text interface init
-        # self.background = Background(file_name=IMAGE_PATH + 'Purdue_blurred.png', moving_name=IMAGE_PATH + 'road.png',
-        #                              bound_x_min=BOUND_X_MIN, bound_x_max=BOUND_X_MAX, bound_y_min=BOUND_Y_MIN,
-        #                              bound_y_max=BOUND_Y_MAX)
-        # self.status = Font(FONT, FONT_SIZE, (20, 200))
-        # self.instruction = Font(FONT, FONT_SIZE, (20, 40))
-        # self.instruction.update("SIMULATION INSTRUCTION")
-        # self.instruction.update("Input device: %s" % control)
+        self.background = Background(file_name=IMAGE_PATH + 'terrain_blur.png',
+                                     bound_x_min=0, bound_x_max=1500, bound_y_min=0, bound_y_max=900)
+        self.status = Font(FONT, FONT_SIZE, (20, 200))
+        self.instruction = Font(FONT, FONT_SIZE, (20, 40))
+        self.instruction.update("SIMULATION INSTRUCTION")
+
+        # GUI sub-part 1: altitude
+        self.display_altitude = Font(FONT, FONT_SIZE, (1510, 22))
+        self.display_altitude.update("Altitude")
+        self.display_altitude.update("Too High")
+        self.display_altitude.update("")
+        self.display_altitude.update("Safe")
+        self.display_altitude.update("")
+        self.display_altitude.update("Too Low")
 
         # Event message
 
@@ -66,8 +117,8 @@ class GameMgr:
         # Position of objects
 
         # Input device
-        self.desired_pos_meter = [0, 0]
-        self.desired_alt_meter = 1
+        # self.desired_pos_meter = [0, 0]
+        # self.desired_alt_meter = 1
 
     def set_target(self, target):
         self.target = target
@@ -99,22 +150,45 @@ class GameMgr:
                 self.desired_pos_meter = desired_pos_meter
 
     def update(self):
+        # Initialization
+        if self.initial:
+            self.t0 = pygame.time.get_ticks()
+            self.initial = False
+
+        # Update message handling
+        self.status.clear()
+
         # Update object status
         for i, obj in enumerate(self.objects):
             obj.update()
 
+        # Update text
+        time_display = (pygame.time.get_ticks() - self.t0) * 1e-3
+        self.status.update('Time: %.1f sec' % time_display)
+
     def render(self):
         # Background
         self.screen.fill(WHITE)
-        # self.screen.blit(self.background.surface, self.background.rect)
+        self.screen.blit(self.background.surface, self.background.rect)
 
         # Visual feedback
         # pygame.draw.rect(self.screen, self.visual_code, (10, 658, 100, 100))
 
-        # Rotate
-        # self.objects[0].rt = self.objects[0].attitude * 180.0 / np.pi
+        # Objects: drones
         self.objects[0].load(IMAGE_PATH + 'drone1.png')
         self.objects[1].load(IMAGE_PATH + 'drone2.png')
+
+        # Objects: drones - side view
+        self.objects[2].load(IMAGE_PATH + 'drone_side1.png')
+        self.objects[3].load(IMAGE_PATH + 'drone_side2.png')
+
+        # Altitude information
+        pygame.draw.rect(self.screen, (100, 100, 100), (1580, 50, 100, 150))
+        pygame.draw.rect(self.screen, (100, 100, 100), (1730, 50, 100, 150))
+        pygame.draw.line(self.screen, RED, (1580, self.objects[2].position[1]),
+                         (1580 + 100, self.objects[2].position[1]), 3)
+        pygame.draw.line(self.screen, BLUE, (1730, self.objects[3].position[1]),
+                         (1730 + 100, self.objects[3].position[1]), 3)
 
         # Targets
         for i, pos in enumerate(self.target):
@@ -129,10 +203,12 @@ class GameMgr:
             self.screen.blit(obj.surface, obj.rect)
 
         # font interface
-        # for text in self.instruction.texts:
-        #     self.screen.blit(text[0], text[1])
-        # for text in self.status.texts:
-        #     self.screen.blit(text[0], text[1])
+        for text in self.instruction.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.status.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_altitude.texts:
+            self.screen.blit(text[0], text[1])
 
         # record sign
         # if self.record and self.record_sign > 0:

@@ -4,18 +4,19 @@ Sooyung Byeon
 10/03/2024
 
 To do list:
-- Add clock
-- Background image: mountain top view from AirSim
+- Fault actions: {sensor, actuator, communication...}
+- Environment change actions: {wind, fog, other drones...}
+- Multiple scenarios with different function allocation
+- Function allocation change
+- Button/Keyboard/Mouse actions: impact drone movements
+- Victim images and pop-up
+- Mission update actions
+- Data streaming and workload inference in real-time with HR/Cam
+- Asking survey questions after performance
+
 - Make classes
 - Identify 'GUI parts' clearly
 - Dual Windows (if necessary)
-- Button actions: impact drone movements
-- Fault actions: {sensor, actuator, communication...}
-- Environment change actions: {wind, fog, other drones...}
-- Victim images and pop-up
-- Mission update actions
-- Altitude and navigation information
-- Data streaming and workload inference in real-time with HR/Cam
 """
 
 import pynput
@@ -150,7 +151,7 @@ mission_complete = [False, False]
 game_mgr = game.GameMgr()
 game_mgr.update()
 
-# Target and takeoff positions for GUI
+# Target and takeoff positions for GUI: this part should be a function
 target_gui = -300.0 * np.array(target_positions) + np.array((750, 450))
 takeoff_gui = -300.0 * np.array(takeoff_positions) + np.array((750, 450))
 game_mgr.set_target(target_gui)
@@ -178,11 +179,12 @@ while fly:
         break
 
     for idx in range(2):
-        # GUI
+        # GUI: this part should be a function
         game_mgr.objects[idx].position[0] = -drones[idx].position[0] * 300.0 + 750
         game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 300.0 + 450
-        drones[idx].rt = np.random.normal(0, 0.01, 1)
+        drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi
+        game_mgr.objects[idx + 2].position[1] = -75.0 * drones[idx].position[2] + 200.0 + np.random.normal(0, 0.3, 1)[0]
 
         # Initial hover
         if dt < hover_duration:
@@ -237,6 +239,21 @@ while fly:
         else:
             fly = False
 
+    # GUI rendering
+    game_mgr.update()
+    game_mgr.render()
+
+# Land till the end
+while max(drones[0].position[2], drones[1].position[2]) > 0.01:
+    for idx in range(2):
+        drones[idx].land_in_place()
+        sleep(0.01)
+        # This should be a function
+        game_mgr.objects[idx].position[0] = -drones[idx].position[0] * 300.0 + 750
+        game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 300.0 + 450
+        drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
+        game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi
+        game_mgr.objects[idx + 2].position[1] = -75.0 * drones[idx].position[2] + 200.0 + np.random.normal(0, 0.3, 1)[0]
     # GUI rendering
     game_mgr.update()
     game_mgr.render()
