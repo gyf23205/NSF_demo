@@ -47,7 +47,7 @@ def distance(point1, point2):
     return np.linalg.norm(np.array(point1) - np.array(point2))
 
 
-def assign_targets_to_drones(drones, targets, go_back=True):
+def assign_targets_to_drones(drones, targets, landing=None):
     # Initialize paths for each drone
     paths = {i: [drones[i]] for i in range(len(drones))}
     remaining_targets = targets.copy()
@@ -61,9 +61,9 @@ def assign_targets_to_drones(drones, targets, go_back=True):
                 paths[i].append(nearest_target)
                 remaining_targets.remove(nearest_target)
 
-    if go_back:
-        for i in range(len(drones)):
-            paths[i].append(drones[i])
+    if landing is not None:
+        for i in range(len(landing)):
+            paths[i].append(landing[i])
 
     return paths
 
@@ -123,7 +123,11 @@ fly = True
 # Task allocation
 target_positions = [[2.0, -0.7], [-0.1, -0.9], [-2.0, -1.0], [-1.0, 0.7], [2.0, 1.0], [-0.5, -0.5]]
 takeoff_positions = [[drones[0].position[0], drones[0].position[1]], [drones[1].position[0], drones[1].position[1]]]
-drone_paths = assign_targets_to_drones(takeoff_positions, target_positions)
+drone_paths = assign_targets_to_drones(takeoff_positions, target_positions, landing=takeoff_positions)
+
+# Remaining paths for re-planning
+target_remaining = target_positions.copy()
+new_target_positions = []
 
 # RRT-connect for all drone paths
 drone_trajectory = [[], []]
@@ -152,9 +156,15 @@ game_mgr = game.GameMgr()
 game_mgr.update()
 
 # Target and takeoff positions for GUI: this part should be a function
-target_gui = -300.0 * np.array(target_positions) + np.array((750, 450))
-takeoff_gui = -300.0 * np.array(takeoff_positions) + np.array((750, 450))
-game_mgr.set_target(target_gui)
+target_gui = np.array(target_positions)
+for k in range(len(target_positions)):
+    target_gui[k][0] = 300.0 * target_gui[k][0] + 750
+    target_gui[k][1] = -300.0 * target_gui[k][1] + 450
+takeoff_gui = np.array(takeoff_positions)
+for k in range(len(takeoff_positions)):
+    takeoff_gui[k][0] = 300.0 * takeoff_gui[k][0] + 750
+    takeoff_gui[k][1] = -300.0 * takeoff_gui[k][1] + 450
+game_mgr.set_target(target=target_gui)
 game_mgr.set_takeoff_positions(takeoff_gui)
 
 # Time
@@ -169,6 +179,9 @@ while fly:
         print(f'[t={int(dt)}] Escape by keyboard.')
         break
 
+    # GUI input
+    mode = game_mgr.input()
+
     # Mind the clock
     dt = time() - t
     # print(f'{dt:.2f} seconds')
@@ -180,7 +193,7 @@ while fly:
 
     for idx in range(2):
         # GUI: this part should be a function
-        game_mgr.objects[idx].position[0] = -drones[idx].position[0] * 300.0 + 750
+        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 300.0 + 750
         game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 300.0 + 450
         drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi
@@ -217,24 +230,59 @@ while fly:
 
             # Check stay start time
             if target_distance[idx] < stay_distance:
+                # Measure stay time
                 if stay_flag[idx]:
+                    # Measure: start point
                     start_time[idx] = time()
                     stay_flag[idx] = False
+                # Measure: end point
                 stay_time[idx] = time() - start_time[idx]
 
             # Check stay duration
-            if stay_time[idx] > stay_duration:
-                # Print status
-                print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} stay checked')
+            if stay_time[idx] > stay_duration and game_mgr.target_decided:
                 if target_index[idx] < len(drone_trajectory[idx]) - 1:
-                    # Update and reset
-                    target_index[idx] += 1
-                    stay_flag[idx] = True
-                    stay_time[idx] = 0
-                    # Temporary
-                    indexing_time[idx] = dt
+                    # Generate victim
+                    if not game_mgr.victim_detected[idx]:
+                        game_mgr.victim_id[idx] = np.random.randint(low=1, high=11)
+                        game_mgr.victim_detected[idx] = True
+
+                    # Once victim is selected, close it
+                    if game_mgr.victim_clicked[idx]:
+                        game_mgr.victim_id[idx] = 0
+                        game_mgr.victim_detected[idx] = False
+                        # Print status
+                        print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} stay checked')
+                        target_remaining.remove(target_current)
+                        # Update and reset
+                        target_index[idx] += 1
+                        stay_flag[idx] = True
+                        stay_time[idx] = 0
+                        # Temporary
+                        indexing_time[idx] = dt
                 else:
                     mission_complete[idx] = True
+
+            # Mission (target) update: triggered by the number of remaining targets
+            if len(target_remaining) == 4 and dt > 18.0:
+                # New target detected (comm from mission control)
+                if not game_mgr.new_target_triggered:
+                    print(f'[t={int(dt)}] New target identified')
+                    new_target = [1.6, 1.1]
+                    new_target_positions.append(new_target)
+                    new_target_gui = np.array(new_target_positions)
+                    new_target_gui[0][0] = 300 * new_target_positions[0][0] + 750.0
+                    new_target_gui[0][1] = -300 * new_target_positions[0][1] + 450.0
+                    game_mgr.set_target(new_target=new_target_gui)
+                    # Close the case
+                    game_mgr.new_target_triggered = True
+                    game_mgr.target_decided = False
+
+                # Decision-making on the new target
+                if dt > 25.0:
+                    print(f'[t={int(dt)}] Decision made on the new target')
+                    game_mgr.target_decided = True
+                else:
+                    print(f'[t={int(dt)}] Waiting for input on the new target')
 
         else:
             fly = False
@@ -249,7 +297,7 @@ while max(drones[0].position[2], drones[1].position[2]) > 0.01:
         drones[idx].land_in_place()
         sleep(0.01)
         # This should be a function
-        game_mgr.objects[idx].position[0] = -drones[idx].position[0] * 300.0 + 750
+        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 300.0 + 750
         game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 300.0 + 450
         drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi

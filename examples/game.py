@@ -78,6 +78,9 @@ class GameMgr:
 
         # Targets
         self.target = []
+        self.target_decided = True
+        self.new_target = []
+        self.new_target_triggered = False
 
         # Takeoff positions
         self.takeoff_position = []
@@ -102,13 +105,30 @@ class GameMgr:
         self.instruction.update("SIMULATION INSTRUCTION")
 
         # GUI sub-part 1: altitude
-        self.display_altitude = Font(FONT, FONT_SIZE, (1510, 22))
-        self.display_altitude.update("Altitude")
-        self.display_altitude.update("Too High")
-        self.display_altitude.update("")
-        self.display_altitude.update("Safe")
-        self.display_altitude.update("")
-        self.display_altitude.update("Too Low")
+        self.display_navigation = Font(FONT, FONT_SIZE, (1510, 22))
+        self.display_navigation.update("                               Navigation")
+        self.display_navigation.update("Too High")
+        self.display_navigation.update("")
+        self.display_navigation.update("Safe")
+        self.display_navigation.update("")
+        self.display_navigation.update("Too Low")
+
+        # GUI sub-part 2: [mission] 1) update mission / 2) confirm victim
+        self.display_mission = Font(FONT, FONT_SIZE, (1510, 250))
+        self.display_mission.update("                                  Mission")
+        self.display_mission.update("")
+        self.display_mission.update("")
+        self.display_mission.update("")
+        self.display_mission.update("")
+        self.display_mission.update("")
+        self.display_mission.update("")
+        self.display_mission.update("     Accept        Reject               Accept        Reject")
+
+        # Event: victim confirmation
+        self.victim_id = [0, 0]
+        self.victim_images = [None, None]
+        self.victim_detected = [False, False]
+        self.victim_clicked = [0, 0]
 
         # Event message
 
@@ -117,11 +137,13 @@ class GameMgr:
         # Position of objects
 
         # Input device
-        # self.desired_pos_meter = [0, 0]
-        # self.desired_alt_meter = 1
+        self.mouse_pos = [0, 0]
 
-    def set_target(self, target):
-        self.target = target
+    def set_target(self, target=None, new_target=None):
+        if target is not None:
+            self.target = target
+        if new_target is not None:
+            self.new_target = new_target
 
     def set_takeoff_positions(self, position):
         self.takeoff_position = position
@@ -135,19 +157,55 @@ class GameMgr:
                 elif event.key == pygame.K_SPACE:
                     self.mode = 2
                     print('Landing Command')
-                elif event.key == pygame.K_UP:
-                    self.desired_alt_meter = min(1.5, self.desired_alt_meter + 0.05)
-                elif event.key == pygame.K_DOWN:
-                    self.desired_alt_meter = max(0.1, self.desired_alt_meter - 0.05)
-                elif event.key == pygame.K_LEFT or pygame.K_RIGHT:
-                    self.desired_alt_meter = 1
+                # elif event.key == pygame.K_UP:
+                #     self.desired_alt_meter = min(1.5, self.desired_alt_meter + 0.05)
+                # elif event.key == pygame.K_DOWN:
+                #     self.desired_alt_meter = max(0.1, self.desired_alt_meter - 0.05)
+                # elif event.key == pygame.K_LEFT or pygame.K_RIGHT:
+                #     self.desired_alt_meter = 1
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_pos = pygame.mouse.get_pos()
-                desired_pos_x = -(mouse_pos[0] - 0.5 * BOUND_X_MAX) / 300.0
-                desired_pos_y = (mouse_pos[1] - 0.5 * BOUND_Y_MAX) / 300.0
-                desired_pos_meter = [desired_pos_x, desired_pos_y]
-                print(desired_pos_meter)
-                self.desired_pos_meter = desired_pos_meter
+                self.mouse_pos = pygame.mouse.get_pos()
+                # print(self.mouse_pos)
+
+    def correct_victim(self):
+        for ind in range(2):
+            if self.victim_id[ind] < 7:
+                if self.victim_clicked[ind] == 1:
+                    print(f'Correct: accepted by drone {int(ind + 1)}')
+                elif self.victim_clicked[ind] == 2:
+                    print(f'Wrong: rejected by drone {int(ind + 1)}')
+            elif self.victim_id[ind] >= 7:
+                if self.victim_clicked[ind] == 1:
+                    print(f'Wrong: accepted by drone {int(ind + 1)}')
+                elif self.victim_clicked[ind] == 2:
+                    print(f'Correct: rejected by drone {int(ind + 1)}')
+
+    def input_victim(self):
+        if 1520 <= self.mouse_pos[0] <= 1600 and 460 <= self.mouse_pos[1] <= 500:
+            self.victim_clicked[0] = 1  # Accepted by drone 1
+            self.mouse_pos = [0, 0]
+        elif 1610 <= self.mouse_pos[0] <= 1690 and 460 <= self.mouse_pos[1] <= 500:
+            self.victim_clicked[0] = 2  # Rejected by drone 1
+            self.correct_victim()
+            self.mouse_pos = [0, 0]
+        elif 1730 <= self.mouse_pos[0] <= 1810 and 460 <= self.mouse_pos[1] <= 500:
+            self.victim_clicked[1] = 1  # Accepted by drone 2
+            self.correct_victim()
+            self.mouse_pos = [0, 0]
+        elif 1820 <= self.mouse_pos[0] <= 1900 and 460 <= self.mouse_pos[1] <= 500:
+            self.victim_clicked[1] = 2  # Accepted by drone 2
+            self.correct_victim()
+            self.mouse_pos = [0, 0]
+        else:
+            self.victim_clicked[0] = 0  # Reset to unselected
+            self.victim_clicked[1] = 0
+
+    def input_new_target(self):
+        if 1520 <= self.mouse_pos[0] <= 1600 and 460 <= self.mouse_pos[1] <= 500:
+            self.target_decided = True
+            self.mouse_pos = [0, 0]
+        # else:
+        #     self.target_decided = False
 
     def update(self):
         # Initialization
@@ -190,9 +248,29 @@ class GameMgr:
         pygame.draw.line(self.screen, BLUE, (1730, self.objects[3].position[1]),
                          (1730 + 100, self.objects[3].position[1]), 3)
 
+        # Victims
+        for ind in range(2):
+            if self.victim_id[ind] > 0:
+                image = 'victim{0}.png'.format(self.victim_id[ind])
+                self.victim_images[ind] = Drone(file_name=IMAGE_PATH + image, pos_x=1600 + 210 * ind, pos_y=360,
+                                                sc=1.0, rt=0.0)
+                self.screen.blit(self.victim_images[ind].surface, self.victim_images[ind].rect)
+
+        # Mouse selections
+        pygame.draw.rect(self.screen, (0, 150, 200), (1520, 460, 80, 40))
+        pygame.draw.rect(self.screen, (250, 50, 50), (1520 + 90, 460, 80, 40))
+        pygame.draw.rect(self.screen, (0, 150, 200), (1730, 460, 80, 40))
+        pygame.draw.rect(self.screen, (250, 50, 50), (1730 + 90, 460, 80, 40))
+
+        # Mouse action
+        self.input_victim()
+        self.input_new_target()
+
         # Targets
         for i, pos in enumerate(self.target):
             pygame.draw.circle(self.screen, BLUE, pos, 10)
+        for i, pos in enumerate(self.new_target):
+            pygame.draw.circle(self.screen, RED, pos, 15)
 
         # Takeoff positions
         for i, pos in enumerate(self.takeoff_position):
@@ -207,7 +285,9 @@ class GameMgr:
             self.screen.blit(text[0], text[1])
         for text in self.status.texts:
             self.screen.blit(text[0], text[1])
-        for text in self.display_altitude.texts:
+        for text in self.display_navigation.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_mission.texts:
             self.screen.blit(text[0], text[1])
 
         # record sign
