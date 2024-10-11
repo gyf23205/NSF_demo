@@ -8,11 +8,11 @@ To do list:
 - Environment change actions: {wind, fog, other drones...}
 - Multiple scenarios with different function allocation
 - Function allocation change
-- Button/Keyboard/Mouse actions: impact drone movements
-- Victim images and pop-up
 - Mission update actions
 - Data streaming and workload inference in real-time with HR/Cam
 - Asking survey questions after performance
+- Collision avoidance by altitude control
+- Set search area - click targets and hit enter (Is this good enough?)
 
 - Make classes
 - Identify 'GUI parts' clearly
@@ -66,6 +66,41 @@ def assign_targets_to_drones(drones, targets, landing=None):
             paths[i].append(landing[i])
 
     return paths
+
+
+def assign_targets_with_path_lengths(drones, targets, assigned_drone_index, landing=None):
+    # Initialize paths for each drone
+    paths = {i: [drones[i]] for i in range(len(drones))}
+    remaining_targets = targets.copy()
+
+    # Assign the additional target to the specific drone
+    additional_target = remaining_targets.pop(assigned_drone_index)
+    paths[assigned_drone_index].append(additional_target)
+
+    while remaining_targets:
+        # Find the nearest target for each drone
+        for i in range(len(drones)):
+            if remaining_targets:
+                current_position = paths[i][-1]
+                nearest_target = min(remaining_targets, key=lambda p: distance(current_position, p))
+                paths[i].append(nearest_target)
+                remaining_targets.remove(nearest_target)
+
+    # Add landing positions if provided
+    if landing is not None:
+        for i in range(len(landing)):
+            paths[i].append(landing[i])
+
+    # Compute path lengths for each drone
+    path_lengths = []
+    for i in range(len(drones)):
+        path_length = sum(distance(paths[i][j], paths[i][j+1]) for j in range(len(paths[i])-1))
+        path_lengths.append(path_length)
+
+    # Output 0 is total path length (output[0] = output[1] + output[2])
+    output = [sum(path_lengths), path_lengths[0], path_lengths[1]]
+
+    return output, paths
 
 
 # Adhoc altitude control for collision avoidance
@@ -129,6 +164,8 @@ drone_paths = assign_targets_to_drones(takeoff_positions, target_positions, land
 target_remaining = target_positions.copy()
 new_target = []
 new_target_positions = []
+path1 = []
+path2 = []
 
 # RRT-connect for all drone paths
 drone_trajectory = [[], []]
@@ -262,18 +299,6 @@ while fly:
                             indexing_time[idx] = dt
                     else:
                         game_mgr.victim_block_choice[idx] = True
-                    # if game_mgr.victim_clicked[idx] and game_mgr.target_decided:
-                    #     game_mgr.victim_id[idx] = 0
-                    #     game_mgr.victim_detected[idx] = False
-                    #     # Print status
-                    #     print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
-                    #     target_remaining.remove(target_current)
-                    #     # Update and reset
-                    #     target_index[idx] += 1
-                    #     stay_flag[idx] = True
-                    #     stay_time[idx] = 0
-                    #     # Temporary
-                    #     indexing_time[idx] = dt
                 else:
                     mission_complete[idx] = True
 
@@ -294,6 +319,19 @@ while fly:
                     game_mgr.new_target_triggered = True
                     game_mgr.target_decided = False
 
+                    # Compute distance with additional target
+                    new_start_positions = [drone_paths[0][target_index[0] + 1], drone_paths[1][target_index[1] + 1]]
+                    # [Temporary: code B]
+                    target_remaining_copy = target_remaining.copy()
+                    target_remaining_copy.remove(new_start_positions[0])
+                    target_remaining_copy.remove(new_start_positions[1])
+                    # Two re-planning scenarios
+                    output1, path1 = assign_targets_with_path_lengths(new_start_positions, target_remaining_copy, 0,
+                                                                      landing=takeoff_positions)
+                    output2, path2 = assign_targets_with_path_lengths(new_start_positions, target_remaining_copy, 1,
+                                                                      landing=takeoff_positions)
+                    game_mgr.planning_distances = output1 + output2
+
                 # Decision-making on the new target (triggered) by mouse action
                 if game_mgr.new_target_triggered and not game_mgr.target_decided and game_mgr.target_clicked:
                     print(f'[t={int(dt)}] Decision made on the new target')
@@ -301,14 +339,13 @@ while fly:
                     game_mgr.victim_block_choice = [False, False]
                     # Target decision made
                     game_mgr.target_decided = True
-                    # [Temporary] Computation without human's decision: Skip the current target
-                    new_start_positions = [drone_paths[0][target_index[0] + 1], drone_paths[1][target_index[1] + 1]]
-                    drone_paths = assign_targets_to_drones(new_start_positions, target_remaining,
-                                                           landing=takeoff_positions)
-                    # [Temporary: Code A] Exclude the overlapped start positions
-                    drone_paths[0] = drone_paths[0][1:]
-                    drone_paths[1] = drone_paths[1][1:]
-                    # RRT-connect for all drone paths
+                    # Reset the planning distance to zeros
+                    game_mgr.planning_distances = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+                    # [Temporary: option 2] from re-planning...
+                    if game_mgr.target_clicked == 1:
+                        drone_paths = path1
+                    elif game_mgr.target_clicked == 2:
+                        drone_paths = path2
                     new_drone_trajectory = [[], []]
                     for d_inx in range(2):
                         for p_idx in range(len(drone_paths[d_inx]) - 1):

@@ -78,7 +78,7 @@ class GameMgr:
 
         # Targets
         self.target = []
-        self.target_clicked = False
+        self.target_clicked = 0
         self.target_decided = True
         self.new_target = []
         self.new_target_triggered = False
@@ -98,6 +98,12 @@ class GameMgr:
         self.objects.append(drone_side1)
         self.objects.append(drone_side2)
 
+        # Drone image: side view - Mission re-planning
+        drone_small1 = Drone(file_name=IMAGE_PATH + 'drone1.png', pos_x=1550, pos_y=605, sc=0.05, rt=0.0)
+        drone_small2 = Drone(file_name=IMAGE_PATH + 'drone2.png', pos_x=1550, pos_y=655, sc=0.05, rt=0.0)
+        self.objects.append(drone_small1)
+        self.objects.append(drone_small2)
+
         # Background and text interface init
         self.background = Background(file_name=IMAGE_PATH + 'terrain_blur.png',
                                      bound_x_min=0, bound_x_max=1500, bound_y_min=0, bound_y_max=900)
@@ -116,7 +122,7 @@ class GameMgr:
 
         # GUI sub-part 2: [mission] 1) update mission / 2) confirm victim
         self.display_mission = Font(FONT, FONT_SIZE, (1510, 250))
-        self.display_mission.update("                                  Mission")
+        self.display_mission.update("                           Confirm Victims")
         self.display_mission.update("")
         self.display_mission.update("")
         self.display_mission.update("")
@@ -124,6 +130,17 @@ class GameMgr:
         self.display_mission.update("")
         self.display_mission.update("")
         self.display_mission.update("     Accept        Reject               Accept        Reject")
+
+        # GUI sub-part 3: [guidance] re-planning
+        self.display_planning = Font(FONT, FONT_SIZE, (1520, 520))
+        self.display_planning.update("                        Mission Re-planning")
+        self.display_planning.update("Decision   Total Dist.   Drone 1 Dist.   Drone 2 Dist.")
+        # Column-wise
+        self.display_planning_c1 = Font(FONT, FONT_SIZE, (1620, 585))
+        self.display_planning_c2 = Font(FONT, FONT_SIZE, (1620 + 1 * 100, 585))
+        self.display_planning_c3 = Font(FONT, FONT_SIZE, (1620 + 2 * 100, 585))
+        # Values
+        self.planning_distances = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         # Event: victim confirmation
         self.victim_id = [0, 0]
@@ -167,6 +184,7 @@ class GameMgr:
                 #     self.desired_alt_meter = 1
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.mouse_pos = pygame.mouse.get_pos()
+                print(self.mouse_pos)
 
     def correct_victim(self):
         for ind in range(2):
@@ -183,26 +201,28 @@ class GameMgr:
 
     def mouse_actions(self):
         # Victim
-        if 1520 <= self.mouse_pos[0] <= 1600 and 460 <= self.mouse_pos[1] <= 500:
+        if 1520 <= self.mouse_pos[0] <= 1600 and 450 <= self.mouse_pos[1] <= 490:
             self.victim_clicked[0] = 1  # Accepted by drone 1
             self.correct_victim()
-        elif 1610 <= self.mouse_pos[0] <= 1690 and 460 <= self.mouse_pos[1] <= 500:
+        elif 1610 <= self.mouse_pos[0] <= 1690 and 450 <= self.mouse_pos[1] <= 490:
             self.victim_clicked[0] = 2  # Rejected by drone 1
             self.correct_victim()
-        elif 1730 <= self.mouse_pos[0] <= 1810 and 460 <= self.mouse_pos[1] <= 500:
+        elif 1730 <= self.mouse_pos[0] <= 1810 and 450 <= self.mouse_pos[1] <= 490:
             self.victim_clicked[1] = 1  # Accepted by drone 2
             self.correct_victim()
-        elif 1820 <= self.mouse_pos[0] <= 1900 and 460 <= self.mouse_pos[1] <= 500:
+        elif 1820 <= self.mouse_pos[0] <= 1900 and 450 <= self.mouse_pos[1] <= 490:
             self.victim_clicked[1] = 2  # Accepted by drone 2
             self.correct_victim()
         # New target
-        elif 1520 <= self.mouse_pos[0] <= 1600 and 500 <= self.mouse_pos[1] <= 1000:
-            self.target_clicked = True
+        elif 1515 <= self.mouse_pos[0] <= 1585 and 585 <= self.mouse_pos[1] <= 625:
+            self.target_clicked = 1
+        elif 1515 <= self.mouse_pos[0] <= 1585 and 635 <= self.mouse_pos[1] <= 675:
+            self.target_clicked = 2
         # Reset clicked
         else:
             self.victim_clicked[0] = 0  # Reset to unselected
             self.victim_clicked[1] = 0
-            self.target_clicked = False
+            self.target_clicked = 0
 
         # Reset mouse position
         self.mouse_pos = [0, 0]
@@ -224,6 +244,20 @@ class GameMgr:
         time_display = (pygame.time.get_ticks() - self.t0) * 1e-3
         self.status.update('Time: %.1f sec' % time_display)
 
+        # Re-planning text
+        self.display_planning_c1.clear()
+        self.display_planning_c1.update('%.1f' % self.planning_distances[0])
+        self.display_planning_c1.update("")
+        self.display_planning_c1.update('%.1f' % self.planning_distances[3])
+        self.display_planning_c2.clear()
+        self.display_planning_c2.update('%.1f' % self.planning_distances[1])
+        self.display_planning_c2.update("")
+        self.display_planning_c2.update('%.1f' % self.planning_distances[4])
+        self.display_planning_c3.clear()
+        self.display_planning_c3.update('%.1f' % self.planning_distances[2])
+        self.display_planning_c3.update("")
+        self.display_planning_c3.update('%.1f' % self.planning_distances[5])
+
     def render(self):
         # Background
         self.screen.fill(WHITE)
@@ -239,6 +273,12 @@ class GameMgr:
         # Objects: drones - side view
         self.objects[2].load(IMAGE_PATH + 'drone_side1.png')
         self.objects[3].load(IMAGE_PATH + 'drone_side2.png')
+
+        # Objects: drones - small ones
+        pygame.draw.rect(self.screen, (150, 150, 150), (1515, 585, 70, 40))
+        pygame.draw.rect(self.screen, (150, 150, 150), (1515, 635, 70, 40))
+        self.objects[4].load(IMAGE_PATH + 'drone1.png')
+        self.objects[5].load(IMAGE_PATH + 'drone2.png')
 
         # Altitude information
         pygame.draw.rect(self.screen, (100, 100, 100), (1580, 50, 100, 150))
@@ -257,14 +297,14 @@ class GameMgr:
                 self.screen.blit(self.victim_images[ind].surface, self.victim_images[ind].rect)
 
         # Mouse selections: victim
-        pygame.draw.rect(self.screen, (0, 150, 200), (1520, 460, 80, 40))
-        pygame.draw.rect(self.screen, (250, 50, 50), (1520 + 90, 460, 80, 40))
-        pygame.draw.rect(self.screen, (0, 150, 200), (1730, 460, 80, 40))
-        pygame.draw.rect(self.screen, (250, 50, 50), (1730 + 90, 460, 80, 40))
+        pygame.draw.rect(self.screen, (0, 150, 200), (1520, 450, 80, 40))
+        pygame.draw.rect(self.screen, (250, 50, 50), (1520 + 90, 450, 80, 40))
+        pygame.draw.rect(self.screen, (0, 150, 200), (1730, 450, 80, 40))
+        pygame.draw.rect(self.screen, (250, 50, 50), (1730 + 90, 450, 80, 40))
         if self.victim_block_choice[0]:
-            pygame.draw.rect(self.screen, (0, 0, 0), (1520, 460, 170, 40))
+            pygame.draw.rect(self.screen, (0, 0, 0), (1520, 450, 170, 40))
         if self.victim_block_choice[1]:
-            pygame.draw.rect(self.screen, (0, 0, 0), (1730, 460, 170, 40))
+            pygame.draw.rect(self.screen, (0, 0, 0), (1730, 450, 170, 40))
 
         # Mouse actions
         self.mouse_actions()
@@ -291,6 +331,14 @@ class GameMgr:
         for text in self.display_navigation.texts:
             self.screen.blit(text[0], text[1])
         for text in self.display_mission.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_planning.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_planning_c1.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_planning_c2.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_planning_c3.texts:
             self.screen.blit(text[0], text[1])
 
         # record sign
