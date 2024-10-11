@@ -142,6 +142,13 @@ class GameMgr:
         # Values
         self.planning_distances = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
+        # GUI sub-part 4: [fault]
+        self.display_fault = Font(FONT, FONT_SIZE, (1510, 700))
+        self.display_fault.update("           Fault Response")
+        self.display_fault.update("")
+        self.display_fault.update("      Change         Maintain")
+        self.display_fault.update("       Routes          Routes")
+
         # Event: victim confirmation
         self.victim_id = [0, 0]
         self.victim_images = [None, None]
@@ -149,7 +156,11 @@ class GameMgr:
         self.victim_clicked = [0, 0]
         self.victim_block_choice = [False, False]
 
-        # Event message
+        # Event: wind
+        self.wind_danger = False
+        self.wind_triggered = False
+        self.wind_decided = True
+        self.wind_clicked = 0
 
         # Obstacles
 
@@ -218,11 +229,17 @@ class GameMgr:
             self.target_clicked = 1
         elif 1515 <= self.mouse_pos[0] <= 1585 and 635 <= self.mouse_pos[1] <= 675:
             self.target_clicked = 2
+        # Wind
+        elif 1525 <= self.mouse_pos[0] <= 1615 and 750 <= self.mouse_pos[1] <= 830:
+            self.wind_clicked = 1
+        elif 1625 <= self.mouse_pos[0] <= 1715 and 750 <= self.mouse_pos[1] <= 830:
+            self.wind_clicked = 2
         # Reset clicked
         else:
             self.victim_clicked[0] = 0  # Reset to unselected
             self.victim_clicked[1] = 0
             self.target_clicked = 0
+            self.wind_clicked = 0
 
         # Reset mouse position
         self.mouse_pos = [0, 0]
@@ -275,8 +292,12 @@ class GameMgr:
         self.objects[3].load(IMAGE_PATH + 'drone_side2.png')
 
         # Objects: drones - small ones
-        pygame.draw.rect(self.screen, (150, 150, 150), (1515, 585, 70, 40))
-        pygame.draw.rect(self.screen, (150, 150, 150), (1515, 635, 70, 40))
+        if self.target_decided:
+            pygame.draw.rect(self.screen, BLACK, (1515, 585, 70, 40))
+            pygame.draw.rect(self.screen, BLACK, (1515, 635, 70, 40))
+        else:
+            pygame.draw.rect(self.screen, (200, 200, 200), (1515, 585, 70, 40))
+            pygame.draw.rect(self.screen, (200, 200, 200), (1515, 635, 70, 40))
         self.objects[4].load(IMAGE_PATH + 'drone1.png')
         self.objects[5].load(IMAGE_PATH + 'drone2.png')
 
@@ -305,6 +326,13 @@ class GameMgr:
             pygame.draw.rect(self.screen, (0, 0, 0), (1520, 450, 170, 40))
         if self.victim_block_choice[1]:
             pygame.draw.rect(self.screen, (0, 0, 0), (1730, 450, 170, 40))
+
+        # Mouse selections: fault
+        if not self.wind_decided:
+            pygame.draw.rect(self.screen, (0, 255, 0), (1525, 750, 90, 80))
+            pygame.draw.rect(self.screen, YELLOW, (1525 + 100, 750, 90, 80))
+        else:
+            pygame.draw.rect(self.screen, BLACK, (1525, 750, 190, 80))
 
         # Mouse actions
         self.mouse_actions()
@@ -339,6 +367,8 @@ class GameMgr:
         for text in self.display_planning_c2.texts:
             self.screen.blit(text[0], text[1])
         for text in self.display_planning_c3.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_fault.texts:
             self.screen.blit(text[0], text[1])
 
         # record sign

@@ -26,6 +26,9 @@ from qfly import World
 from rrt_2D import rrt_connect
 import game
 
+# [Temporary] Function allocation
+fa = 2  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
+
 # Drone Setting: Physical constraints
 hover_duration = 10
 stay_duration = 5
@@ -333,6 +336,9 @@ while fly:
                     game_mgr.planning_distances = output1 + output2
 
                 # Decision-making on the new target (triggered) by mouse action
+                # [Temporary] Function allocation
+                if fa == 1:
+                    game_mgr.target_clicked = 2
                 if game_mgr.new_target_triggered and not game_mgr.target_decided and game_mgr.target_clicked:
                     print(f'[t={int(dt)}] Decision made on the new target')
                     # Restore block if there is any
@@ -341,7 +347,7 @@ while fly:
                     game_mgr.target_decided = True
                     # Reset the planning distance to zeros
                     game_mgr.planning_distances = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-                    # [Temporary: option 2] from re-planning...
+                    # Selecting one re-planning scenario
                     if game_mgr.target_clicked == 1:
                         drone_paths = path1
                     elif game_mgr.target_clicked == 2:
@@ -360,9 +366,36 @@ while fly:
                         for j in range(len(new_drone_trajectory[i])):
                             drone_trajectory[i].append(new_drone_trajectory[i][j])
                     target_index = [0, 0]
-                    # [Temporary: Code A] Recover the overlapped start positions (target_current)
+                    # [Temporary] Recover the overlapped start positions (target_current)
                     drone_paths[0].insert(0, new_start_positions[0])
                     drone_paths[1].insert(0, new_start_positions[1])
+
+            # Wind (fault) condition
+            if idx == 0:
+                # Trigger windy condition based on time
+                if not game_mgr.wind_triggered and dt > 30.0:
+                    game_mgr.wind_danger = True
+                    game_mgr.wind_triggered = True
+                    game_mgr.wind_decided = False
+                    print(f'[t={int(dt)}] Environmental change: dangerous wind')
+
+                # Turn-off windy condition based on time
+                if game_mgr.wind_danger and game_mgr.wind_triggered and dt > 60.0:
+                    game_mgr.wind_danger = False
+                    print(f'[t={int(dt)}] Environmental change: stable wind')
+
+                # [Temporary] Function allocation
+                if fa == 1 or fa == 2:
+                    game_mgr.wind_clicked = 1
+                # Ask for decision
+                if game_mgr.wind_danger and game_mgr.wind_triggered and not game_mgr.wind_decided:
+                    if game_mgr.wind_clicked == 1:
+                        game_mgr.wind_decided = True
+                        print(f'[t={int(dt)}] Change routes')
+                        # Put obstacle avoidance here
+                    elif game_mgr.wind_clicked == 2:
+                        game_mgr.wind_decided = True
+                        print(f'[t={int(dt)}] Maintain routes')
 
         else:
             fly = False
