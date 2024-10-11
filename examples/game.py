@@ -78,6 +78,7 @@ class GameMgr:
 
         # Targets
         self.target = []
+        self.target_clicked = False
         self.target_decided = True
         self.new_target = []
         self.new_target_triggered = False
@@ -129,6 +130,7 @@ class GameMgr:
         self.victim_images = [None, None]
         self.victim_detected = [False, False]
         self.victim_clicked = [0, 0]
+        self.victim_block_choice = [False, False]
 
         # Event message
 
@@ -165,11 +167,10 @@ class GameMgr:
                 #     self.desired_alt_meter = 1
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.mouse_pos = pygame.mouse.get_pos()
-                # print(self.mouse_pos)
 
     def correct_victim(self):
         for ind in range(2):
-            if self.victim_id[ind] < 7:
+            if 0 < self.victim_id[ind] < 7:
                 if self.victim_clicked[ind] == 1:
                     print(f'Correct: accepted by drone {int(ind + 1)}')
                 elif self.victim_clicked[ind] == 2:
@@ -180,32 +181,31 @@ class GameMgr:
                 elif self.victim_clicked[ind] == 2:
                     print(f'Correct: rejected by drone {int(ind + 1)}')
 
-    def input_victim(self):
+    def mouse_actions(self):
+        # Victim
         if 1520 <= self.mouse_pos[0] <= 1600 and 460 <= self.mouse_pos[1] <= 500:
             self.victim_clicked[0] = 1  # Accepted by drone 1
-            self.mouse_pos = [0, 0]
+            self.correct_victim()
         elif 1610 <= self.mouse_pos[0] <= 1690 and 460 <= self.mouse_pos[1] <= 500:
             self.victim_clicked[0] = 2  # Rejected by drone 1
             self.correct_victim()
-            self.mouse_pos = [0, 0]
         elif 1730 <= self.mouse_pos[0] <= 1810 and 460 <= self.mouse_pos[1] <= 500:
             self.victim_clicked[1] = 1  # Accepted by drone 2
             self.correct_victim()
-            self.mouse_pos = [0, 0]
         elif 1820 <= self.mouse_pos[0] <= 1900 and 460 <= self.mouse_pos[1] <= 500:
             self.victim_clicked[1] = 2  # Accepted by drone 2
             self.correct_victim()
-            self.mouse_pos = [0, 0]
+        # New target
+        elif 1520 <= self.mouse_pos[0] <= 1600 and 500 <= self.mouse_pos[1] <= 1000:
+            self.target_clicked = True
+        # Reset clicked
         else:
             self.victim_clicked[0] = 0  # Reset to unselected
             self.victim_clicked[1] = 0
+            self.target_clicked = False
 
-    def input_new_target(self):
-        if 1520 <= self.mouse_pos[0] <= 1600 and 460 <= self.mouse_pos[1] <= 500:
-            self.target_decided = True
-            self.mouse_pos = [0, 0]
-        # else:
-        #     self.target_decided = False
+        # Reset mouse position
+        self.mouse_pos = [0, 0]
 
     def update(self):
         # Initialization
@@ -256,15 +256,18 @@ class GameMgr:
                                                 sc=1.0, rt=0.0)
                 self.screen.blit(self.victim_images[ind].surface, self.victim_images[ind].rect)
 
-        # Mouse selections
+        # Mouse selections: victim
         pygame.draw.rect(self.screen, (0, 150, 200), (1520, 460, 80, 40))
         pygame.draw.rect(self.screen, (250, 50, 50), (1520 + 90, 460, 80, 40))
         pygame.draw.rect(self.screen, (0, 150, 200), (1730, 460, 80, 40))
         pygame.draw.rect(self.screen, (250, 50, 50), (1730 + 90, 460, 80, 40))
+        if self.victim_block_choice[0]:
+            pygame.draw.rect(self.screen, (0, 0, 0), (1520, 460, 170, 40))
+        if self.victim_block_choice[1]:
+            pygame.draw.rect(self.screen, (0, 0, 0), (1730, 460, 170, 40))
 
-        # Mouse action
-        self.input_victim()
-        self.input_new_target()
+        # Mouse actions
+        self.mouse_actions()
 
         # Targets
         for i, pos in enumerate(self.target):

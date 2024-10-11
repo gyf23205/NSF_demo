@@ -127,6 +127,7 @@ drone_paths = assign_targets_to_drones(takeoff_positions, target_positions, land
 
 # Remaining paths for re-planning
 target_remaining = target_positions.copy()
+new_target = []
 new_target_positions = []
 
 # RRT-connect for all drone paths
@@ -184,7 +185,6 @@ while fly:
 
     # Mind the clock
     dt = time() - t
-    # print(f'{dt:.2f} seconds')
 
     # Mission completed
     if all(mission_complete):
@@ -239,33 +239,48 @@ while fly:
                 stay_time[idx] = time() - start_time[idx]
 
             # Check stay duration
-            if stay_time[idx] > stay_duration and game_mgr.target_decided:
+            if stay_time[idx] > stay_duration:
                 if target_index[idx] < len(drone_trajectory[idx]) - 1:
                     # Generate victim
                     if not game_mgr.victim_detected[idx]:
                         game_mgr.victim_id[idx] = np.random.randint(low=1, high=11)
                         game_mgr.victim_detected[idx] = True
 
-                    # Once victim is selected, close it
-                    if game_mgr.victim_clicked[idx]:
-                        game_mgr.victim_id[idx] = 0
-                        game_mgr.victim_detected[idx] = False
-                        # Print status
-                        print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} stay checked')
-                        target_remaining.remove(target_current)
-                        # Update and reset
-                        target_index[idx] += 1
-                        stay_flag[idx] = True
-                        stay_time[idx] = 0
-                        # Temporary
-                        indexing_time[idx] = dt
+                    # Once victim is selected, close it: only if there is no unassigned target
+                    if game_mgr.target_decided:
+                        if game_mgr.victim_clicked[idx]:
+                            game_mgr.victim_id[idx] = 0
+                            game_mgr.victim_detected[idx] = False
+                            # Print status
+                            print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
+                            target_remaining.remove(target_current)
+                            # Update and reset
+                            target_index[idx] += 1
+                            stay_flag[idx] = True
+                            stay_time[idx] = 0
+                            # Temporary
+                            indexing_time[idx] = dt
+                    else:
+                        game_mgr.victim_block_choice[idx] = True
+                    # if game_mgr.victim_clicked[idx] and game_mgr.target_decided:
+                    #     game_mgr.victim_id[idx] = 0
+                    #     game_mgr.victim_detected[idx] = False
+                    #     # Print status
+                    #     print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
+                    #     target_remaining.remove(target_current)
+                    #     # Update and reset
+                    #     target_index[idx] += 1
+                    #     stay_flag[idx] = True
+                    #     stay_time[idx] = 0
+                    #     # Temporary
+                    #     indexing_time[idx] = dt
                 else:
                     mission_complete[idx] = True
 
             # Mission (target) update: triggered by the number of remaining targets
-            if len(target_remaining) == 4 and dt > 18.0:
-                # New target detected (comm from mission control)
-                if not game_mgr.new_target_triggered:
+            if idx == 0:    # Do only once: 1st drone
+                if len(target_remaining) == 4 and dt > 18.0 and not game_mgr.new_target_triggered:
+                    # New target detected (comm from mission control)
                     print(f'[t={int(dt)}] New target identified')
                     new_target = [1.6, 1.1]
                     new_target_positions.append(new_target)
@@ -273,16 +288,44 @@ while fly:
                     new_target_gui[0][0] = 300 * new_target_positions[0][0] + 750.0
                     new_target_gui[0][1] = -300 * new_target_positions[0][1] + 450.0
                     game_mgr.set_target(new_target=new_target_gui)
+                    # Update remaining
+                    target_remaining.append(new_target)
                     # Close the case
                     game_mgr.new_target_triggered = True
                     game_mgr.target_decided = False
 
-                # Decision-making on the new target
-                if dt > 25.0:
+                # Decision-making on the new target (triggered) by mouse action
+                if game_mgr.new_target_triggered and not game_mgr.target_decided and game_mgr.target_clicked:
                     print(f'[t={int(dt)}] Decision made on the new target')
+                    # Restore block if there is any
+                    game_mgr.victim_block_choice = [False, False]
+                    # Target decision made
                     game_mgr.target_decided = True
-                else:
-                    print(f'[t={int(dt)}] Waiting for input on the new target')
+                    # [Temporary] Computation without human's decision: Skip the current target
+                    new_start_positions = [drone_paths[0][target_index[0] + 1], drone_paths[1][target_index[1] + 1]]
+                    drone_paths = assign_targets_to_drones(new_start_positions, target_remaining,
+                                                           landing=takeoff_positions)
+                    # [Temporary: Code A] Exclude the overlapped start positions
+                    drone_paths[0] = drone_paths[0][1:]
+                    drone_paths[1] = drone_paths[1][1:]
+                    # RRT-connect for all drone paths
+                    new_drone_trajectory = [[], []]
+                    for d_inx in range(2):
+                        for p_idx in range(len(drone_paths[d_inx]) - 1):
+                            rrt_conn = rrt_connect.RrtConnect(drone_paths[d_inx][p_idx], drone_paths[d_inx][p_idx + 1],
+                                                              0.08, 0.05, 5000)
+                            rrt_conn.planning()
+                            rrt_conn.smoothing()
+                            new_drone_trajectory[d_inx].append(rrt_conn.path)
+                    # Maintain the current trajectory
+                    drone_trajectory = [[drone_trajectory[0][target_index[0]]], [drone_trajectory[1][target_index[1]]]]
+                    for i in range(2):
+                        for j in range(len(new_drone_trajectory[i])):
+                            drone_trajectory[i].append(new_drone_trajectory[i][j])
+                    target_index = [0, 0]
+                    # [Temporary: Code A] Recover the overlapped start positions (target_current)
+                    drone_paths[0].insert(0, new_start_positions[0])
+                    drone_paths[1].insert(0, new_start_positions[1])
 
         else:
             fly = False
