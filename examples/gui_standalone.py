@@ -27,7 +27,7 @@ from rrt_2D import rrt_connect
 import game
 
 # [Temporary] Function allocation
-fa = 2  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
+fa = 3  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
 
 # Drone Setting: Physical constraints
 hover_duration = 10
@@ -199,18 +199,22 @@ game_mgr.update()
 # Target and takeoff positions for GUI: this part should be a function
 target_gui = np.array(target_positions)
 for k in range(len(target_positions)):
-    target_gui[k][0] = 300.0 * target_gui[k][0] + 750
-    target_gui[k][1] = -300.0 * target_gui[k][1] + 450
+    target_gui[k][0] = 240.0 * target_gui[k][0] + 600
+    target_gui[k][1] = -240.0 * target_gui[k][1] + 360
 takeoff_gui = np.array(takeoff_positions)
 for k in range(len(takeoff_positions)):
-    takeoff_gui[k][0] = 300.0 * takeoff_gui[k][0] + 750
-    takeoff_gui[k][1] = -300.0 * takeoff_gui[k][1] + 450
+    takeoff_gui[k][0] = 240.0 * takeoff_gui[k][0] + 600
+    takeoff_gui[k][1] = -240.0 * takeoff_gui[k][1] + 360
 game_mgr.set_target(target=target_gui)
 game_mgr.set_takeoff_positions(takeoff_gui)
 
 # Time
 t = time()
 dt = 0
+dt_prev = [hover_duration, hover_duration]
+
+# Path
+path_index = [0, 0]
 
 """Main Loop"""
 while fly:
@@ -233,8 +237,8 @@ while fly:
 
     for idx in range(2):
         # GUI: this part should be a function
-        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 300.0 + 750
-        game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 300.0 + 450
+        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 240.0 + 600
+        game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 240.0 + 360
         drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi
         game_mgr.objects[idx + 2].position[1] = -75.0 * drones[idx].position[2] + 200.0 + np.random.normal(0, 0.3, 1)[0]
@@ -259,10 +263,14 @@ while fly:
                 # Temporary
                 current_trajectory = drone_trajectory[idx][target_index[idx]]
                 # Find the target positions: {make indexing as a function for better interpretability}
-                path_index = min(int(speed_constant * (dt - indexing_time[idx])) + 1, len(current_trajectory))
-                target = [current_trajectory[-path_index][0], current_trajectory[-path_index][1],
+                increment = speed_constant * (dt - dt_prev[idx])
+                path_index[idx] += increment
+                picked = min(int(path_index[idx]) + 1, len(current_trajectory))
+                target = [current_trajectory[-picked][0], current_trajectory[-picked][1],
                           0.5 * world.expanse[2]]
                 drones[idx].set_position(target)
+                # Time
+                dt_prev[idx] = dt
                 sleep(0.01)
 
             # Check distance to the target
@@ -283,7 +291,7 @@ while fly:
                 if target_index[idx] < len(drone_trajectory[idx]) - 1:
                     # Generate victim
                     if not game_mgr.victim_detected[idx]:
-                        game_mgr.victim_id[idx] = np.random.randint(low=1, high=11)
+                        game_mgr.victim_id[idx] = np.random.randint(low=1, high=21)
                         game_mgr.victim_detected[idx] = True
 
                     # Once victim is selected, close it: only if there is no unassigned target
@@ -300,6 +308,7 @@ while fly:
                             stay_time[idx] = 0
                             # Temporary
                             indexing_time[idx] = dt
+                            path_index[idx] = 0
                     else:
                         game_mgr.victim_block_choice[idx] = True
                 else:
@@ -313,8 +322,8 @@ while fly:
                     new_target = [1.6, 1.1]
                     new_target_positions.append(new_target)
                     new_target_gui = np.array(new_target_positions)
-                    new_target_gui[0][0] = 300 * new_target_positions[0][0] + 750.0
-                    new_target_gui[0][1] = -300 * new_target_positions[0][1] + 450.0
+                    new_target_gui[0][0] = 240 * new_target_positions[0][0] + 600.0
+                    new_target_gui[0][1] = -240 * new_target_positions[0][1] + 360.0
                     game_mgr.set_target(new_target=new_target_gui)
                     # Update remaining
                     target_remaining.append(new_target)
@@ -378,21 +387,44 @@ while fly:
                     game_mgr.wind_triggered = True
                     game_mgr.wind_decided = False
                     print(f'[t={int(dt)}] Environmental change: dangerous wind')
+                    speed_constant = 2.0
 
                 # Turn-off windy condition based on time
                 if game_mgr.wind_danger and game_mgr.wind_triggered and dt > 60.0:
                     game_mgr.wind_danger = False
                     print(f'[t={int(dt)}] Environmental change: stable wind')
+                    speed_constant = 5.0
 
                 # [Temporary] Function allocation
+                # If fa = 1 or 2, skip the wind change response
                 if fa == 1 or fa == 2:
                     game_mgr.wind_clicked = 1
                 # Ask for decision
+                # If fa = 3, ask for human's decision
                 if game_mgr.wind_danger and game_mgr.wind_triggered and not game_mgr.wind_decided:
                     if game_mgr.wind_clicked == 1:
                         game_mgr.wind_decided = True
                         print(f'[t={int(dt)}] Change routes')
                         # Put obstacle avoidance here
+                        speed_constant = 5.0
+                        # Task allocation
+                        current_start = [[drones[0].position[0], drones[0].position[1]],
+                                         [drones[1].position[0], drones[1].position[1]]]
+                        drone_paths = assign_targets_to_drones(current_start, target_remaining,
+                                                               landing=takeoff_positions)
+                        # Put forbidden region
+
+                        # RRT-connect for all drone paths
+                        drone_trajectory = [[], []]
+                        for d_inx in range(2):
+                            for p_idx in range(len(drone_paths[d_inx]) - 1):
+                                rrt_conn = rrt_connect.RrtConnect(drone_paths[d_inx][p_idx],
+                                                                  drone_paths[d_inx][p_idx + 1], 0.08, 0.05, 5000)
+                                rrt_conn.planning()
+                                rrt_conn.smoothing()
+                                drone_trajectory[d_inx].append(rrt_conn.path)
+                        target_index = [0, 0]
+
                     elif game_mgr.wind_clicked == 2:
                         game_mgr.wind_decided = True
                         print(f'[t={int(dt)}] Maintain routes')
@@ -410,8 +442,8 @@ while max(drones[0].position[2], drones[1].position[2]) > 0.01:
         drones[idx].land_in_place()
         sleep(0.01)
         # This should be a function
-        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 300.0 + 750
-        game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 300.0 + 450
+        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 240.0 + 600
+        game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 240.0 + 360
         drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi
         game_mgr.objects[idx + 2].position[1] = -75.0 * drones[idx].position[2] + 200.0 + np.random.normal(0, 0.3, 1)[0]

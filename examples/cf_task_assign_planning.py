@@ -195,8 +195,15 @@ with ParallelContexts(*_qcfs) as qcfs:
 
     # Testing
     target_gui = np.array(target_positions)
-    target_gui = -300.0 * target_gui + np.array([750, 450])
-    game_mgr.set_target(target_gui)
+    for k in range(len(target_positions)):
+        target_gui[k][0] = 300.0 * target_gui[k][0] + 750
+        target_gui[k][1] = -300.0 * target_gui[k][1] + 450
+    takeoff_gui = np.array(takeoff_positions)
+    for k in range(len(takeoff_positions)):
+        takeoff_gui[k][0] = 300.0 * takeoff_gui[k][0] + 750
+        takeoff_gui[k][1] = -300.0 * takeoff_gui[k][1] + 450
+    game_mgr.set_target(target=target_gui)
+    game_mgr.set_takeoff_positions(takeoff_gui)
 
     # Let there be time (This should be right before the while loop)
     t = time()
@@ -209,6 +216,9 @@ with ParallelContexts(*_qcfs) as qcfs:
         if last_key_pressed == pynput.keyboard.Key.esc:
             break
 
+        # GUI input
+        mode = game_mgr.input()
+
         # Mind the clock
         dt = time() - t
 
@@ -220,10 +230,11 @@ with ParallelContexts(*_qcfs) as qcfs:
         # Time out for safety
         for idx, qcf in enumerate(qcfs):
             # GUI
-            game_mgr.objects[idx].position[0] = -qcfs[idx].pose.x * 300.0 + 750
+            game_mgr.objects[idx].position[0] = qcfs[idx].pose.x * 300.0 + 750
             game_mgr.objects[idx].position[1] = -qcfs[idx].pose.y * 300.0 + 450
             yaw = -math.atan2(qcfs[idx].pose.rotmatrix[1][0], qcfs[idx].pose.rotmatrix[0][0])
             game_mgr.objects[idx].rt = yaw * 180 / np.pi
+            game_mgr.objects[idx + 2].position[1] = -75.0 * qcfs[idx].pose.z + 200.0
 
             # Initial hover
             if dt < hover_duration:
@@ -260,24 +271,54 @@ with ParallelContexts(*_qcfs) as qcfs:
 
                 # Check stay start time
                 if target_distance[idx] < stay_distance:
+                    # Measure stay time
                     if stay_flag[idx]:
+                        # Measure: start point
                         start_time[idx] = time()
                         stay_flag[idx] = False
+                    # Measure: end point
                     stay_time[idx] = time() - start_time[idx]
 
                 # Check stay duration
                 if stay_time[idx] > stay_duration:
-                    # Print status
-                    print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} stay checked')
                     if target_index[idx] < len(drone_trajectory[idx]) - 1:
-                        # Update and reset
-                        target_index[idx] += 1
-                        stay_flag[idx] = True
-                        stay_time[idx] = 0
-                        # Temporary
-                        indexing_time[idx] = dt
+                        # Generate victim
+                        if not game_mgr.victim_detected[idx]:
+                            game_mgr.victim_id[idx] = np.random.randint(low=1, high=21)
+                            game_mgr.victim_detected[idx] = True
+
+                        # Once victim is selected, close it: only if there is no unassigned target
+                        if game_mgr.target_decided:
+                            if game_mgr.victim_clicked[idx]:
+                                game_mgr.victim_id[idx] = 0
+                                game_mgr.victim_detected[idx] = False
+                                # Print status
+                                print(
+                                    f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
+                                # target_remaining.remove(target_current)
+                                # Update and reset
+                                target_index[idx] += 1
+                                stay_flag[idx] = True
+                                stay_time[idx] = 0
+                                # Temporary
+                                indexing_time[idx] = dt
+                        else:
+                            game_mgr.victim_block_choice[idx] = True
                     else:
                         mission_complete[idx] = True
+
+                # if stay_time[idx] > stay_duration:
+                #     # Print status
+                #     print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} stay checked')
+                #     if target_index[idx] < len(drone_trajectory[idx]) - 1:
+                #         # Update and reset
+                #         target_index[idx] += 1
+                #         stay_flag[idx] = True
+                #         stay_time[idx] = 0
+                #         # Temporary
+                #         indexing_time[idx] = dt
+                #     else:
+                #         mission_complete[idx] = True
 
             else:
                 fly = False
@@ -291,6 +332,15 @@ with ParallelContexts(*_qcfs) as qcfs:
         for idx, qcf in enumerate(qcfs):
             qcf.land_in_place()
             sleep(0.01)
+            # This should be a function
+            game_mgr.objects[idx].position[0] = qcfs[idx].pose.x * 300.0 + 750
+            game_mgr.objects[idx].position[1] = -qcfs[idx].pose.y * 300.0 + 450
+            yaw = -math.atan2(qcfs[idx].pose.rotmatrix[1][0], qcfs[idx].pose.rotmatrix[0][0])
+            game_mgr.objects[idx].rt = yaw * 180 / np.pi
+            game_mgr.objects[idx + 2].position[1] = -75.0 * qcfs[idx].pose.z + 200.0
+            # GUI rendering
+        game_mgr.update()
+        game_mgr.render()
 
     # Log stop
     stop_event.set()
