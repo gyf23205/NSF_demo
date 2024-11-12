@@ -146,9 +146,9 @@ class VirtualDrone:
 
 
 drones = [VirtualDrone(), VirtualDrone()]
-drones[0].position[0] = -1.0
+drones[0].position[0] = -1.2
 drones[0].position[1] = -0.5
-drones[1].position[0] = -1.0
+drones[1].position[0] = -1.2
 drones[1].position[1] = 0.5
 
 """with ParallelContexts(*_qcfs) as qcfs:"""
@@ -390,10 +390,33 @@ while fly:
                     speed_constant = 2.0
 
                 # Turn-off windy condition based on time
-                if game_mgr.wind_danger and game_mgr.wind_triggered and dt > 60.0:
+                if game_mgr.wind_danger and game_mgr.wind_triggered and dt > 70.0:
                     game_mgr.wind_danger = False
                     print(f'[t={int(dt)}] Environmental change: stable wind')
+                    # Remove wind graphic
+                    game_mgr.reset_wind()
+                    # Speed adjustment
                     speed_constant = 5.0
+                    # Task allocation
+                    current_start = [[drones[0].position[0], drones[0].position[1]],
+                                     [drones[1].position[0], drones[1].position[1]]]
+                    drone_paths = assign_targets_to_drones(current_start, target_remaining,
+                                                           landing=takeoff_positions)
+                    # RRT-connect for all drone paths
+                    drone_trajectory = [[], []]
+                    for d_inx in range(2):
+                        for p_idx in range(len(drone_paths[d_inx]) - 1):
+                            rrt_conn = rrt_connect.RrtConnect(drone_paths[d_inx][p_idx],
+                                                              drone_paths[d_inx][p_idx + 1], 0.08, 0.05, 5000)
+                            rrt_conn.utils.update_obs([], [], [])
+                            rrt_conn.planning()
+                            rrt_conn.smoothing()
+                            drone_trajectory[d_inx].append(rrt_conn.path)
+                    target_index = [0, 0]
+                    # Time correction
+                    path_index = [0, 0]
+                    dt_prev[0] = dt
+                    dt_prev[1] = dt
 
                 # [Temporary] Function allocation
                 # If fa = 1 or 2, skip the wind change response
@@ -406,24 +429,34 @@ while fly:
                         game_mgr.wind_decided = True
                         print(f'[t={int(dt)}] Change routes')
                         # Put obstacle avoidance here
+                        wind = [0, 0, 0.5]
+                        wind_gui = wind.copy()
+                        wind_gui[0] = 240 * wind[0] + 600.0
+                        wind_gui[1] = -240 * wind[1] + 360.0
+                        wind_gui[2] = 240 * wind[2]
+                        game_mgr.set_wind(wind_gui)
+                        # Speed adjustment
                         speed_constant = 5.0
                         # Task allocation
                         current_start = [[drones[0].position[0], drones[0].position[1]],
                                          [drones[1].position[0], drones[1].position[1]]]
                         drone_paths = assign_targets_to_drones(current_start, target_remaining,
                                                                landing=takeoff_positions)
-                        # Put forbidden region
-
                         # RRT-connect for all drone paths
                         drone_trajectory = [[], []]
                         for d_inx in range(2):
                             for p_idx in range(len(drone_paths[d_inx]) - 1):
                                 rrt_conn = rrt_connect.RrtConnect(drone_paths[d_inx][p_idx],
                                                                   drone_paths[d_inx][p_idx + 1], 0.08, 0.05, 5000)
+                                rrt_conn.utils.update_obs([wind], [], [])
                                 rrt_conn.planning()
                                 rrt_conn.smoothing()
                                 drone_trajectory[d_inx].append(rrt_conn.path)
                         target_index = [0, 0]
+                        # Time correction
+                        path_index = [0, 0]
+                        dt_prev[0] = dt
+                        dt_prev[1] = dt
 
                     elif game_mgr.wind_clicked == 2:
                         game_mgr.wind_decided = True

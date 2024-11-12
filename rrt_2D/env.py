@@ -11,6 +11,7 @@ class Env:
         # This should be automatically updated with world.py...
         self.x_range = (-2.5, 2.5)
         self.y_range = (-1.3, 1.3)
+        self.added_circle = []
         self.obs_boundary = self.obs_boundary()
         self.obs_circle = self.obs_circle()
         self.obs_rectangle = self.obs_rectangle()
@@ -50,3 +51,4 @@ class Env:
         obs_cir = []
         # [center_x, center_y, radius]
         return obs_cir
+

@@ -83,6 +83,9 @@ class GameMgr:
         self.new_target = []
         self.new_target_triggered = False
 
+        # Winds
+        self.wind = []
+
         # Takeoff positions
         self.takeoff_position = []
 
@@ -179,6 +182,12 @@ class GameMgr:
             self.target = target
         if new_target is not None:
             self.new_target = new_target
+
+    def set_wind(self, wind):
+        self.wind.append(wind)
+
+    def reset_wind(self):
+        self.wind = []
 
     def set_takeoff_positions(self, position):
         self.takeoff_position = position
@@ -350,6 +359,10 @@ class GameMgr:
             pygame.draw.circle(self.screen, BLUE, pos, 10)
         for i, pos in enumerate(self.new_target):
             pygame.draw.circle(self.screen, RED, pos, 15)
+
+        # Wind
+        for i, value in enumerate(self.wind):
+            pygame.draw.circle(self.screen, (35, 250, 252), [value[0], value[1]], value[2])
 
         # Takeoff positions
         for i, pos in enumerate(self.takeoff_position):

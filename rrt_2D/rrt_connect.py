@@ -91,6 +91,13 @@ class RrtConnect:
         if not self.path:
             return []
 
+        # Skip smoothing for short paths or stay-still
+        if np.linalg.norm(np.array(self.path[0]) - np.array(self.path[-1])) < 1e-7:
+            self.path = [self.path[0], self.path[0], self.path[0], self.path[0], self.path[0]]
+            return []
+        if len(self.path) < 7:
+            return []
+
         # 1) Eliminate redundant waypoints
         # Initialize
         non_redundant_path = [self.path[0]]
@@ -140,6 +147,9 @@ class RrtConnect:
 
         # 3) Plotting, if necessary
         # self.plotting.animation_connect(self.V1, self.V2, self.path, "RRT_CONNECT")
+
+    def add_wind_area(self, wind_area):
+        self.env.added_circle = wind_area
 
     @staticmethod
     def change_node(node_new_prim, node_new_prim2):
