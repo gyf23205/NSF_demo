@@ -2,7 +2,6 @@ import pygame
 import os
 from drone import *
 
-
 BOUND_X_MAX = 1920
 BOUND_Y_MAX = 900
 IMAGE_PATH = 'images/'
@@ -52,6 +51,14 @@ class Background:
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
 
+class Mission:
+    def __init__(self):
+        self.accepted = 0
+        self.rejected = 0
+        self.response_time = []
+        self.correctness = []
+
+
 class GameMgr:
     def __init__(self, mode=1):
         self.initial = True
@@ -88,6 +95,9 @@ class GameMgr:
 
         # Takeoff positions
         self.takeoff_position = []
+
+        # Numbers for mission: finding survivors
+        self.missions = [Mission(), Mission()]
 
         # Drone image: Main drones
         drone1 = Drone(file_name=IMAGE_PATH + 'drone1.png', sc=0.1, rt=0.0)
@@ -150,12 +160,15 @@ class GameMgr:
         # Values
         self.planning_distances = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-        # GUI sub-part 4: [fault]
-        self.display_fault = Font(FONT, FONT_SIZE, (20, 740))
-        self.display_fault.update("           Wind Response")
+        # GUI sub-part 4: [fault (wind)]
+        self.display_fault = Font(FONT, FONT_SIZE, (30, 740))
+        self.display_fault.update("                  Wind Response")
         self.display_fault.update("")
-        self.display_fault.update("      Change         Maintain")
-        self.display_fault.update("       Routes          Routes")
+        self.display_fault.update("Change routes             Maintain routes")
+        self.display_fault.update("Maintain speed            Slow-down speed")
+
+        # GUI sub-part 5: [Mission monitor]
+        self.display_m_status = Font(FONT, FONT_SIZE, (370, 740))
 
         # Event: victim confirmation
         self.victim_id = [0, 0]
@@ -163,6 +176,7 @@ class GameMgr:
         self.victim_detected = [False, False]
         self.victim_clicked = [0, 0]
         self.victim_block_choice = [False, False]
+        self.victim_timing = [0, 0]
 
         # Event: wind
         self.wind_danger = False
@@ -215,14 +229,26 @@ class GameMgr:
         for ind in range(2):
             if 0 < self.victim_id[ind] < 15:
                 if self.victim_clicked[ind] == 1:
+                    self.missions[ind].accepted += 1
+                    self.missions[ind].correctness.append(1)
                     print(f'Correct: accepted by drone {int(ind + 1)}')
+                    print(f'Correctness by drone {int(ind + 1)}: {self.missions[ind].correctness}')
                 elif self.victim_clicked[ind] == 2:
+                    self.missions[ind].rejected += 1
+                    self.missions[ind].correctness.append(0)
                     print(f'Wrong: rejected by drone {int(ind + 1)}')
+                    print(f'Correctness by drone {int(ind + 1)}: {self.missions[ind].correctness}')
             elif self.victim_id[ind] >= 15:
                 if self.victim_clicked[ind] == 1:
+                    self.missions[ind].accepted += 1
+                    self.missions[ind].correctness.append(0)
                     print(f'Wrong: accepted by drone {int(ind + 1)}')
+                    print(f'Correctness by drone {int(ind + 1)}: {self.missions[ind].correctness}')
                 elif self.victim_clicked[ind] == 2:
+                    self.missions[ind].rejected += 1
+                    self.missions[ind].correctness.append(1)
                     print(f'Correct: rejected by drone {int(ind + 1)}')
+                    print(f'Correctness by drone {int(ind + 1)}: {self.missions[ind].correctness}')
 
     def mouse_actions(self):
         # Victim
@@ -289,6 +315,21 @@ class GameMgr:
         self.display_planning_c3.update("")
         self.display_planning_c3.update('%.1f' % self.planning_distances[5])
 
+        # Mission status update
+        self.display_m_status.clear()
+        a0 = self.missions[0].accepted
+        a1 = self.missions[1].accepted
+        r0 = self.missions[0].rejected
+        r1 = self.missions[1].rejected
+        t0 = np.mean(self.missions[0].response_time) if self.missions[0].response_time else 0.0
+        t1 = np.mean(self.missions[1].response_time) if self.missions[1].response_time else 0.0
+        self.display_m_status.update("                       Mission Status: Survivors")
+        self.display_m_status.update("                   Accepted     |     Rejected     |    Avg. Response Time")
+        self.display_m_status.update(
+            "Drone 1:             %d                      %d                       %.2f sec" % (a0, r0, t0))
+        self.display_m_status.update(
+            "Drone 2:             %d                      %d                       %.2f sec" % (a1, r1, t1))
+
     def render(self):
         # Background
         self.screen.fill(WHITE)
@@ -310,15 +351,18 @@ class GameMgr:
             pygame.draw.rect(self.screen, BLACK, (1515, 85, 70, 43))
             pygame.draw.rect(self.screen, BLACK, (1515, 85 + 50, 70, 43))
         else:
-            pygame.draw.rect(self.screen, (200, 200, 200), (1515, 85, 70, 43))
-            pygame.draw.rect(self.screen, (200, 200, 200), (1515, 85 + 50, 70, 43))
-        self.objects[4].load(IMAGE_PATH + 'drone1.png')
-        self.objects[5].load(IMAGE_PATH + 'drone2.png')
+            pygame.draw.rect(self.screen, (0, 255, 0), (1515, 85, 70, 43))
+            pygame.draw.rect(self.screen, (0, 255, 0), (1515, 85 + 50, 70, 43))
+            # Objects (drones - small ones)
+            self.objects[4].load(IMAGE_PATH + 'drone1.png')
+            self.objects[5].load(IMAGE_PATH + 'drone2.png')
+            for i, obj in enumerate(self.objects[4:6]):
+                self.screen.blit(obj.surface, obj.rect)
 
         # Altitude information
         x_alt = [1280, 1400]
-        pygame.draw.rect(self.screen, (100, 100, 100), (x_alt[0], 50, 100, 150))
-        pygame.draw.rect(self.screen, (100, 100, 100), (x_alt[1], 50, 100, 150))
+        pygame.draw.rect(self.screen, (130, 130, 130), (x_alt[0], 50, 100, 150))
+        pygame.draw.rect(self.screen, (130, 130, 130), (x_alt[1], 50, 100, 150))
         pygame.draw.line(self.screen, RED, (x_alt[0], self.objects[2].position[1]),
                          (x_alt[0] + 100, self.objects[2].position[1]), 3)
         pygame.draw.line(self.screen, BLUE, (x_alt[1], self.objects[3].position[1]),
@@ -346,10 +390,10 @@ class GameMgr:
 
         # Mouse selections: wind
         if not self.wind_decided:
-            pygame.draw.rect(self.screen, (0, 255, 0), (45, 790, 90, 80))
-            pygame.draw.rect(self.screen, YELLOW, (45 + 100, 790, 90, 80))
+            pygame.draw.rect(self.screen, (0, 255, 0), (20, 790, 140, 80))
+            pygame.draw.rect(self.screen, YELLOW, (195, 790, 140, 80))
         else:
-            pygame.draw.rect(self.screen, BLACK, (45, 790, 190, 80))
+            pygame.draw.rect(self.screen, BLACK, (15, 790, 320, 80))
 
         # Mouse actions
         self.mouse_actions()
@@ -369,7 +413,7 @@ class GameMgr:
             pygame.draw.circle(self.screen, BLACK, pos, 10)
 
         # Objects (drones)
-        for i, obj in enumerate(self.objects):
+        for i, obj in enumerate(self.objects[0:4]):
             self.screen.blit(obj.surface, obj.rect)
 
         # font interface
@@ -390,6 +434,8 @@ class GameMgr:
         for text in self.display_planning_c3.texts:
             self.screen.blit(text[0], text[1])
         for text in self.display_fault.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_m_status.texts:
             self.screen.blit(text[0], text[1])
 
         # record sign
@@ -433,4 +479,3 @@ class GameMgr:
         #     display_surface.blit(text, textrect)
         #     pygame.display.update()
         #     pygame.time.delay(2500)
-

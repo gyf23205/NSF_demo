@@ -293,12 +293,18 @@ while fly:
                     if not game_mgr.victim_detected[idx]:
                         game_mgr.victim_id[idx] = np.random.randint(low=1, high=21)
                         game_mgr.victim_detected[idx] = True
+                        # To record response time
+                        game_mgr.victim_timing[idx] = dt
 
                     # Once victim is selected, close it: only if there is no unassigned target
                     if game_mgr.target_decided:
                         if game_mgr.victim_clicked[idx]:
                             game_mgr.victim_id[idx] = 0
                             game_mgr.victim_detected[idx] = False
+                            # To record response time
+                            game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
+                            game_mgr.victim_timing[idx] = 0
+                            print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time}')
                             # Print status
                             print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
                             target_remaining.remove(target_current)
@@ -388,10 +394,18 @@ while fly:
                     game_mgr.wind_decided = False
                     print(f'[t={int(dt)}] Environmental change: dangerous wind')
                     speed_constant = 2.0
+                    # Put obstacle avoidance here
+                    wind = [0, 0, 0.5]
+                    wind_gui = wind.copy()
+                    wind_gui[0] = 240 * wind[0] + 600.0
+                    wind_gui[1] = -240 * wind[1] + 360.0
+                    wind_gui[2] = 240 * wind[2]
+                    game_mgr.set_wind(wind_gui)
 
                 # Turn-off windy condition based on time
                 if game_mgr.wind_danger and game_mgr.wind_triggered and dt > 70.0:
                     game_mgr.wind_danger = False
+                    game_mgr.wind_decided = True
                     print(f'[t={int(dt)}] Environmental change: stable wind')
                     # Remove wind graphic
                     game_mgr.reset_wind()
@@ -428,13 +442,6 @@ while fly:
                     if game_mgr.wind_clicked == 1:
                         game_mgr.wind_decided = True
                         print(f'[t={int(dt)}] Change routes')
-                        # Put obstacle avoidance here
-                        wind = [0, 0, 0.5]
-                        wind_gui = wind.copy()
-                        wind_gui[0] = 240 * wind[0] + 600.0
-                        wind_gui[1] = -240 * wind[1] + 360.0
-                        wind_gui[2] = 240 * wind[2]
-                        game_mgr.set_wind(wind_gui)
                         # Speed adjustment
                         speed_constant = 5.0
                         # Task allocation
