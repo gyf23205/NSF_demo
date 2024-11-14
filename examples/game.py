@@ -102,6 +102,9 @@ class GameMgr:
         # Health
         self.health = [100, 100]
 
+        # Survey
+        self.workload = 0
+
         # Drone image: Main drones
         drone1 = Drone(file_name=IMAGE_PATH + 'drone1.png', sc=0.1, rt=0.0)
         drone2 = Drone(file_name=IMAGE_PATH + 'drone2.png', sc=0.1, rt=0.0)
@@ -115,8 +118,8 @@ class GameMgr:
         self.objects.append(drone_side2)
 
         # Drone image: side view - Mission re-planning
-        drone_small1 = Drone(file_name=IMAGE_PATH + 'drone1.png', pos_x=1400, pos_y=250 + 85, sc=0.05, rt=0.0)
-        drone_small2 = Drone(file_name=IMAGE_PATH + 'drone2.png', pos_x=1400, pos_y=250 + 85 + 50, sc=0.05, rt=0.0)
+        drone_small1 = Drone(file_name=IMAGE_PATH + 'drone1.png', pos_x=1400, pos_y=250 + 80, sc=0.05, rt=0.0)
+        drone_small2 = Drone(file_name=IMAGE_PATH + 'drone2.png', pos_x=1400, pos_y=250 + 80 + 50, sc=0.05, rt=0.0)
         self.objects.append(drone_small1)
         self.objects.append(drone_small2)
 
@@ -394,13 +397,13 @@ class GameMgr:
         # Random process
         random1 = np.random.uniform()
         random2 = np.random.uniform()
-        reduce1 = 0.01 if random1 > 0.01 else 0.0
-        reduce2 = 0.01 if random2 > 0.01 else 0.0
+        reduce1 = 0.03 if random1 > 0.01 else 0.0
+        reduce2 = 0.03 if random2 > 0.01 else 0.0
         self.health[0] -= reduce1
         self.health[1] -= reduce2
         # Position
         h_start = [-1.5 * self.health[0] + 200, -1.5 * self.health[1] + 200]
-        h_len = [200 - int(h_start[0]), 200 - int(h_start[1])]
+        h_len = [max(0, 200 - int(h_start[0])), max(0, 200 - int(h_start[1]))]
         pygame.draw.rect(self.screen, (20, 230, 70), (x_hea[0], int(h_start[0]), 100, h_len[0]))
         pygame.draw.rect(self.screen, (20, 230, 70), (x_hea[1], int(h_start[1]), 100, h_len[1]))
 
@@ -494,6 +497,50 @@ class GameMgr:
 
         # ??
         pygame.display.update()
+
+    def mouse_survey(self):
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                self.mouse_pos = pygame.mouse.get_pos()
+                print(self.mouse_pos)
+
+        if 560 <= self.mouse_pos[0] <= 760 and 400 <= self.mouse_pos[1] <= 600:
+            self.workload = 1
+            print('Reported Workload: LOW')
+        elif 860 <= self.mouse_pos[0] <= 1060 and 400 <= self.mouse_pos[1] <= 600:
+            self.workload = 2
+            print('Reported Workload: MEDIUM')
+        elif 1160 <= self.mouse_pos[0] <= 1360 and 400 <= self.mouse_pos[1] <= 600:
+            self.workload = 3
+            print('Reported Workload: HIGH')
+
+    def survey_render(self):
+        font = pygame.font.Font('freesansbold.ttf', 32)
+        text = font.render('Survey: Workload', True, WHITE, BLACK)
+        text_rect = text.get_rect()
+        text_rect.center = (BOUND_X_MAX // 2, BOUND_Y_MAX // 3)
+        self.screen.fill(BLACK)
+        self.screen.blit(text, text_rect)
+
+        # Survey buttons
+        pygame.draw.rect(self.screen, WHITE, (560, 400, 200, 200))
+        pygame.draw.rect(self.screen, WHITE, (860, 400, 200, 200))
+        pygame.draw.rect(self.screen, WHITE, (1160, 400, 200, 200))
+        button = font.render('LOW                      MEDIUM                      HIGH', True, RED)
+        button_rect = text.get_rect()
+        button_rect.center = (760, 500)
+        self.screen.blit(button, button_rect)
+
+        # Check mouse action
+        self.mouse_survey()
+
+        # Update
+        pygame.display.flip()
+        pygame.display.update()
+
+        # Escape
+        if self.workload > 0:
+            self.mode = 4
 
         # Pausing
         # if self.initial:

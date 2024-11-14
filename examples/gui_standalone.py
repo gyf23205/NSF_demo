@@ -4,25 +4,15 @@ Sooyung Byeon
 10/03/2024
 
 To do list:
-- Fault actions: {sensor, actuator, communication...}
-- Environment change actions: {wind, fog, other drones...}
-- Multiple scenarios with different function allocation
-- Function allocation change
-- Mission update actions
-- Data streaming and workload inference in real-time with HR/Cam
-- Asking survey questions after performance
-- Collision avoidance by altitude control
-- Set search area - click targets and hit enter (Is this good enough?)
-
-- Make classes
-- Identify 'GUI parts' clearly
-- Dual Windows (if necessary)
+- Make classes: Identify 'GUI parts' clearly
+- Randomize target point positions and event timings
 """
 
 import pynput
 import numpy as np
-from time import time, sleep
+from time import time, sleep, strftime
 from qfly import World
+import csv
 from rrt_2D import rrt_connect
 import game
 
@@ -498,5 +488,27 @@ while max(drones[0].position[2], drones[1].position[2]) > 0.01:
     # GUI rendering
     game_mgr.update()
     game_mgr.render()
+
+# Self-report
+game_mgr.mode = 3
+while game_mgr.mode == 3:
+    game_mgr.survey_render()
+
+# Data out: {response time, correctness, workload survey}
+response = game_mgr.missions[0].response_time + game_mgr.missions[1].response_time
+correctness = game_mgr.missions[0].correctness + game_mgr.missions[1].correctness
+workload = game_mgr.workload
+
+# If empty, skip
+if not response or not correctness:
+    response = 0
+    correctness = 0
+
+time_string = strftime('%y%m%d%H%M%S')
+filename = '../logs/human_log_' + time_string + '.csv'
+with open(filename, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(['Response', 'Correctness', 'Workload'])
+    writer.writerow([np.mean(response), np.mean(correctness), workload])
 
 print('End GUI standalone mode.')
