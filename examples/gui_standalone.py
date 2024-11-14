@@ -304,7 +304,7 @@ while fly:
                             # To record response time
                             game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
                             game_mgr.victim_timing[idx] = 0
-                            print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time}')
+                            print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
                             # Print status
                             print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
                             target_remaining.remove(target_current)
@@ -468,6 +468,14 @@ while fly:
                     elif game_mgr.wind_clicked == 2:
                         game_mgr.wind_decided = True
                         print(f'[t={int(dt)}] Maintain routes')
+
+            # Mission report
+            if idx == 0:
+                if not game_mgr.report_triggered and dt > 55.0:
+                    game_mgr.report_triggered = True
+                    game_mgr.report_requested = True
+                if game_mgr.report_requested and game_mgr.report_clicked:
+                    game_mgr.report_requested = False
 
         else:
             fly = False

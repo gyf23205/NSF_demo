@@ -77,7 +77,7 @@ class RrtConnect:
                     # Set right direction of path: AD-HOC! Should be revised!
                     if np.linalg.norm(np.array(self.path[-1]) - np.array([self.s_goal.x, self.s_goal.y])) < 1e-2:
                         self.path.reverse()
-                        print('Path reversed for correction.')
+                        # print('Path reversed for correction.')
                     return self.path
 
             if len(self.V2) < len(self.V1):

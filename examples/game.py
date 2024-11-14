@@ -99,6 +99,9 @@ class GameMgr:
         # Numbers for mission: finding survivors
         self.missions = [Mission(), Mission()]
 
+        # Health
+        self.health = [100, 100]
+
         # Drone image: Main drones
         drone1 = Drone(file_name=IMAGE_PATH + 'drone1.png', sc=0.1, rt=0.0)
         drone2 = Drone(file_name=IMAGE_PATH + 'drone2.png', sc=0.1, rt=0.0)
@@ -106,14 +109,14 @@ class GameMgr:
         self.objects.append(drone2)
 
         # Drone image: side view - altitude
-        drone_side1 = Drone(file_name=IMAGE_PATH + 'drone_side1.png', pos_x=1330, pos_y=base_altitude, sc=0.8, rt=0.0)
-        drone_side2 = Drone(file_name=IMAGE_PATH + 'drone_side2.png', pos_x=1450, pos_y=base_altitude, sc=0.8, rt=0.0)
+        drone_side1 = Drone(file_name=IMAGE_PATH + 'drone_side1.png', pos_x=1350, pos_y=base_altitude, sc=0.8, rt=0.0)
+        drone_side2 = Drone(file_name=IMAGE_PATH + 'drone_side2.png', pos_x=1490, pos_y=base_altitude, sc=0.8, rt=0.0)
         self.objects.append(drone_side1)
         self.objects.append(drone_side2)
 
         # Drone image: side view - Mission re-planning
-        drone_small1 = Drone(file_name=IMAGE_PATH + 'drone1.png', pos_x=1550, pos_y=22 + 85, sc=0.05, rt=0.0)
-        drone_small2 = Drone(file_name=IMAGE_PATH + 'drone2.png', pos_x=1550, pos_y=22 + 85 + 50, sc=0.05, rt=0.0)
+        drone_small1 = Drone(file_name=IMAGE_PATH + 'drone1.png', pos_x=1400, pos_y=250 + 85, sc=0.05, rt=0.0)
+        drone_small2 = Drone(file_name=IMAGE_PATH + 'drone2.png', pos_x=1400, pos_y=250 + 85 + 50, sc=0.05, rt=0.0)
         self.objects.append(drone_small1)
         self.objects.append(drone_small2)
 
@@ -125,8 +128,8 @@ class GameMgr:
         self.instruction.update("SIMULATION INSTRUCTION")
 
         # GUI sub-part 1: altitude
-        self.display_navigation = Font(FONT, FONT_SIZE, (1210, 22))
-        self.display_navigation.update("                          Navigation")
+        self.display_navigation = Font(FONT, FONT_SIZE, (1220, 22))
+        self.display_navigation.update("                                Navigation")
         self.display_navigation.update("Too High")
         self.display_navigation.update("")
         self.display_navigation.update("Safe")
@@ -134,7 +137,7 @@ class GameMgr:
         self.display_navigation.update("Too Low")
 
         # GUI sub-part 2: [mission] 1) update mission / 2) confirm victim
-        self.display_mission = Font(FONT, FONT_SIZE, (1320, 250))
+        self.display_mission = Font(FONT, FONT_SIZE, (1320, 470))
         self.display_mission.update("                                    Confirm Victims")
         self.display_mission.update("")
         self.display_mission.update("")
@@ -150,13 +153,14 @@ class GameMgr:
         self.display_mission.update("Accept        Reject                                        Accept        Reject")
 
         # GUI sub-part 3: [guidance] re-planning
-        self.display_planning = Font(FONT, FONT_SIZE, (1520, 22))
+        x_rep = [1370, 250]
+        self.display_planning = Font(FONT, FONT_SIZE, (x_rep[0], x_rep[1]))
         self.display_planning.update("                        Mission Re-planning")
         self.display_planning.update("Decision   Total Dist.   Drone 1 Dist.   Drone 2 Dist.")
         # Column-wise
-        self.display_planning_c1 = Font(FONT, FONT_SIZE, (1620, 22 + 65))
-        self.display_planning_c2 = Font(FONT, FONT_SIZE, (1620 + 1 * 100, 22 + 65))
-        self.display_planning_c3 = Font(FONT, FONT_SIZE, (1620 + 2 * 100, 22 + 65))
+        self.display_planning_c1 = Font(FONT, FONT_SIZE, (x_rep[0] + 100, x_rep[1] + 65))
+        self.display_planning_c2 = Font(FONT, FONT_SIZE, (x_rep[0] + 100 + 1 * 100, x_rep[1] + 65))
+        self.display_planning_c3 = Font(FONT, FONT_SIZE, (x_rep[0] + 100 + 2 * 100, x_rep[1] + 65))
         # Values
         self.planning_distances = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
@@ -169,6 +173,18 @@ class GameMgr:
 
         # GUI sub-part 5: [Mission monitor]
         self.display_m_status = Font(FONT, FONT_SIZE, (370, 740))
+
+        # GUI sub-part 6: [Mission report]
+        self.display_m_report = Font(FONT, FONT_SIZE, (970, 740))
+        self.display_m_report.update("    Mission Report")
+        value = np.random.randint(low=3, high=6)
+        self.display_m_report.update("Found >= %d survivors?" % value)
+        self.display_m_report.update("")
+        self.display_m_report.update("YES                 NO")
+
+        # GUI sub-part 7: [Drone health]
+        self.display_health = Font(FONT, FONT_SIZE, (1680, 22))
+        self.display_health.update("Drone Health")
 
         # Event: victim confirmation
         self.victim_id = [0, 0]
@@ -184,9 +200,10 @@ class GameMgr:
         self.wind_decided = True
         self.wind_clicked = 0
 
-        # Obstacles
-
-        # Position of objects
+        # Mission report
+        self.report_triggered = False
+        self.report_requested = False
+        self.report_clicked = 0
 
         # Input device
         self.mouse_pos = [0, 0]
@@ -252,28 +269,33 @@ class GameMgr:
 
     def mouse_actions(self):
         # Victim
-        if 1310 <= self.mouse_pos[0] <= 1390 and 605 <= self.mouse_pos[1] <= 645:
+        if 1310 <= self.mouse_pos[0] <= 1390 and 825 <= self.mouse_pos[1] <= 865:
             self.victim_clicked[0] = 1  # Accepted by drone 1
             self.correct_victim()
-        elif 1400 <= self.mouse_pos[0] <= 1480 and 605 <= self.mouse_pos[1] <= 645:
+        elif 1400 <= self.mouse_pos[0] <= 1480 and 825 <= self.mouse_pos[1] <= 865:
             self.victim_clicked[0] = 2  # Rejected by drone 1
             self.correct_victim()
-        elif 1640 <= self.mouse_pos[0] <= 1720 and 605 <= self.mouse_pos[1] <= 645:
+        elif 1640 <= self.mouse_pos[0] <= 1720 and 825 <= self.mouse_pos[1] <= 865:
             self.victim_clicked[1] = 1  # Accepted by drone 2
             self.correct_victim()
-        elif 1730 <= self.mouse_pos[0] <= 1810 and 605 <= self.mouse_pos[1] <= 645:
+        elif 1730 <= self.mouse_pos[0] <= 1810 and 825 <= self.mouse_pos[1] <= 865:
             self.victim_clicked[1] = 2  # Accepted by drone 2
             self.correct_victim()
         # New target
-        elif 1515 <= self.mouse_pos[0] <= 1585 and 85 <= self.mouse_pos[1] <= 128:
+        elif 1370 <= self.mouse_pos[0] <= 1745 and 310 <= self.mouse_pos[1] <= 355:
             self.target_clicked = 1
-        elif 1515 <= self.mouse_pos[0] <= 1585 and 135 <= self.mouse_pos[1] <= 177:
+        elif 1370 <= self.mouse_pos[0] <= 1745 and 360 <= self.mouse_pos[1] <= 405:
             self.target_clicked = 2
         # Wind
         elif 45 <= self.mouse_pos[0] <= 135 and 790 <= self.mouse_pos[1] <= 870:
             self.wind_clicked = 1
         elif 145 <= self.mouse_pos[0] <= 235 and 790 <= self.mouse_pos[1] <= 870:
             self.wind_clicked = 2
+        # Mission report
+        elif 935 <= self.mouse_pos[0] <= 1035 and 800 <= self.mouse_pos[1] <= 880:
+            self.report_clicked = 1
+        elif 1050 <= self.mouse_pos[0] <= 1150 and 800 <= self.mouse_pos[1] <= 880:
+            self.report_clicked = 2
         # Reset clicked
         else:
             self.victim_clicked[0] = 0  # Reset to unselected
@@ -323,7 +345,7 @@ class GameMgr:
         r1 = self.missions[1].rejected
         t0 = np.mean(self.missions[0].response_time) if self.missions[0].response_time else 0.0
         t1 = np.mean(self.missions[1].response_time) if self.missions[1].response_time else 0.0
-        self.display_m_status.update("                       Mission Status: Survivors")
+        self.display_m_status.update("                                  Mission Status: Survivors")
         self.display_m_status.update("                   Accepted     |     Rejected     |    Avg. Response Time")
         self.display_m_status.update(
             "Drone 1:             %d                      %d                       %.2f sec" % (a0, r0, t0))
@@ -335,9 +357,6 @@ class GameMgr:
         self.screen.fill(WHITE)
         self.screen.blit(self.background.surface, self.background.rect)
 
-        # Visual feedback
-        # pygame.draw.rect(self.screen, self.visual_code, (10, 658, 100, 100))
-
         # Objects: drones
         self.objects[0].load(IMAGE_PATH + 'drone1.png')
         self.objects[1].load(IMAGE_PATH + 'drone2.png')
@@ -347,12 +366,12 @@ class GameMgr:
         self.objects[3].load(IMAGE_PATH + 'drone_side2.png')
 
         # Objects: drones - small ones
+        x_rep = [1370, 310]
         if self.target_decided:
-            pygame.draw.rect(self.screen, BLACK, (1515, 85, 70, 43))
-            pygame.draw.rect(self.screen, BLACK, (1515, 85 + 50, 70, 43))
+            pygame.draw.rect(self.screen, BLACK, (x_rep[0], x_rep[1], 375, 110))
         else:
-            pygame.draw.rect(self.screen, (0, 255, 0), (1515, 85, 70, 43))
-            pygame.draw.rect(self.screen, (0, 255, 0), (1515, 85 + 50, 70, 43))
+            pygame.draw.rect(self.screen, (0, 255, 0), (x_rep[0], x_rep[1], 375, 45))
+            pygame.draw.rect(self.screen, YELLOW, (x_rep[0], x_rep[1] + 50, 375, 45))
             # Objects (drones - small ones)
             self.objects[4].load(IMAGE_PATH + 'drone1.png')
             self.objects[5].load(IMAGE_PATH + 'drone2.png')
@@ -360,7 +379,7 @@ class GameMgr:
                 self.screen.blit(obj.surface, obj.rect)
 
         # Altitude information
-        x_alt = [1280, 1400]
+        x_alt = [1300, 1440]
         pygame.draw.rect(self.screen, (130, 130, 130), (x_alt[0], 50, 100, 150))
         pygame.draw.rect(self.screen, (130, 130, 130), (x_alt[1], 50, 100, 150))
         pygame.draw.line(self.screen, RED, (x_alt[0], self.objects[2].position[1]),
@@ -368,17 +387,34 @@ class GameMgr:
         pygame.draw.line(self.screen, BLUE, (x_alt[1], self.objects[3].position[1]),
                          (x_alt[1] + 100, self.objects[3].position[1]), 3)
 
+        # Drone health
+        x_hea = [1610, 1750]
+        pygame.draw.rect(self.screen, BLACK, (x_hea[0], 50, 100, 150))
+        pygame.draw.rect(self.screen, BLACK, (x_hea[1], 50, 100, 150))
+        # Random process
+        random1 = np.random.uniform()
+        random2 = np.random.uniform()
+        reduce1 = 0.01 if random1 > 0.01 else 0.0
+        reduce2 = 0.01 if random2 > 0.01 else 0.0
+        self.health[0] -= reduce1
+        self.health[1] -= reduce2
+        # Position
+        h_start = [-1.5 * self.health[0] + 200, -1.5 * self.health[1] + 200]
+        h_len = [200 - int(h_start[0]), 200 - int(h_start[1])]
+        pygame.draw.rect(self.screen, (20, 230, 70), (x_hea[0], int(h_start[0]), 100, h_len[0]))
+        pygame.draw.rect(self.screen, (20, 230, 70), (x_hea[1], int(h_start[1]), 100, h_len[1]))
+
         # Victims
         for ind in range(2):
             if self.victim_id[ind] > 0:
                 image = 'victim{0}.jpeg'.format(self.victim_id[ind])
-                self.victim_images[ind] = Drone(file_name=IMAGE_PATH + image, pos_x=1385 + 350 * ind, pos_y=440,
+                self.victim_images[ind] = Drone(file_name=IMAGE_PATH + image, pos_x=1385 + 350 * ind, pos_y=660,
                                                 sc=0.25, rt=0.0)
                 self.screen.blit(self.victim_images[ind].surface, self.victim_images[ind].rect)
 
         # Mouse selections: victim
         x_vic = [1310, 1640]
-        y_vic = 605
+        y_vic = 825
         pygame.draw.rect(self.screen, (0, 150, 200), (x_vic[0], y_vic, 80, 40))
         pygame.draw.rect(self.screen, (250, 50, 50), (x_vic[0] + 90, y_vic, 80, 40))
         pygame.draw.rect(self.screen, (0, 150, 200), (x_vic[1], y_vic, 80, 40))
@@ -395,6 +431,17 @@ class GameMgr:
         else:
             pygame.draw.rect(self.screen, BLACK, (15, 790, 320, 80))
 
+        # Wind
+        for i, value in enumerate(self.wind):
+            pygame.draw.circle(self.screen, (35, 250, 252), [value[0], value[1]], value[2])
+
+        # Mission report
+        if self.report_requested:
+            pygame.draw.rect(self.screen, (0, 150, 200), (935, 800, 100, 80))
+            pygame.draw.rect(self.screen, (250, 50, 50), (1050, 800, 100, 80))
+        else:
+            pygame.draw.rect(self.screen, BLACK, (935, 770, 215, 110))
+
         # Mouse actions
         self.mouse_actions()
 
@@ -403,10 +450,6 @@ class GameMgr:
             pygame.draw.circle(self.screen, BLUE, pos, 10)
         for i, pos in enumerate(self.new_target):
             pygame.draw.circle(self.screen, RED, pos, 15)
-
-        # Wind
-        for i, value in enumerate(self.wind):
-            pygame.draw.circle(self.screen, (35, 250, 252), [value[0], value[1]], value[2])
 
         # Takeoff positions
         for i, pos in enumerate(self.takeoff_position):
@@ -436,6 +479,10 @@ class GameMgr:
         for text in self.display_fault.texts:
             self.screen.blit(text[0], text[1])
         for text in self.display_m_status.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_m_report.texts:
+            self.screen.blit(text[0], text[1])
+        for text in self.display_health.texts:
             self.screen.blit(text[0], text[1])
 
         # record sign
