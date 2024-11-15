@@ -201,6 +201,7 @@ class GameMgr:
         self.wind_danger = False
         self.wind_triggered = False
         self.wind_decided = True
+        self.wind_closed = True
         self.wind_clicked = 0
 
         # Mission report
@@ -304,7 +305,7 @@ class GameMgr:
             self.victim_clicked[0] = 0  # Reset to unselected
             self.victim_clicked[1] = 0
             self.target_clicked = 0
-            self.wind_clicked = 0
+            # self.wind_clicked = 0
 
         # Reset mouse position
         self.mouse_pos = [0, 0]
@@ -428,7 +429,7 @@ class GameMgr:
             pygame.draw.rect(self.screen, (0, 0, 0), (x_vic[1], y_vic, 170, 40))
 
         # Mouse selections: wind
-        if not self.wind_decided:
+        if not self.wind_closed:
             pygame.draw.rect(self.screen, (0, 255, 0), (20, 790, 140, 80))
             pygame.draw.rect(self.screen, YELLOW, (195, 790, 140, 80))
         else:

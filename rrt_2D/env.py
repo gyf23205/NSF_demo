@@ -19,10 +19,10 @@ class Env:
     @staticmethod
     def obs_boundary():
         obs_boundary = [
-            [-2.5, -1.3, 0.1, 2.6],
-            [-2.5, 1.3, 5, 0.1],
-            [-2.5 + 0.1, -1.3, 5, 0.1],
-            [2.5, -1.3 + 0.1, 0.1, 2.6]
+            [-2.6, -1.4, 0.1, 2.8],
+            [-2.6, 1.3, 5.2, 0.1],
+            [-2.6, -1.4, 5.2, 0.1],
+            [2.5, -1.4, 0.1, 2.8]
         ]
         # [start_x, start_y, horizontal length, vertical length]
         return obs_boundary
