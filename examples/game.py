@@ -290,9 +290,9 @@ class GameMgr:
         elif 1370 <= self.mouse_pos[0] <= 1745 and 360 <= self.mouse_pos[1] <= 405:
             self.target_clicked = 2
         # Wind
-        elif 45 <= self.mouse_pos[0] <= 135 and 790 <= self.mouse_pos[1] <= 870:
+        elif 20 <= self.mouse_pos[0] <= 160 and 790 <= self.mouse_pos[1] <= 870:
             self.wind_clicked = 1
-        elif 145 <= self.mouse_pos[0] <= 235 and 790 <= self.mouse_pos[1] <= 870:
+        elif 195 <= self.mouse_pos[0] <= 335 and 790 <= self.mouse_pos[1] <= 870:
             self.wind_clicked = 2
         # Mission report
         elif 935 <= self.mouse_pos[0] <= 1035 and 800 <= self.mouse_pos[1] <= 880:
@@ -434,7 +434,7 @@ class GameMgr:
         else:
             pygame.draw.rect(self.screen, BLACK, (15, 790, 320, 80))
 
-        # Wind
+        # Wind as obstacle
         for i, value in enumerate(self.wind):
             pygame.draw.circle(self.screen, (35, 250, 252), [value[0], value[1]], value[2])
 

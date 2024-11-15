@@ -24,7 +24,7 @@ hover_duration = 10
 stay_duration = 5
 stay_distance = 0.1
 separation_distance = 0.5
-total_duration = 120
+total_duration = 180
 speed_constant = 5.0
 indexing_time = [hover_duration, hover_duration]
 
@@ -149,13 +149,34 @@ fly = True
 # Log: omitted
 
 # Task allocation
-target_positions = [[2.0, -0.7], [-0.1, -0.9], [-2.0, -1.0], [-1.0, 0.7], [2.0, 1.0], [-0.5, -0.5]]
 takeoff_positions = [[drones[0].position[0], drones[0].position[1]], [drones[1].position[0], drones[1].position[1]]]
+random_positions = []
+num_targets = 7
+while len(random_positions) < num_targets:
+    new_position = [np.random.uniform(-2.45, 2.45), np.random.uniform(-1.25, 1.25)]
+
+    # Check distance to existing positions
+    if all(distance(new_position, existing) >= 0.55 for existing in random_positions + takeoff_positions):
+        # Avoid takeoff and wind position by force
+        if distance(new_position, [0, 0]) > 0.6:
+            random_positions.append(new_position)
+
+# Known target and new target
+new_target = random_positions[-1]
+target_positions = random_positions[0:num_targets - 1]
+
+# Task assignment in advance
 drone_paths = assign_targets_to_drones(takeoff_positions, target_positions, landing=takeoff_positions)
+
+# Wind timing
+wind_on = np.random.normal(loc=30.0, scale=3.0)
+wind_off = np.random.normal(loc=70.0, scale=3.0)
+
+# Report timing
+report_on = np.random.normal(loc=55.0, scale=3.0)
 
 # Remaining paths for re-planning
 target_remaining = target_positions.copy()
-new_target = []
 new_target_positions = []
 path1 = []
 path2 = []
@@ -255,6 +276,10 @@ while fly:
                 # Find the target positions: {make indexing as a function for better interpretability}
                 increment = speed_constant * (dt - dt_prev[idx])
                 path_index[idx] += increment
+                if not path_index:
+                    print(path_index)
+                    print(current_trajectory)
+                    print('Somthing went to wrong.')
                 picked = min(int(path_index[idx]) + 1, len(current_trajectory))
                 target = [current_trajectory[-picked][0], current_trajectory[-picked][1],
                           0.5 * world.expanse[2]]
@@ -315,7 +340,6 @@ while fly:
                 if len(target_remaining) == 4 and dt > 18.0 and not game_mgr.new_target_triggered:
                     # New target detected (comm from mission control)
                     print(f'[t={int(dt)}] New target identified')
-                    new_target = [1.6, 1.1]
                     new_target_positions.append(new_target)
                     new_target_gui = np.array(new_target_positions)
                     new_target_gui[0][0] = 240 * new_target_positions[0][0] + 600.0
@@ -378,7 +402,7 @@ while fly:
             # Wind (fault) condition
             if idx == 0:
                 # Trigger windy condition based on time
-                if not game_mgr.wind_triggered and dt > 30.0:
+                if not game_mgr.wind_triggered and dt > wind_on:
                     game_mgr.wind_danger = True
                     game_mgr.wind_triggered = True
                     game_mgr.wind_decided = False
@@ -393,7 +417,7 @@ while fly:
                     game_mgr.set_wind(wind_gui)
 
                 # Turn-off windy condition based on time
-                if game_mgr.wind_danger and game_mgr.wind_triggered and dt > 70.0:
+                if game_mgr.wind_danger and game_mgr.wind_triggered and dt > wind_off:
                     game_mgr.wind_danger = False
                     game_mgr.wind_decided = True
                     print(f'[t={int(dt)}] Environmental change: stable wind')
@@ -461,7 +485,7 @@ while fly:
 
             # Mission report
             if idx == 0:
-                if not game_mgr.report_triggered and dt > 55.0:
+                if not game_mgr.report_triggered and dt > report_on:
                     game_mgr.report_triggered = True
                     game_mgr.report_requested = True
                 if game_mgr.report_requested and game_mgr.report_clicked:
@@ -508,7 +532,7 @@ time_string = strftime('%y%m%d%H%M%S')
 filename = '../logs/human_log_' + time_string + '.csv'
 with open(filename, mode='w', newline='') as file:
     writer = csv.writer(file)
-    writer.writerow(['Response', 'Correctness', 'Workload'])
-    writer.writerow([np.mean(response), np.mean(correctness), workload])
+    writer.writerow(['Response', 'Correctness', 'Workload', 'Allocation'])
+    writer.writerow([np.mean(response), np.mean(correctness), workload, fa])
 
 print('End GUI standalone mode.')
