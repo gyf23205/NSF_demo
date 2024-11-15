@@ -275,3 +275,6 @@ docs/.jekyll-metadata
 
 # Python venv
 venv/
+
+# Produced data
+*.csv
