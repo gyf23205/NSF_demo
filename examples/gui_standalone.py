@@ -17,24 +17,20 @@ from rrt_2D import rrt_connect
 import game
 
 # Additional import
-import matplotlib.pyplot as plt
-import math
 import os
 import glob
-import ast
-from scipy import interpolate
-from scipy.signal import butter, filtfilt
-
 import sys
 import shutil
 
 # Allow importing bleakheart from parent directory
 sys.path.append('../')
-
 Openface_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Openface/"  # Openface output directory
 ECG_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/ECG/"
-latest_csv = max(glob.glob(Openface_directory + '*.csv'), key=os.path.getctime)  # give path to your desired file path
-print(latest_csv)
+try:
+    latest_csv = max(glob.glob(Openface_directory + '*.csv'), key=os.path.getctime)  # give path to your desired file path
+    print(latest_csv)
+except ValueError:
+    print('No csv file at Openface.')
 ##########################################
 
 # [Temporary] Function allocation
@@ -47,7 +43,6 @@ stay_distance = 0.1
 separation_distance = 0.5
 total_duration = 180
 speed_constant = 5.0
-indexing_time = [hover_duration, hover_duration]
 
 # Set up the world
 world = World()
@@ -122,8 +117,8 @@ def avoid_altitude_control(drones, proximity=0.5):
     altitude = [0, 0]
     # If they are too close, ...
     if distance(drones[0], drones[1]) < proximity:
-        altitude[0] = 0.3
-        altitude[1] = -0.3
+        altitude[0] = 0.1
+        altitude[1] = -0.1
 
     return altitude
 
@@ -157,6 +152,7 @@ class VirtualDrone:
 
 
 drones = [VirtualDrone(), VirtualDrone()]
+# Drone initial positions
 drones[0].position[0] = -1.2
 drones[0].position[1] = -0.5
 drones[1].position[0] = -1.2
@@ -169,11 +165,13 @@ fly = True
 
 # Log: omitted
 
+# Random seed control
+# np.random.seed(47)
+
 # Task allocation
 takeoff_positions = [[drones[0].position[0], drones[0].position[1]], [drones[1].position[0], drones[1].position[1]]]
 random_positions = []
 num_targets = 7
-np.random.seed(47)
 while len(random_positions) < num_targets:
     new_position = [np.random.uniform(-2.45, 2.45), np.random.uniform(-1.25, 1.25)]
 
@@ -191,6 +189,15 @@ target_positions = random_positions[0:num_targets - 1]
 # new_target = [1.6, 1.1]
 # target_positions = [[2.0, -0.7], [-0.1, -0.9], [-2.0, -1.0], [-1.0, 0.7], [2.0, 1.0], [-0.5, -0.5]]
 
+# Survivor images
+survivor_images = set()
+while len(survivor_images) < num_targets:
+    random_number = np.random.randint(low=1, high=21)
+    survivor_images.add(random_number)
+survivor_images = list(survivor_images)
+survivor_index = 0
+
+
 # Task assignment in advance
 drone_paths = assign_targets_to_drones(takeoff_positions, target_positions, landing=takeoff_positions)
 
@@ -202,9 +209,11 @@ wind_off = np.random.normal(loc=70.0, scale=3.0)
 # Report timing
 report_on = np.random.normal(loc=55.0, scale=3.0)
 
+# New target
+update_on = np.random.normal(loc=18.0, scale=1.0)
+
 # Remaining paths for re-planning
 target_remaining = target_positions.copy()
-new_target_positions = []
 path1 = []
 path2 = []
 
@@ -234,15 +243,9 @@ mission_complete = [False, False]
 game_mgr = game.GameMgr()
 game_mgr.update()
 
-# Target and takeoff positions for GUI: this part should be a function
-target_gui = np.array(target_positions)
-for k in range(len(target_positions)):
-    target_gui[k][0] = 240.0 * target_gui[k][0] + 600
-    target_gui[k][1] = -240.0 * target_gui[k][1] + 360
-takeoff_gui = np.array(takeoff_positions)
-for k in range(len(takeoff_positions)):
-    takeoff_gui[k][0] = 240.0 * takeoff_gui[k][0] + 600
-    takeoff_gui[k][1] = -240.0 * takeoff_gui[k][1] + 360
+# Target and takeoff positions for GUI
+target_gui = game_mgr.position_meter_to_gui(target_positions)
+takeoff_gui = game_mgr.position_meter_to_gui(takeoff_positions)
 game_mgr.set_target(target=target_gui)
 game_mgr.set_takeoff_positions(takeoff_gui)
 
@@ -260,8 +263,8 @@ frame_old = []
 error_ind = False
 ecg_csv = ECG_directory + 'ecg.csv'
 try:
-    with open(str(ecg_csv), 'w') as myfile:
-        wr = csv.writer(myfile)
+    with open(str(ecg_csv), 'w') as my_file:
+        wr = csv.writer(my_file)
         wr.writerow(frame_old)
 except:
     error_ind = True
@@ -282,7 +285,6 @@ try:
 except:
     error_ind = True
     print('Error detected: Openface')
-
 #######################################################
 
 """Main Loop"""
@@ -305,12 +307,11 @@ while fly:
         break
 
     for idx in range(2):
-        # GUI: this part should be a function
-        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 240.0 + 600
-        game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 240.0 + 360
+        # GUI: transform from meter to gui
+        game_mgr.objects[idx].position = game_mgr.position_meter_to_gui_single(drones[idx].position)
         drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi
-        game_mgr.objects[idx + 2].position[1] = -75.0 * drones[idx].position[2] + 200.0 + np.random.normal(0, 0.3, 1)[0]
+        game_mgr.objects[idx + 2].position[1] = game_mgr.altitude_meter_to_gui(drones[idx].position[2], noise=True)
 
         # Initial hover
         if dt < hover_duration:
@@ -328,7 +329,9 @@ while fly:
                 sleep(0.01)
                 continue
             else:
-                # Mutual avoidance by altitude control: TBD
+                # Mutual avoidance by altitude control
+                drone_positions = [[drones[0].position[0:2]], [drones[1].position[0:2]]]
+                altitude_adjust = avoid_altitude_control(drone_positions)
                 # Temporary
                 current_trajectory = drone_trajectory[idx][target_index[idx]]
                 # Find the target positions: {make indexing as a function for better interpretability}
@@ -336,7 +339,7 @@ while fly:
                 path_index[idx] += increment
                 picked = min(int(path_index[idx]) + 1, len(current_trajectory))
                 target = [current_trajectory[-picked][0], current_trajectory[-picked][1],
-                          0.5 * world.expanse[2]]
+                          0.5 * world.expanse[2] + altitude_adjust[idx]]
                 drones[idx].set_position(target)
                 # Time
                 dt_prev[idx] = dt
@@ -360,7 +363,8 @@ while fly:
                 if target_index[idx] < len(drone_trajectory[idx]) - 1:
                     # Generate victim
                     if not game_mgr.victim_detected[idx]:
-                        game_mgr.victim_id[idx] = np.random.randint(low=1, high=21)
+                        game_mgr.victim_id[idx] = survivor_images[survivor_index]
+                        survivor_index += 1
                         game_mgr.victim_detected[idx] = True
                         # To record response time
                         game_mgr.victim_timing[idx] = dt
@@ -372,19 +376,18 @@ while fly:
                             game_mgr.victim_detected[idx] = False
                             # To record response time
                             game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
+                            game_mgr.missions[idx].time_stamp.append(dt)
+                            game_mgr.missions[idx].drone_id.append(idx)
                             game_mgr.victim_timing[idx] = 0
-                            print(
-                                f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
+                            print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
                             # Print status
-                            print(
-                                f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
+                            print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index[idx] + 1)} accomplished')
                             target_remaining.remove(target_current)
                             # Update and reset
                             target_index[idx] += 1
                             stay_flag[idx] = True
                             stay_time[idx] = 0
                             # Temporary
-                            indexing_time[idx] = dt
                             path_index[idx] = 0
                     else:
                         game_mgr.victim_block_choice[idx] = True
@@ -393,14 +396,11 @@ while fly:
 
             # Mission (target) update: triggered by the number of remaining targets
             if idx == 0:  # Do only once: 1st drone
-                if len(target_remaining) == 4 and dt > 18.0 and not game_mgr.new_target_triggered:
+                if len(target_remaining) == 4 and dt > update_on and not game_mgr.new_target_triggered:
                     # New target detected (comm from mission control)
                     print(f'[t={int(dt)}] New target identified')
-                    new_target_positions.append(new_target)
-                    new_target_gui = np.array(new_target_positions)
-                    new_target_gui[0][0] = 240 * new_target_positions[0][0] + 600.0
-                    new_target_gui[0][1] = -240 * new_target_positions[0][1] + 360.0
-                    game_mgr.set_target(new_target=new_target_gui)
+                    new_target_gui = game_mgr.position_meter_to_gui_single(new_target)
+                    game_mgr.set_target(new_target=[new_target_gui])
                     # Update remaining
                     target_remaining.append(new_target)
                     # Close the case
@@ -466,11 +466,7 @@ while fly:
                     print(f'[t={int(dt)}] Environmental change: dangerous wind')
                     speed_constant = 2.0
                     # Put obstacle avoidance here
-                    wind_gui = wind.copy()
-                    wind_gui[0] = 240 * wind[0] + 600.0
-                    wind_gui[1] = -240 * wind[1] + 360.0
-                    wind_gui[2] = 240 * wind[2]
-                    game_mgr.set_wind(wind_gui)
+                    game_mgr.set_wind(wind, meter=True)
 
                 # Turn-off windy condition based on time
                 if game_mgr.wind_danger and game_mgr.wind_triggered and dt > wind_off:
@@ -567,12 +563,10 @@ while max(drones[0].position[2], drones[1].position[2]) > 0.01:
     for idx in range(2):
         drones[idx].land_in_place()
         sleep(0.01)
-        # This should be a function
-        game_mgr.objects[idx].position[0] = drones[idx].position[0] * 240.0 + 600
-        game_mgr.objects[idx].position[1] = -drones[idx].position[1] * 240.0 + 360
+        game_mgr.objects[idx].position = game_mgr.position_meter_to_gui_single(drones[idx].position)
         drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.objects[idx].rt = drones[idx].rt * 180 / np.pi
-        game_mgr.objects[idx + 2].position[1] = -75.0 * drones[idx].position[2] + 200.0 + np.random.normal(0, 0.3, 1)[0]
+        game_mgr.objects[idx + 2].position[1] = game_mgr.altitude_meter_to_gui(drones[idx].position[2], noise=True)
     # GUI rendering
     game_mgr.update()
     game_mgr.render()
@@ -588,23 +582,31 @@ except shutil.SameFileError:
 # Self-report
 game_mgr.mode = 3
 while game_mgr.mode == 3:
-    game_mgr.survey_render()
+    game_mgr.workload_render()
+while game_mgr.mode == 4:
+    game_mgr.perceived_risk_render()
 
 # Data out: {response time, correctness, workload survey}
+time_stamp = game_mgr.missions[0].time_stamp + game_mgr.missions[1].time_stamp
+drone_id = game_mgr.missions[0].drone_id + game_mgr.missions[1].drone_id
 response = game_mgr.missions[0].response_time + game_mgr.missions[1].response_time
 correctness = game_mgr.missions[0].correctness + game_mgr.missions[1].correctness
 workload = game_mgr.workload
+p_risk = game_mgr.p_risk
 
 # If empty, skip
-if not response or not correctness:
-    response = 0
-    correctness = 0
+if not response:
+    time_stamp = [0]
+    drone_id = [0]
+    response = [0]
+    correctness = [0]
 
 time_string = strftime('%y%m%d%H%M%S')
 filename = '../logs/human_log_' + time_string + '.csv'
 with open(filename, mode='w', newline='') as file:
     writer = csv.writer(file)
-    writer.writerow(['Response', 'Correctness', 'Workload', 'Allocation'])
-    writer.writerow([np.mean(response), np.mean(correctness), workload, fa])
+    writer.writerow(['Drone', 'Time', 'Response', 'Correctness', 'Workload', 'Risk', 'Allocation'])
+    for i in range(len(response)):
+        writer.writerow([drone_id[i], time_stamp[i], response[i], correctness[i], workload, p_risk, fa])
 
 print('End GUI standalone mode.')

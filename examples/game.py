@@ -57,6 +57,8 @@ class Mission:
         self.rejected = 0
         self.response_time = []
         self.correctness = []
+        self.time_stamp = []
+        self.drone_id = []
 
 
 class GameMgr:
@@ -71,6 +73,11 @@ class GameMgr:
         # Window position
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (0, 30)
         self.screen = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX), 0)
+
+        # Size transform from meter to gui
+        self.ratio = 240.0
+        self.center = [600.0, 360.0]
+        self.altitude = [-75.0, 200.0]
 
         # Game title on the window
         pygame.display.set_caption('Drone SAR Mission')
@@ -104,6 +111,7 @@ class GameMgr:
 
         # Survey
         self.workload = 0
+        self.p_risk = 0
 
         # Drone image: Main drones
         drone1 = Drone(file_name=IMAGE_PATH + 'drone1.png', sc=0.1, rt=0.0)
@@ -218,14 +226,38 @@ class GameMgr:
         if new_target is not None:
             self.new_target = new_target
 
-    def set_wind(self, wind):
-        self.wind.append(wind)
+    def set_wind(self, wind, meter=True):
+        wind_copy = wind.copy()
+        if meter:
+            wind_copy[0] = self.ratio * wind[0] + self.center[0]
+            wind_copy[1] = -self.ratio * wind[1] + self.center[1]
+            wind_copy[2] = self.ratio * wind[2]
+        self.wind.append(wind_copy)
 
     def reset_wind(self):
         self.wind = []
 
     def set_takeoff_positions(self, position):
         self.takeoff_position = position
+
+    def position_meter_to_gui(self, p_meter):
+        p_gui = np.array(p_meter)
+        for k in range(len(p_meter)):
+            p_gui[k][0] = self.ratio * p_gui[k][0] + self.center[0]
+            p_gui[k][1] = -self.ratio * p_gui[k][1] + self.center[1]
+        return p_gui
+
+    def position_meter_to_gui_single(self, p_meter):
+        result = [0, 0]
+        result[0] = self.ratio * p_meter[0] + self.center[0]
+        result[1] = -self.ratio * p_meter[1] + self.center[1]
+        return result
+
+    def altitude_meter_to_gui(self, altitude, noise=False):
+        output = self.altitude[0] * altitude + self.altitude[1]
+        if noise:
+            output += np.random.normal(0, 0.3, 1)[0]
+        return output
 
     def input(self):
         for event in pygame.event.get():
@@ -499,7 +531,7 @@ class GameMgr:
         # ??
         pygame.display.update()
 
-    def mouse_survey(self):
+    def mouse_workload(self):
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 self.mouse_pos = pygame.mouse.get_pos()
@@ -514,8 +546,26 @@ class GameMgr:
         elif 1160 <= self.mouse_pos[0] <= 1360 and 400 <= self.mouse_pos[1] <= 600:
             self.workload = 3
             print('Reported Workload: HIGH')
+        self.mouse_pos = [0, 0]
 
-    def survey_render(self):
+    def mouse_p_risk(self):
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                self.mouse_pos = pygame.mouse.get_pos()
+                print(self.mouse_pos)
+
+        if 560 <= self.mouse_pos[0] <= 760 and 400 <= self.mouse_pos[1] <= 600:
+            self.p_risk = 1
+            print('Reported Perceived-Risk: LOW')
+        elif 860 <= self.mouse_pos[0] <= 1060 and 400 <= self.mouse_pos[1] <= 600:
+            self.p_risk = 2
+            print('Reported Perceived-Risk: MEDIUM')
+        elif 1160 <= self.mouse_pos[0] <= 1360 and 400 <= self.mouse_pos[1] <= 600:
+            self.p_risk = 3
+            print('Reported Perceived-Risk: HIGH')
+        self.mouse_pos = [0, 0]
+
+    def workload_render(self):
         font = pygame.font.Font('freesansbold.ttf', 32)
         text = font.render('Survey: Workload', True, WHITE, BLACK)
         text_rect = text.get_rect()
@@ -533,7 +583,7 @@ class GameMgr:
         self.screen.blit(button, button_rect)
 
         # Check mouse action
-        self.mouse_survey()
+        self.mouse_workload()
 
         # Update
         pygame.display.flip()
@@ -543,34 +593,31 @@ class GameMgr:
         if self.workload > 0:
             self.mode = 4
 
-        # Pausing
-        # if self.initial:
-        #     # Wait time (mil-sec)
-        #     pygame.time.delay(2500)
-        #     self.initial = False
-        #     self.t0 = pygame.time.get_ticks()
+    def perceived_risk_render(self):
+        font = pygame.font.Font('freesansbold.ttf', 32)
+        text = font.render('Survey: Perceived-Risk', True, WHITE, (50, 50, 50))
+        text_rect = text.get_rect()
+        text_rect.center = (BOUND_X_MAX // 2, BOUND_Y_MAX // 3)
+        self.screen.fill((50, 50, 50))
+        self.screen.blit(text, text_rect)
 
-        # Text info
-        # if not self.mode and not self.collision:
-        #     self.trial += 1
-        #     display_surface = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX))
-        #     font = pygame.font.Font('freesansbold.ttf', 32)
-        #     text = font.render('Trial %d: Safe landing at %.2f sec' % (self.trial, self.final_time_record), True, WHITE, BLACK)
-        #     textrect = text.get_rect()
-        #     textrect.center = (BOUND_X_MAX // 2, BOUND_Y_MAX // 2)
-        #     display_surface.fill(BLACK)
-        #     display_surface.blit(text, textrect)
-        #     pygame.display.update()
-        #     pygame.time.delay(2500)
-        # elif not self.mode and self.collision:
-        #     self.trial += 1
-        #     display_surface = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX))
-        #     font = pygame.font.Font('freesansbold.ttf', 32)
-        #     text = font.render('Trial %d: Crash at %.2f sec' % (self.trial, self.final_time_record), True,
-        #                        RED, BLACK)
-        #     textrect = text.get_rect()
-        #     textrect.center = (BOUND_X_MAX // 2, BOUND_Y_MAX // 2)
-        #     display_surface.fill(BLACK)
-        #     display_surface.blit(text, textrect)
-        #     pygame.display.update()
-        #     pygame.time.delay(2500)
+        # Survey buttons
+        pygame.draw.rect(self.screen, WHITE, (560, 400, 200, 200))
+        pygame.draw.rect(self.screen, WHITE, (860, 400, 200, 200))
+        pygame.draw.rect(self.screen, WHITE, (1160, 400, 200, 200))
+        button = font.render('     LOW                      MEDIUM                      HIGH', True, BLUE)
+        button_rect = text.get_rect()
+        button_rect.center = (760, 500)
+        self.screen.blit(button, button_rect)
+
+        # Check mouse action
+        self.mouse_p_risk()
+
+        # Update
+        pygame.display.flip()
+        pygame.display.update()
+
+        # Escape
+        if self.p_risk > 0:
+            self.mode = 5
+
