@@ -23,7 +23,7 @@ import sys
 import shutil
 
 # Participant ID
-participant = 'gui_test'
+participant = 'p2'
 
 # Allow importing bleakheart from parent directory
 sys.path.append('../')
@@ -37,7 +37,7 @@ except ValueError:
 ##########################################
 
 # [Temporary] Function allocation
-fa = 3  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
+fa = 2  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
 
 # Result dataset directory
 dataset_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Dataset/FA{}/".format(fa)
@@ -585,6 +585,8 @@ try:
     print('data copied')
 except shutil.SameFileError:
     print('Same File Error')
+except NameError:
+    print('Name Error')
 
 # Self-report
 game_mgr.mode = 3

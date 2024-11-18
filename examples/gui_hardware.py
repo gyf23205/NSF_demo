@@ -27,7 +27,7 @@ import sys
 import shutil
 
 # Participant ID
-participant = 'p1'
+participant = 'p2'
 
 ########################################################################################################################
 # Allow importing bleakheart from parent directory
@@ -59,7 +59,7 @@ cf_marker_ids = [
 ]
 
 # Function allocation
-fa = 3  # {1: monitor + confirm, 2: + re-planning, 3: + fault, verbal reporting}
+fa = 1  # {1: monitor + confirm, 2: + re-planning, 3: + fault, verbal reporting}
 
 # Result dataset directory
 dataset_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Dataset/FA{}/".format(fa)
@@ -70,7 +70,7 @@ stay_duration = 5
 stay_distance = 0.1
 separation_distance = 0.5
 total_duration = 180
-speed_constant = 5.0
+speed_constant = 3.0
 
 # Set up world - the World object comes with sane defaults (geofencing)
 world = World()
@@ -212,7 +212,7 @@ with ParallelContexts(*_qcfs) as qcfs:
     random_positions = []
     num_targets = 7
     while len(random_positions) < num_targets:
-        new_position = [np.random.uniform(-2.45, 2.45), np.random.uniform(-1.25, 1.25)]
+        new_position = [np.random.uniform(-2.3, 2.3), np.random.uniform(-1.2, 1.2)]
 
         # Check distance to existing positions
         if all(distance(new_position, existing) >= 0.55 for existing in random_positions + takeoff_positions):
@@ -425,6 +425,8 @@ with ParallelContexts(*_qcfs) as qcfs:
                                 target_index[idx] += 1
                                 stay_flag[idx] = True
                                 stay_time[idx] = 0
+                                # Temporary
+                                path_index[idx] = 0
                         else:
                             game_mgr.victim_block_choice[idx] = True
                     else:
@@ -505,7 +507,7 @@ with ParallelContexts(*_qcfs) as qcfs:
                         game_mgr.wind_closed = False
                         game_mgr.wind_decided = False
                         print(f'[t={int(dt)}] Environmental change: dangerous wind')
-                        speed_constant = 2.0
+                        speed_constant = 1.0
                         # Put obstacle avoidance here
                         game_mgr.set_wind(wind, meter=True)
 
@@ -518,7 +520,7 @@ with ParallelContexts(*_qcfs) as qcfs:
                         # Remove wind graphic
                         game_mgr.reset_wind()
                         # Speed adjustment
-                        speed_constant = 5.0
+                        speed_constant = 3.0
                         # Task allocation
                         current_start = [[qcfs[0].pose.x, qcfs[0].pose.y], [qcfs[1].pose.x, qcfs[1].pose.y]]
                         drone_paths = assign_targets_to_drones(current_start, target_remaining,
@@ -557,7 +559,7 @@ with ParallelContexts(*_qcfs) as qcfs:
                                 print(f'[t={int(dt)}] Change routes')
                                 game_mgr.wind_decided = True
                                 # Speed adjustment
-                                speed_constant = 5.0
+                                speed_constant = 3.0
                                 # Task allocation
                                 current_start = [[qcfs[0].pose.x, qcfs[0].pose.y], [qcfs[1].pose.x, qcfs[1].pose.y]]
                                 drone_paths = assign_targets_to_drones(current_start, target_remaining,
@@ -621,6 +623,8 @@ with ParallelContexts(*_qcfs) as qcfs:
         print('data copied')
     except shutil.SameFileError:
         print('Same File Error')
+    except NameError:
+        print('Name Error')
     ####################################################################################################################
 
     # Self-report
