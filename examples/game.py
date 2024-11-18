@@ -149,7 +149,7 @@ class GameMgr:
 
         # GUI sub-part 2: [mission] 1) update mission / 2) confirm victim
         self.display_mission = Font(FONT, FONT_SIZE, (1320, 470))
-        self.display_mission.update("                                    Confirm Victims")
+        self.display_mission.update("                                    Confirm Humans")
         self.display_mission.update("")
         self.display_mission.update("")
         self.display_mission.update("")
@@ -189,7 +189,7 @@ class GameMgr:
         self.display_m_report = Font(FONT, FONT_SIZE, (970, 740))
         self.display_m_report.update("    Mission Report")
         value = np.random.randint(low=3, high=6)
-        self.display_m_report.update("Found >= %d survivors?" % value)
+        self.display_m_report.update("Found >= %d humans?" % value)
         self.display_m_report.update("")
         self.display_m_report.update("YES                 NO")
 
@@ -381,7 +381,7 @@ class GameMgr:
         r1 = self.missions[1].rejected
         t0 = np.mean(self.missions[0].response_time) if self.missions[0].response_time else 0.0
         t1 = np.mean(self.missions[1].response_time) if self.missions[1].response_time else 0.0
-        self.display_m_status.update("                                  Mission Status: Survivors")
+        self.display_m_status.update("                                  Mission Status: Humans")
         self.display_m_status.update("                   Accepted     |     Rejected     |    Avg. Response Time")
         self.display_m_status.update(
             "Drone 1:             %d                      %d                       %.2f sec" % (a0, r0, t0))

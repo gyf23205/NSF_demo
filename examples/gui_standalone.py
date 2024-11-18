@@ -22,6 +22,9 @@ import glob
 import sys
 import shutil
 
+# Participant ID
+participant = 'gui_test'
+
 # Allow importing bleakheart from parent directory
 sys.path.append('../')
 Openface_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Openface/"  # Openface output directory
@@ -35,6 +38,9 @@ except ValueError:
 
 # [Temporary] Function allocation
 fa = 3  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
+
+# Result dataset directory
+dataset_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Dataset/FA{}/".format(fa)
 
 # Drone Setting: Physical constraints
 hover_duration = 10
@@ -572,9 +578,10 @@ while max(drones[0].position[2], drones[1].position[2]) > 0.01:
     game_mgr.render()
 
 # Game end - data processing
+time_string = strftime('%y%m%d%H%M%S')
 try:
-    shutil.copyfile(latest_csv, Openface_directory + 'test_result_of.csv')
-    shutil.copyfile(ecg_csv, ECG_directory + 'test_result_ecg.csv')
+    shutil.copyfile(latest_csv, dataset_directory + 'test_result_of_' + time_string + '_' + participant + '.csv')
+    shutil.copyfile(ecg_csv, dataset_directory + 'test_result_ecg_' + time_string + '_' + participant + '.csv')
     print('data copied')
 except shutil.SameFileError:
     print('Same File Error')
@@ -601,8 +608,7 @@ if not response:
     response = [0]
     correctness = [0]
 
-time_string = strftime('%y%m%d%H%M%S')
-filename = '../logs/human_log_' + time_string + '.csv'
+filename = dataset_directory + 'human_log_' + time_string + '_' + participant + '.csv'
 with open(filename, mode='w', newline='') as file:
     writer = csv.writer(file)
     writer.writerow(['Drone', 'Time', 'Response', 'Correctness', 'Workload', 'Risk', 'Allocation'])

@@ -26,6 +26,9 @@ import glob
 import sys
 import shutil
 
+# Participant ID
+participant = 'p1'
+
 ########################################################################################################################
 # Allow importing bleakheart from parent directory
 sys.path.append('../')
@@ -58,6 +61,9 @@ cf_marker_ids = [
 # Function allocation
 fa = 3  # {1: monitor + confirm, 2: + re-planning, 3: + fault, verbal reporting}
 
+# Result dataset directory
+dataset_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Dataset/FA{}/".format(fa)
+
 # Drone Setting: Physical constraints
 hover_duration = 10
 stay_duration = 5
@@ -74,7 +80,7 @@ last_key_pressed = None
 
 # Log Setting: File name and directory
 time_string = strftime('%y%m%d%H%M%S')
-log_name = '../logs/log' + time_string + '.csv'
+log_name = '../logs/log' + time_string + '_' + participant + '.csv'
 
 # Open logging csv file: put head (variable names)
 with open(log_name, 'w', newline='') as file:
@@ -607,14 +613,11 @@ with ParallelContexts(*_qcfs) as qcfs:
         game_mgr.update()
         game_mgr.render()
 
-    # For csv files
-    time_string = strftime('%y%m%d%H%M%S')
-
     ####################################################################################################################
     # Game end - data processing
     try:
-        shutil.copyfile(latest_csv, Openface_directory + 'test_result_of' + time_string + '.csv')
-        shutil.copyfile(ecg_csv, ECG_directory + 'test_result_ecg' + time_string + '.csv')
+        shutil.copyfile(latest_csv, dataset_directory + 'test_result_of_' + time_string + '_' + participant + '.csv')
+        shutil.copyfile(ecg_csv, dataset_directory + 'test_result_ecg_' + time_string + '_' + participant + '.csv')
         print('data copied')
     except shutil.SameFileError:
         print('Same File Error')
@@ -642,7 +645,7 @@ with ParallelContexts(*_qcfs) as qcfs:
         response = [0]
         correctness = [0]
 
-    filename = '../logs/human_log_' + time_string + '.csv'
+    filename = dataset_directory + 'human_log_' + time_string + '_' + participant + '.csv'
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['Drone', 'Time', 'Response', 'Correctness', 'Workload', 'Risk', 'Allocation'])
