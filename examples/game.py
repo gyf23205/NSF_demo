@@ -149,7 +149,7 @@ class GameMgr:
 
         # GUI sub-part 2: [mission] 1) update mission / 2) confirm victim
         self.display_mission = Font(FONT, FONT_SIZE, (1320, 470))
-        self.display_mission.update("                                    Confirm Humans")
+        self.display_mission.update("[From RED]                  Confirm Humans                  [From BLUE]")
         self.display_mission.update("")
         self.display_mission.update("")
         self.display_mission.update("")
@@ -537,13 +537,13 @@ class GameMgr:
                 self.mouse_pos = pygame.mouse.get_pos()
                 print(self.mouse_pos)
 
-        if 560 <= self.mouse_pos[0] <= 760 and 400 <= self.mouse_pos[1] <= 600:
+        if 360 <= self.mouse_pos[0] <= 560 and 400 <= self.mouse_pos[1] <= 600:
             self.workload = 1
             print('Reported Workload: LOW')
         elif 860 <= self.mouse_pos[0] <= 1060 and 400 <= self.mouse_pos[1] <= 600:
             self.workload = 2
             print('Reported Workload: MEDIUM')
-        elif 1160 <= self.mouse_pos[0] <= 1360 and 400 <= self.mouse_pos[1] <= 600:
+        elif 1360 <= self.mouse_pos[0] <= 1560 and 400 <= self.mouse_pos[1] <= 600:
             self.workload = 3
             print('Reported Workload: HIGH')
         self.mouse_pos = [0, 0]
@@ -554,13 +554,13 @@ class GameMgr:
                 self.mouse_pos = pygame.mouse.get_pos()
                 print(self.mouse_pos)
 
-        if 560 <= self.mouse_pos[0] <= 760 and 400 <= self.mouse_pos[1] <= 600:
+        if 360 <= self.mouse_pos[0] <= 560 and 400 <= self.mouse_pos[1] <= 600:
             self.p_risk = 1
             print('Reported Perceived-Risk: LOW')
         elif 860 <= self.mouse_pos[0] <= 1060 and 400 <= self.mouse_pos[1] <= 600:
             self.p_risk = 2
             print('Reported Perceived-Risk: MEDIUM')
-        elif 1160 <= self.mouse_pos[0] <= 1360 and 400 <= self.mouse_pos[1] <= 600:
+        elif 1360 <= self.mouse_pos[0] <= 1560 and 400 <= self.mouse_pos[1] <= 600:
             self.p_risk = 3
             print('Reported Perceived-Risk: HIGH')
         self.mouse_pos = [0, 0]
@@ -574,13 +574,42 @@ class GameMgr:
         self.screen.blit(text, text_rect)
 
         # Survey buttons
-        pygame.draw.rect(self.screen, WHITE, (560, 400, 200, 200))
+        pygame.draw.rect(self.screen, WHITE, (360, 400, 200, 200))
         pygame.draw.rect(self.screen, WHITE, (860, 400, 200, 200))
-        pygame.draw.rect(self.screen, WHITE, (1160, 400, 200, 200))
-        button = font.render('LOW                      MEDIUM                      HIGH', True, RED)
+        pygame.draw.rect(self.screen, WHITE, (1360, 400, 200, 200))
+        button = font.render('LOW                                            MEDIUM                                            HIGH', True, RED)
         button_rect = text.get_rect()
-        button_rect.center = (760, 500)
+        button_rect.center = (560, 500)
         self.screen.blit(button, button_rect)
+
+        # Descriptions
+        # Low
+        lows = [font.render('When there is sufficient', True, WHITE, BLACK),
+                font.render('capacity to handle current', True, WHITE, BLACK),
+                font.render('tasks comfortably with room', True, WHITE, BLACK),
+                font.render('to take on additional tasks.', True, WHITE, BLACK)]
+        for i, low in enumerate(lows):
+            low_rect = low.get_rect()
+            low_rect.topleft = (160, 700 + 35 * i)
+            self.screen.blit(low, low_rect)
+        # Medium
+        mediums = [font.render('When there is limited spare', True, WHITE, BLACK),
+                   font.render('capacity to take on a few', True, WHITE, BLACK),
+                   font.render('additional tasks without significantly', True, WHITE, BLACK),
+                   font.render('impacting overall performance.', True, WHITE, BLACK)]
+        for i, medium in enumerate(mediums):
+            medium_rect = medium.get_rect()
+            medium_rect.topleft = (720, 700 + 35 * i)
+            self.screen.blit(medium, medium_rect)
+        # High
+        highs = [font.render('When the volume of tasks meets', True, WHITE, BLACK),
+                 font.render('or exceeds your capacity to', True, WHITE, BLACK),
+                 font.render('respond efficiently, leaving no', True, WHITE, BLACK),
+                 font.render('room for additional tasks.', True, WHITE, BLACK)]
+        for i, high in enumerate(highs):
+            high_rect = high.get_rect()
+            high_rect.topleft = (1360, 700 + 35 * i)
+            self.screen.blit(high, high_rect)
 
         # Check mouse action
         self.mouse_workload()
@@ -602,13 +631,23 @@ class GameMgr:
         self.screen.blit(text, text_rect)
 
         # Survey buttons
-        pygame.draw.rect(self.screen, WHITE, (560, 400, 200, 200))
+        pygame.draw.rect(self.screen, WHITE, (360, 400, 200, 200))
         pygame.draw.rect(self.screen, WHITE, (860, 400, 200, 200))
-        pygame.draw.rect(self.screen, WHITE, (1160, 400, 200, 200))
-        button = font.render('     LOW                      MEDIUM                      HIGH', True, BLUE)
+        pygame.draw.rect(self.screen, WHITE, (1360, 400, 200, 200))
+        button = font.render('LOW                                             MEDIUM                                            HIGH', True, BLUE)
         button_rect = text.get_rect()
-        button_rect.center = (760, 500)
+        button_rect.center = (600, 500)
         self.screen.blit(button, button_rect)
+
+        # Description
+        definitions = [font.render('During the mission, how high', True, WHITE, BLACK),
+                       font.render('was the risk of misidentifying humans', True, WHITE, BLACK),
+                       font.render('in need of assistance and', True, WHITE, BLACK),
+                       font.render('misinforming the command center?', True, WHITE, BLACK)]
+        for i, line in enumerate(definitions):
+            line_rect = line.get_rect()
+            line_rect.topleft = (720, 700 + 35 * i)
+            self.screen.blit(line, line_rect)
 
         # Check mouse action
         self.mouse_p_risk()

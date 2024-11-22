@@ -23,7 +23,7 @@ import sys
 import shutil
 
 # Participant ID
-participant = 'p2'
+participant = 'p11' + 'v'
 
 # Allow importing bleakheart from parent directory
 sys.path.append('../')
@@ -37,7 +37,7 @@ except ValueError:
 ##########################################
 
 # [Temporary] Function allocation
-fa = 2  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
+fa = 1  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
 
 # Result dataset directory
 dataset_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Dataset/FA{}/".format(fa)
