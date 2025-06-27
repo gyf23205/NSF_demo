@@ -7,11 +7,14 @@ To do list:
 - Make classes: Identify 'GUI parts' clearly
 - Randomize target point positions and event timings
 """
-
+import sys
+sys.path.append('D:/Projects/qualisys_drone_sdk')
 import pynput
 import numpy as np
 from time import time, sleep, strftime
 from qfly import World
+# import qfly.world
+# print("Imported qfly.world from:", qfly.world.__file__)
 import csv
 from rrt_2D import rrt_connect
 import game
@@ -19,16 +22,31 @@ import game
 # Additional import
 import os
 import glob
-import sys
 import shutil
 
 # Participant ID
 participant = 'p11' + 'v'
 
+
+def list_files_and_folders(path):
+    """Prints the names of all files and folders in the given path."""
+    try:
+        entries = os.listdir(path)
+        for entry in entries:
+            print(entry)
+    except FileNotFoundError:
+        print(f"Error: Directory not found: {path}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
 # Allow importing bleakheart from parent directory
-sys.path.append('../')
-Openface_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Openface/"  # Openface output directory
-ECG_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/ECG/"
+# sys.path.append('../')
+Openface_directory = "examples/data/Openface/"  # Openface output directory
+# list_files_and_folders(Openface_directory)
+# f = open('/home/yifan/git/qualisys_drone_sdk/data/Openface/empty.csv')
+# print(f)
+# print(glob.glob(Openface_directory + '*.csv'))
+ECG_directory = "examples/data/ECG/"
 try:
     latest_csv = max(glob.glob(Openface_directory + '*.csv'), key=os.path.getctime)  # give path to your desired file path
     print(latest_csv)
@@ -37,10 +55,10 @@ except ValueError:
 ##########################################
 
 # [Temporary] Function allocation
-fa = 1  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
+fa = 3  # {1: monitor + confirm, 2: + re-planning, 3: + fault}
 
 # Result dataset directory
-dataset_directory = "C:/Users/sooyung/OneDrive - purdue.edu/Desktop/Repository/data/Dataset/FA{}/".format(fa)
+dataset_directory = f"examples/Dataset/FA{fa}/"
 
 # Drone Setting: Physical constraints
 hover_duration = 10
@@ -52,6 +70,7 @@ speed_constant = 5.0
 
 # Set up the world
 world = World()
+# print(world.expanse)
 
 # Watch key presses with a global variable
 last_key_pressed = None
@@ -559,6 +578,10 @@ while fly:
 
         else:
             fly = False
+
+    # Convert drone positions to GUI/map coordinates as needed
+    drone_gui_positions = [game_mgr.position_meter_to_gui_single(d.position) for d in drones]
+    game_mgr.update_awareness(drone_gui_positions)
 
     # GUI rendering
     game_mgr.update()

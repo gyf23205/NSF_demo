@@ -1,6 +1,5 @@
 from qfly import Pose
 
-
 class World:
     """
     Hold safety-critical information about the physical world.
@@ -34,7 +33,7 @@ class World:
             Max allowed mocap frame loss.
             (Unit: frames)
         """
-        if expanse is None:
+        if expanse == None:
             expanse = [2.5, 1.3, 2.0]
 
         self.origin = origin
