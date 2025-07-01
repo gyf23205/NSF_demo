@@ -3,6 +3,27 @@ import numpy as np
 from constants import *
 
 
+class Bar:
+    def __init__(self, screen, rect, color=GREEN, maximum=100.0):
+        self.screen = screen
+        self.color = color
+        self.maximum = maximum
+        self.rect = pygame.Rect(rect)
+
+    def draw(self, val):
+        if val >= 60:
+            self.color = GREEN
+        elif 30 <= val < 60:
+            self.color = YELLOW
+        elif val < 30:
+            self.color = RED
+        else:
+            print("Invalid val number!")
+        fill_rect = pygame.Rect((*self.rect.topleft, (val/100) * self.rect[2], self.rect[3]))
+        pygame.draw.rect(self.screen, GREY, self.rect)
+        pygame.draw.rect(self.screen, self.color,fill_rect)
+        pygame.draw.rect(self.screen, BLACK, self.rect, 2)
+
 class Font:
     def __init__(self, font_name, size, pos):
         self.font = pygame.font.SysFont(font_name, size)
@@ -55,67 +76,51 @@ class TextInput:
         self.font = pygame.font.SysFont(font_name, font_size)
         self.text = ""
         self.active = False
+        self.lock = False  # Lock to prevent multiple activations
+        self.temp_flag = False  # Temporary flag to track active state changes
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.type == pygame.MOUSEBUTTONDOWN and not self.lock:
             # Toggle active state if clicked
             if self.rect.collidepoint(event.pos):
                 self.active = not self.active
             else:
                 self.active = False
+            self.lock = True
+        
+        if self.temp_flag != self.active:
+            print(f"TextInput active state changed: {self.active}")
+            print(f"TextInput text updated: {self.text}")
+            self.temp_flag = self.active
+
+        if event.type == pygame.MOUSEBUTTONUP and self.lock:
+            # Reset lock on mouse button release
+           self.lock = False
+
         if event.type == pygame.KEYDOWN and self.active:
             if event.key == pygame.K_RETURN:
                 self.active = False  # Optionally finish editing on Enter
             elif event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
+                print(f"TextInput text after backspace: {self.text}")
             else:
-                if int(self.text + event.unicode) <= self.maximum: 
-                    self.text += event.unicode
+                # Check if the input is a digit and within the maximum limit
+                if event.unicode.isdigit():
+                    if int(self.text + event.unicode) < self.maximum: 
+                        self.text += event.unicode
+                        print(f"TextInput text updated: {self.text}")
+                    else:
+                        print(f"TextInput text '{self.text + event.unicode}' exceeds maximum {self.maximum-1}")
+                else:
+                    print(f"TextInput received non-digit input: {event.unicode}")
 
     def draw(self, surface):
-        # Draw the input box
-        pygame.draw.rect(surface, self.color, self.rect, 2 if self.active else 1)
-        # Render the text
+        # Fill the input box background
+        pygame.draw.rect(surface, self.color, self.rect)  # Fill the rect
+        # Draw the rim (border)
+        pygame.draw.rect(surface, BLACK, self.rect, 5 if self.active else 1)
+        # Render the text   
         txt_surface = self.font.render(self.text, True, self.text_color)
         surface.blit(txt_surface, (self.rect.x+5, self.rect.y+5))
 
 
-class Task:
-    def __init__(self, surface, task_id, target_loc, task_pos, assigned_drone=None, assigned_gv=None):
-        self.task_id = task_id
-        self.surface = surface
-        self.x0, self.y0 = task_pos
-        self.target_pos = target_loc
-        self.assigned_drone = assigned_drone if assigned_drone is not None else 'None'
-        self.assigned_gv = assigned_gv  if assigned_gv is not None else 'None'
-
-        self.grid_width = 80
-        self.grid_height = line_height * FONT_SIZE
-        self.task_id_text = Font(FONT, FONT_SIZE, (self.x0, self.y0))
-        self.target_pos_text = Font(FONT, FONT_SIZE, (self.x0 + self.grid_width, self.y0))
-        self.assigned_drone_input = TextInput((self.x0 + 2 * self.grid_width, self.y0,self.grid_width, self.grid_height), color=WHITE, maximum=n_drones)
-        self.assigned_gv_input = TextInput((self.x0 + 3 * self.grid_width, self.y0, self.grid_width, self.grid_height), color=WHITE, maximum=n_gvs)
-
-        self.task_id_text.update(f'     {self.task_id}')
-        self.target_pos_text.update(f'{self.target_pos}')
-        self.assigned_drone_input.text = '          ' + str(self.assigned_drone)
-        self.assigned_gv_input.text = '                  ' + str(self.assigned_gv)
-
-    # def update(self, task_pos):
-    #     self.x0, self.y0 = task_pos
-    #     self.task_id_text.pos = (self.x0, self.y0)
-    #     self.target_pos_text.pos = (self.x0 + self.grid_width, self.y0)
-    #     self.assigned_drone_input.rect.topleft = (self.x0 + 2 * self.grid_width, self.y0)
-    #     self.assigned_gv_input.rect.topleft = (self.x0 + 3 * self.grid_width, self.y0)
-        
-    def draw(self):
-        for text in self.task_id_text.texts:
-            self.surface.blit(text[0], text[1])
-        for text in self.target_pos_text.texts:
-            self.surface.blit(text[0], text[1])
-        self.assigned_drone_input.draw(self.surface)
-        self.assigned_gv_input.draw(self.surface)
-
-    def handle_event(self, event):
-        self.assigned_drone_input.handle_event(event)
-        self.assigned_gv_input.handle_event(event)
