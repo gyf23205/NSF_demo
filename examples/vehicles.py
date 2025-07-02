@@ -57,8 +57,8 @@ class VirtualDrone:
         self.rt = 0
         self.health = 100.0
 
-    # def set_position(self, target_):
-    #     self.position = target_
+    def set_position(self, target_):
+        self.position = target_
 
     def takeoff_in_place(self, altitude):
         self.position[2] = min([self.position[2] + 0.01, altitude])

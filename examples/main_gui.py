@@ -70,7 +70,7 @@ if __name__=='__main__':
     s.listen()
     clients = []  # Track all client addresses
     print("Server waiting for connection...")
-    while len(clients) < 1:  # Wait for at least one client to connect
+    while len(clients) < 1:  # !!! Wait for at least one client to connect
         conn, addr = s.accept()
         print("Connected by", addr)
         clients.append((conn, addr))  # Store the address
@@ -84,7 +84,7 @@ if __name__=='__main__':
     fa = 1  # {0:Automatic allocation; 1: human supervision}
 
     # Constants
-    n_drones = 5
+    n_drones = 2
     n_gvs = 2
     n_targets = 7
     speed_constant = 5.0
@@ -124,7 +124,7 @@ if __name__=='__main__':
     # Randomly generate targets
     random_positions = []
     while len(random_positions) < n_targets:
-        new_position = [np.random.uniform(-1.9, 1.9), np.random.uniform(-1.25, 1.25)]
+        new_position = [np.random.uniform(-1.5, 1.5), np.random.uniform(-1, 1)]
 
         # Check distance to existing positions
         if all(distance(new_position, existing) >= 0.55 for existing in random_positions + takeoff_positions):
@@ -151,13 +151,7 @@ if __name__=='__main__':
 
     # Task assignment
     drone_paths = assign_targets_to_drones(takeoff_positions, target_positions, landing=takeoff_positions)
-
-    # Remaining paths for re-planning
-    target_remaining = target_positions.copy()
-    tasks = []
-    for idx, target in enumerate(target_remaining):
-        tasks.append([idx + 1, target, 0])
-
+    
     # Wind
     old_wind_average_speed = 0.0
 
@@ -176,14 +170,20 @@ if __name__=='__main__':
     game_mgr = GameMgr(drones, gvs)
     target_gui = game_mgr.position_meter_to_gui(target_positions)
     takeoff_gui = game_mgr.position_meter_to_gui(takeoff_positions)
+    # Remaining paths for re-planning
+    target_remaining = target_positions.copy()
+    tasks = []
+    for idx, t_gui in enumerate(target_gui):
+        tasks.append([idx + 1, t_gui.tolist(), 0])
     game_mgr.set_target(target=target_gui)
     game_mgr.set_takeoff_positions(takeoff_gui)
+    game_mgr.set_task(tasks)
     ######################## Environmental setting ends ###################################
 
     ########################## Main loop ################################################
     while fly:
         data = None # Data received from the clients
-        message = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'progress': None, 'workload': None} # Message to be sent to the clients
+        message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None} # Message to be sent to the clients
 
         # Land with ESC
         if last_key_pressed == pynput.keyboard.Key.esc:
@@ -199,7 +199,7 @@ if __name__=='__main__':
         if len(tasks) > 0:
             mission_complete = False
 
-        ############################ Socket receive ###########################
+        ############################ Socket receive ########################### !!!
         try:
             data = clients[0][0].recv(1024).decode() # !!! Decide which client to listen
             if data:
@@ -211,7 +211,7 @@ if __name__=='__main__':
         ########################### Update human progress and workload ##############
         ########################### Update human progress and workload ends #########
 
-        ############################ Task priority update ###########################
+        ############################ Task update ################################
         if data and data['tasks'] is not None:
             for i, task in enumerate(data['tasks']):
                 if task.reject:
@@ -241,7 +241,7 @@ if __name__=='__main__':
             picked = min(int(path_index_drone[idx]) + 1, len(current_trajectory))
             target = [current_trajectory[-picked][0], current_trajectory[-picked][1],
                     0.5 * world.expanse[2] + altitude_adjust[idx]]
-            # drones[idx].set_position(target)
+            drones[idx].set_position(target)
             
             # Time
             dt_prev[idx] = dt
@@ -283,11 +283,12 @@ if __name__=='__main__':
                             game_mgr.victim_id[idx] = 0
                             game_mgr.victim_detected[idx] = False
                             # To record response time
-                            game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
-                            game_mgr.missions[idx].time_stamp.append(dt)
-                            game_mgr.missions[idx].drone_id.append(idx)
-                            game_mgr.victim_timing[idx] = 0
-                            print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
+                            # game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
+                            # game_mgr.missions[idx].time_stamp.append(dt)
+                            # game_mgr.missions[idx].drone_id.append(idx)
+                            # game_mgr.victim_timing[idx] = 0
+
+                            # print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
                             # Print status
                             print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index_drone[idx] + 1)} accomplished')
                             # Remove the task whose target matches target_current
@@ -295,6 +296,7 @@ if __name__=='__main__':
                                 if np.allclose(task[1], target_current):
                                     tasks.pop(i)
                                     message['tasks'] = tasks
+                                    print('task updated in message')
                                     message_changed = True
                                     break
                             # target_remaining.remove(target_current)
@@ -323,7 +325,7 @@ if __name__=='__main__':
         
         ########################### Awareness map #####################################
         pos = [(d.position[0], d.position[1]) for d in drones]
-        drone_gui_positions = [game_mgr.position_meter_to_gui(pos)]
+        drone_gui_positions = game_mgr.position_meter_to_gui(pos)
         game_mgr.update_awareness(drone_gui_positions)
         ########################### Awareness map ends #################################
 
@@ -336,12 +338,13 @@ if __name__=='__main__':
             wind = [w for w in wind if np.random.uniform(0, 1) < p_wind]
             average_wind_speed = np.mean([w[3] for w in wind]) if wind else 0.0
             # Update the wind speed in the message if it has changed significantly
-            if abs(average_wind_speed - old_wind_average_speed) > 2:
+            if average_wind_speed - old_wind_average_speed > 2:
+                # Current way of changing wind speed is not very significant, can change it.
                 message['wind_speed'] = average_wind_speed
                 message_changed = True
                 old_wind_average_speed = average_wind_speed
         
-        if data['weather_decision'] is not None:
+        if data and data['weather_decision'] is not None:
             if data['weather_decision'] == 'change':
                 data['weather_decision'] = None
                 current_start = [[drones[idx].position[0], drones[idx].position[1]] for idx in range(n_drones)]
@@ -372,16 +375,19 @@ if __name__=='__main__':
         # Decide which client to send the message!!!
         if message_changed:
             idx = 0
+            print('Message changed')
+            print(message)
             clients[idx][0].sendall(json.dumps(message).encode())
+            message_changed = False
         ############################# Socket Send ends #####################################
         game_mgr.render()
-        print('gui rendered')
+        # print('gui rendered')
 
     # Land till the end
     while max([drones[idx].position[2] for idx in range(2)]) > 0.01:
         for idx in range(n_drones):
             drones[idx].land_in_place()
-            sleep(0.01)
+            # sleep(0.01)
             drones[idx].position = game_mgr.position_meter_to_gui([drones[idx].position])
             drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
         game_mgr.render()

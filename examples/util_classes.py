@@ -31,12 +31,14 @@ class Font:
         self.size = size
         self.pos = pos
         self.texts = []
+        self.rect = pygame.Rect((pos[0], pos[1], 0, 0))  # Initialize rect with position
 
     def update(self, content):
         text = self.font.render(content, True, BLACK)
         posx = self.pos[0]
-        posy = self.pos[1] + len(self.texts) * self.size * line_height
+        posy = self.pos[1] + len(self.texts) * int(self.size * line_height)  # Stack text vertically
         self.texts.append((text, (posx, posy)))
+        self.rect = pygame.Rect((posx, posy, text.get_width(), text.get_height()))  # Update rect size based on text
 
     def clear(self):
         self.texts = []

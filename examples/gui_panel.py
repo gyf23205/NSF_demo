@@ -93,8 +93,16 @@ class GameMgr:
         self.target = []
         self.target_clicked = 0
         self.target_decided = True
-        # self.new_target = []
-        # self.new_target_triggered = False
+        self.task = None
+        
+        # Victim flags
+        n_drones = len(drones)
+        self.victim_id = [0 for _ in range(n_drones)]
+        self.victim_detected = [False for _ in range(n_drones)]
+        self.victim_clicked = [0 for _ in range(n_drones)]
+        self.victim_block_choice = [False for _ in range(n_drones)]
+        self.victim_timing = [0 for _ in range(n_drones)]
+
         # Drones
         self.drone_images = [Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.07, rt=0.0) for _ in range(self.n_drones)]
         # Take-off position
@@ -148,9 +156,9 @@ class GameMgr:
             pos_image = tuple(self.position_meter_to_gui([g.position]))
             self.gv_images[i].draw(pos_image)
         # Targets
-        assert len(priority) == len(self.target)
-        for i, pos in enumerate(self.target):
-            pygame.draw.circle(self.screen, BLUE if priority[i] <= 0 else RED, pos, 10)
+        for i, (idx, pos, priority) in enumerate(self.task):
+            # pygame.draw.circle(self.screen, BLUE if priority <= 0 else RED, pos, 10)
+            pygame.draw.circle(self.screen, RED, pos, 10)
         # for i, pos in enumerate(self.new_target):
         #     pygame.draw.circle(self.screen, RED, pos, 15)
         # Takeoff positions
@@ -171,6 +179,7 @@ class GameMgr:
         pygame.display.flip()
     
     def position_meter_to_gui(self, p_meter):
+        # print("p_meter", p_meter)
         p_gui = np.array(p_meter)
         for k in range(len(p_meter)):
             p_gui[k][0] = self.ratio * p_gui[k][0] + self.center[0]
@@ -182,7 +191,8 @@ class GameMgr:
         # Vectorized update of awareness map for each drone position
         yy, xx = np.ogrid[:self.map_height, :self.map_width]
         for pos in drone_positions:
-            print(pos)
+            # print(drone_positions)
+            # print(pos)
             cy, cx = int(pos[0]), int(pos[1])
             dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
             mask = dist <= radius
@@ -198,6 +208,9 @@ class GameMgr:
     def set_target(self, target=None):
         if target is not None:
             self.target = target
+    
+    def set_task(self, task):
+        self.task = task
         # if new_target is not None:
         #     self.new_target = new_target
 
@@ -213,8 +226,6 @@ class GameMgr:
         self.wind = []
 
 
-
-
 if __name__ == "__main__":
     pygame.init()
     drones = [VirtualDrone(0, (-1.2, -0.5)), VirtualDrone(1, (-1.2, 0.5))]
@@ -222,10 +233,16 @@ if __name__ == "__main__":
     takeoff_positions = [d.position[0:2] for d in drones]
     game_mgr = GameMgr(drones, gvs)
     game_mgr.set_takeoff_positions(takeoff_positions)
-    game_mgr.set_wind([0, 0, 0.05])
+    # game_mgr.set_wind([0, 0, 0.05])
     game_mgr.set_wind([0, 1, 0.05])
     priority = []
+    tasks = []
+    target_remaining = [[0, 0], [-1.0, 0], [1.0, 0]]
+    for idx, target in enumerate(target_remaining):
+        target = game_mgr.position_meter_to_gui([target])[0]
+        tasks.append([idx + 1, target, 0])
 
+    game_mgr.set_task(tasks)
     running = True
     while running:
         # Update drone positions and health
@@ -239,7 +256,12 @@ if __name__ == "__main__":
             
 
         pos = [(d.position[0], d.position[1]) for d in drones]
-        game_mgr.update_awareness(game_mgr.position_meter_to_gui(pos), radius=70)
+        # print(pos)
+        # print()
+        pos = game_mgr.position_meter_to_gui(pos)
+        # print("Drone positions:", pos)
+        # assert False
+        game_mgr.update_awareness(pos, radius=70)
         game_mgr.render()
 
         # Check for quit event

@@ -185,10 +185,11 @@ class UserGUI:
                 task.draw()
 
         # weather block
-        if data and data['wind'] is not None:
-            self.weather = data['wind']
+        if data and data['wind_speed'] is not None:
+            self.weather = data['wind_speed']
+            pygame.draw.rect(self.screen, WHITE, self.weather_text.rect)  # Clear the previous weather text
             self.weather_text.clear()
-            self.weather_text.update('Weather: ' + str(self.weather))
+            self.weather_text.update('Wind speed increase significantly, current speed: ' + "{:.2f}".format(self.weather))
             self.screen.blit(self.weather_text.texts[0][0], self.weather_text.texts[0][1])
 
         pygame.display.flip()
@@ -207,7 +208,7 @@ if __name__ == '__main__':
 
     gui = UserGUI()
 
-    # response['victim']: b'reject' or b'accept'
+    # response['victim']: 'reject' or 'accept'
     # response['weather_decision']: 'change' or 'maintain'
     # response['tasks']: list of Task objects
     data = None # Data received from the server
@@ -223,7 +224,6 @@ if __name__ == '__main__':
         except BlockingIOError:
             pass
 
-
         # Event handling
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -234,12 +234,12 @@ if __name__ == '__main__':
                 gui.image = None
                 data['idx_image'] = None
                 response_changed = True
-                response['victim'] = b'accept'
+                response['victim'] = 'accept'
             elif gui.button_reject.handle_event(event):
                 gui.image = None
                 data['idx_image'] = None
                 response_changed = True
-                response['victim'] = b'reject'
+                response['victim'] = 'reject'
             else:
                 pass
 
@@ -265,8 +265,7 @@ if __name__ == '__main__':
                 response['weather_decision'] = 'maintain'
             else:
                 pass
-            
-
+  
         # Render the GUI and get the response        
         gui.render()
         idx_image = None  # Reset image after rendering
