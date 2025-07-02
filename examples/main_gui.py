@@ -375,8 +375,8 @@ if __name__=='__main__':
         # Decide which client to send the message!!!
         if message_changed:
             idx = 0
-            print('Message changed')
-            print(message)
+            # print('Message changed')
+            # print(message)
             clients[idx][0].sendall(json.dumps(message).encode())
             message_changed = False
         ############################# Socket Send ends #####################################

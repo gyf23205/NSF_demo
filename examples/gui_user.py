@@ -173,14 +173,15 @@ class UserGUI:
             
 
         # Task block
-        if self.task_list:
-            for i, task in enumerate(self.task_list): # tasks is defined in main
+        if data and data['tasks'] is not None:
+            for i, task in enumerate(data['tasks']):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
                 task_id, target_loc, priority = task
                 new_task = Task(self.screen, task_id, target_loc, task_pos, priority)
                 self.task_list.append(new_task)
                 print(new_task.priority_input.text)
         if self.task_list:
+            print('Drawing tasks')
             for task in self.task_list:
                 task.draw()
 
@@ -223,6 +224,11 @@ if __name__ == '__main__':
                 data = json.loads(data_received)
         except BlockingIOError:
             pass
+        
+
+        if data and data['tasks'] is not None:
+            tasks = data['tasks']
+            # print('Received tasks from server:', tasks)
 
         # Event handling
         for event in pygame.event.get():
@@ -255,6 +261,7 @@ if __name__ == '__main__':
             if tasks_changed:
                 response_changed = True
                 response['tasks'] = gui.task_list
+                
 
             # Weather handling
             if gui.button_wind_change.handle_event(event):
