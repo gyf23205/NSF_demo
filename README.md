@@ -9,14 +9,18 @@
 
 ## Run the main GUI
 On the host machine, cd to the root directory of the repository and run the following command:
+
     python examples/main_gui.py
 
 ## Run the user GUI
 On the host machine, find the host IP address using the command:
     ipconfig
 and look for the IPv4 address. Then, on the client machine, cd to the root directory of the repository change the host IP address in the user_gui.py file and run the following command:
+
     python examples/user_gui.py
 
 You can test your connection by:
+
     ping <host_ip_address>
+    
 and you should see a response.
