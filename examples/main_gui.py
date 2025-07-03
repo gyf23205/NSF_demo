@@ -63,7 +63,7 @@ def assign_targets_with_path_lengths(drones, targets, assigned_drone_index, land
 if __name__=='__main__':
     ########################## Set up socket ##############################################
     # Create a server for socket communication
-    host = '127.0.0.1'  # Use '0.0.0.0' to accept connections from other machines
+    host = '0.0.0.0'  # Use '0.0.0.0' to accept connections from other machines
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((host, port))
