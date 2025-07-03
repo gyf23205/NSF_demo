@@ -178,6 +178,10 @@ class UserGUI:
         if data and data['workload'] is not None:
             self.workload_text.clear()
             self.workload_text.update('Workload: ' + data['workload'])
+        # [MODIFY HERE] To Do: 
+        # 1. implement trained model here
+        # 2. Read output CSV file (+ erase contents) here
+
         ###################### Update workload text ends #####################
 
         ###################### Victim block ######################
