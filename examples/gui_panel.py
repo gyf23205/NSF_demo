@@ -19,26 +19,40 @@ class DroneHealth:
         self.health_bar = Bar(screen, (self.x0 + 2*(self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height))
         self.current_pos_txt = SysFont(FONT, FONT_SIZE)
         self.current_target = SysFont(FONT, FONT_SIZE)
-        # self.status_txt = SysFont(FONT, FONT_SIZE)
 
     def draw(self):
         idx_txt = self.idx_txt.render('         ' + str(self.drone.idx), True, BLACK)
         self.screen.blit(idx_txt, (self.x0, self.y0, self.grid_width, self.grid_height))
-        self.alt_bar.draw(self.drone.position[2])
+        self.alt_bar.draw(self.drone.position[2]/2 * 100)
         self.health_bar.draw(self.drone.health)
         pos_str = f"({self.drone.position[0]:.2f}, {self.drone.position[1]:.2f})"
         pos_txt = self.current_pos_txt.render(pos_str, True, BLACK)
         self.screen.blit(pos_txt, (self.x0 + 3*(self.grid_width+self.spacing), self.y0, self.grid_width, self.grid_height))
-        # status_txt = self.status_txt.render(...)
-        # self.screen.blit(pos_txt, (self.x0 + 4*self.grid_width, self.y0, self.grid_width, self.grid_height))
 
-    # def update_health(self, reduction):
-    #     self.health = max(0, self.health - reduction)
-    #     return self.health
 
-    # def is_healthy(self):
-    #     return self.health > 0
+class GVHealth:
+    def __init__(self, screen, pos, virtual_gv):
+        self.screen = screen
+        self.x0, self.y0 = pos
+        self.gv = virtual_gv
+        self.grid_width = 100
+        self.grid_height = line_height * FONT_SIZE
+        self.spacing = 20
+        self.idx_txt = SysFont(FONT, FONT_SIZE)
+        self.carrying_txt = SysFont(FONT, FONT_SIZE)
+        self.health_bar = Bar(screen, (self.x0 + (self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height))
+        self.current_pos_txt = SysFont(FONT, FONT_SIZE)
+        self.current_target = SysFont(FONT, FONT_SIZE)
 
+    def draw(self):
+        idx_txt = self.idx_txt.render('         ' + str(self.gv.idx), True, BLACK)
+        self.screen.blit(idx_txt, (self.x0, self.y0, self.grid_width, self.grid_height))
+        carrying_txt = self.carrying_txt.render(str(self.gv.carrying), True, BLACK)
+        self.screen.blit(carrying_txt, (self.x0 + 2 * (self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height))
+        self.health_bar.draw(self.gv.health)
+        pos_str = f"({self.gv.position[0]:.2f}, {self.gv.position[1]:.2f})"
+        pos_txt = self.current_pos_txt.render(pos_str, True, BLACK)
+        self.screen.blit(pos_txt, (self.x0 + 3*(self.grid_width+self.spacing), self.y0, self.grid_width, self.grid_height))
 
 class Background:
     def __init__(self, file_name, bound_x_min, bound_x_max, bound_y_min, bound_y_max):
@@ -49,6 +63,26 @@ class Background:
         self.min_bound = np.array([bound_x_min, bound_y_min])
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
+
+class EnvironmentInfo:
+    def __init__(self, screen):
+        self.screen = screen
+        self.x0, self.y0 = 950, 700
+        self.title = Font(FONT, FONT_SIZE, (self.x0, self.y0))
+        self.spacing = '               '
+        self.title.update('                 Environment Info')
+        self.title.update('Location' + self.spacing + self.spacing + '          Speed')
+        self.content = Font(FONT, FONT_SIZE, (self.x0, self.y0 + 2 * int(FONT_SIZE * line_height)))
+
+    def draw(self, wind):
+        for text, pos in self.title.texts:
+            self.screen.blit(text, pos)
+        self.content.clear()
+        for i, w in enumerate(wind):
+            content = f'Wind {i+1}: ({w[0]:.2f}, {w[1]:.2f}){self.spacing}{w[2]:.2f}'
+            self.content.update(content)
+        for text, pos in self.content.texts:
+            self.screen.blit(text, pos)
 
 class GameMgr:
     def __init__(self, drones, gvs):
@@ -61,10 +95,10 @@ class GameMgr:
         
         # Define position of blocks, tf=topleft, c=center
         self.tf_map = (100, 100)
-        self.tf_health = (950, 120)
+        self.tf_health_drone = (950, 120)
+        self.tf_health_gv = (950, 500)
         self.c_drone_icon = (950, 70)
-
-        # Make sure to call pygame.init() before
+        self.c_gv_icon = (950, 450)
 
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (0, 30)
         self.screen = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX), 0)
@@ -107,32 +141,45 @@ class GameMgr:
         self.drone_images = [Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.07, rt=0.0) for _ in range(self.n_drones)]
         # Take-off position
         self.takeoff_position = None
-        # Groung vehicles
+        # Ground vehicles
         self.gv_images = [Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.09, rt=0.0) for _ in range(self.n_drones)]
+        # Hospital. It's not a vehicle, but not much difference
+        self.hospital = Vehicle(file_name=IMAGE_PATH + 'hospital.png', surface=self.screen, sc=0.09, rt=0.0)
         ############# Main map ends ####################
 
         ############### Drone health ###################
+        # Add title
+        self.title_drone_health = Font(FONT, FONT_SIZE, (self.tf_health_drone[0], self.tf_health_drone[1] - 2 * FONT_SIZE * line_height))
+        self.title_drone_health.update('    Drone Health')
+        self.title_drone_health.update('Drone ID           Altitude            Health                Position')
         # Small drone icon at the topleft of the drone health block
         self.drone_icon = Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.05, rt=0.0)
-
         # Drone health table
-        self.health = [DroneHealth(self.screen, (self.tf_health[0], self.tf_health[1] + i*(line_height*FONT_SIZE + 20)), d) for i, d in enumerate(self.drones)]
+        self.health = [DroneHealth(self.screen, (self.tf_health_drone[0], self.tf_health_drone[1] + i*(line_height*FONT_SIZE + 20)), d) for i, d in enumerate(self.drones)]
         ############## Drone health ends ################
+
+        ###################### Ground vehicle health #####################
+        # Add title
+        self.title_gv_health = Font(FONT, FONT_SIZE, (self.tf_health_gv[0], self.tf_health_gv[1] - 2 * FONT_SIZE * line_height))
+        self.title_gv_health.update('     Ground Vehicle Health')
+        self.title_gv_health.update('    GV ID              Health           Carrying            Position')
+        # Small ground vehicle icon at the topleft of the ground vehicle health block
+        self.gv_icon = Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.05, rt=0.0)
+        # Ground vehicle health table
+        self.gv_health = [GVHealth(self.screen, (self.tf_health_gv[0], self.tf_health_gv[1] + i*(line_height*FONT_SIZE + 20)), g) for i, g in enumerate(self.gvs)]
+        ##################### Ground vehicle health ends ##################
 
         ###################### Wind #####################
         self.wind = []
-        self.wind_danger = False
-        self.wind_triggered = False
-        self.wind_decided = True
-        self.wind_closed = True
-        self.wind_clicked = 0
         #################### Wind ends ##################
 
-        ###################### Mission #####################
-        #################### Mission ends ##################
+        ###################### Environment #####################
+        self.environment_info = EnvironmentInfo(self.screen)
+        #################### Environment ends ##################
 
     def render(self):
         # Record start time
+        pygame.event.get()  # Process events to avoid blocking
         if self.initial:
             self.t0 = pygame.time.get_ticks()
             self.initial = False
@@ -155,27 +202,41 @@ class GameMgr:
         for i, g in enumerate(self.gvs):
             pos_image = tuple(self.position_meter_to_gui([g.position]))
             self.gv_images[i].draw(pos_image)
+        # Hospital
+        self.hospital.draw(tuple(self.position_meter_to_gui([[0, 0]])))
         # Targets
         for i, (idx, pos, priority) in enumerate(self.task):
-            # pygame.draw.circle(self.screen, BLUE if priority <= 0 else RED, pos, 10)
-            pygame.draw.circle(self.screen, RED, pos, 10)
-        # for i, pos in enumerate(self.new_target):
-        #     pygame.draw.circle(self.screen, RED, pos, 15)
+            pygame.draw.circle(self.screen, BLUE if priority <= 0 else RED, pos, 10)
         # Takeoff positions
         for i, pos in enumerate(self.takeoff_position):
             pygame.draw.circle(self.screen, BLACK, pos, 10)
         ##################### Map ends ##########################
 
         ###################### Drone health #####################
+        for text, pos in self.title_drone_health.texts:
+            self.screen.blit(text, pos)
         self.drone_icon.draw(self.c_drone_icon)
         for h in self.health:
             h.draw()
         ##################### Drone health ends ##################
 
+        ####################### GV health #####################
+        for text, pos in self.title_gv_health.texts:
+            self.screen.blit(text, pos)
+        self.gv_icon.draw(self.c_gv_icon)
+        for h in self.gv_health:
+            h.draw()
+        ##################### GV health ends ####################
+
         ####################### Wind ############################
         for i, value in enumerate(self.wind):
             pygame.draw.circle(self.screen, (35, 250, 152), [value[0], value[1]], value[2])
         ####################### Wind ends ########################
+
+        ####################### Environment ######################
+        self.environment_info.draw(self.wind)
+        ####################### Environment ends ##################
+
         pygame.display.flip()
     
     def position_meter_to_gui(self, p_meter):
@@ -215,12 +276,11 @@ class GameMgr:
         #     self.new_target = new_target
 
     def set_wind(self, wind, meter=True):
-        wind_copy = wind.copy()
         if meter:
-            wind_copy[0] = self.ratio * wind[0] + self.center[0]
-            wind_copy[1] = -self.ratio * wind[1] + self.center[1]
-            wind_copy[2] = self.ratio * wind[2]
-        self.wind.append(wind_copy)
+            wind[0] = self.ratio * wind[0] + self.center[0]
+            wind[1] = -self.ratio * wind[1] + self.center[1]
+            wind[2] = self.ratio * wind[2]
+        self.wind.append(wind)
 
     def reset_wind(self):
         self.wind = []

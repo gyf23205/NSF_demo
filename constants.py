@@ -22,3 +22,6 @@ max_altitude = 2
 
 n_drones = 2
 n_gvs = 2
+
+spacing = 40
+grid_width = 100

@@ -11,6 +11,8 @@ class Bar:
         self.rect = pygame.Rect(rect)
 
     def draw(self, val):
+        # Set val in [0, 100]
+        val = max(0, min(100, val))
         if val >= 60:
             self.color = GREEN
         elif 30 <= val < 60:
@@ -34,7 +36,7 @@ class Font:
         self.rect = pygame.Rect((pos[0], pos[1], 0, 0))  # Initialize rect with position
 
     def update(self, content):
-        text = self.font.render(content, True, BLACK)
+        text = self.font.render(self.set_digits(content), True, BLACK)
         posx = self.pos[0]
         posy = self.pos[1] + len(self.texts) * int(self.size * line_height)  # Stack text vertically
         self.texts.append((text, (posx, posy)))
@@ -42,6 +44,14 @@ class Font:
 
     def clear(self):
         self.texts = []
+
+    def set_digits(self, content):
+        if isinstance(content, str) and content[0] == '[' and content[-1] == ']':
+            d1 = content[1:content.index(',')]
+            d2 = content[content.index(',')+1:-1]
+            content = '[{:.2f}, {:.2f}]'.format(float(d1), float(d2))
+        return content
+
 
 
 class Button:
@@ -108,7 +118,7 @@ class TextInput:
             else:
                 # Check if the input is a digit and within the maximum limit
                 if event.unicode.isdigit():
-                    if int(self.text + event.unicode) < self.maximum: 
+                    if int(self.text + event.unicode) <= self.maximum: 
                         self.text += event.unicode
                         print(f"TextInput text updated: {self.text}")
                     else:

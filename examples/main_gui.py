@@ -84,7 +84,7 @@ if __name__=='__main__':
     fa = 1  # {0:Automatic allocation; 1: human supervision}
 
     # Constants
-    n_drones = 2
+    n_drones = 4
     n_gvs = 2
     n_targets = 7
     speed_constant = 5.0
@@ -92,7 +92,6 @@ if __name__=='__main__':
     hover_duration = 10
     stay_distance_drone = 0.1
     n_wind = 3
-    p_wind = 0.5  # Probability of wind being active
 
     # Define world
     world = World()
@@ -178,12 +177,17 @@ if __name__=='__main__':
     game_mgr.set_target(target=target_gui)
     game_mgr.set_takeoff_positions(takeoff_gui)
     game_mgr.set_task(tasks)
+    # Send initial tasks to the clients
+    message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None} # Message to be sent to the clients
+    for idx in range(len(clients)):
+        clients[idx][0].sendall(json.dumps(message).encode())
+    game_mgr.render()
     ######################## Environmental setting ends ###################################
 
     ########################## Main loop ################################################
     while fly:
         data = None # Data received from the clients
-        message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None} # Message to be sent to the clients
+        message = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'progress': None, 'workload': None} # Message to be sent to the clients
 
         # Land with ESC
         if last_key_pressed == pynput.keyboard.Key.esc:
@@ -213,110 +217,109 @@ if __name__=='__main__':
 
         ############################ Task update ################################
         if data and data['tasks'] is not None:
-            for i, task in enumerate(data['tasks']):
-                if task.reject:
-                    tasks.pop(i)
-                    print(f'[t={int(dt)}] Task {task.idx} rejected by user.')
-                    message['tasks'] = tasks
-                    message_changed = True
-                else:
-                    tasks[i][2] = task.priority
+            exist_task_idx = []
+            for task in data['tasks']:
+                exist_task_idx.append(task['task_id'])
+                for j, ta in enumerate(tasks):
+                    if ta[0] == task['task_id']:
+                        tasks[j][2] = task['priority']
+                        print(f'reset task {task["task_id"]} priority to {task["priority"]}')
+                        break
                 
+            for j, ta in enumerate(tasks):
+                if ta[0] not in exist_task_idx:
+                    tasks.pop(j)
+                    print(f'[t={int(dt)}] Task {ta[0]} removed from the task list.')
+        ############################## Task update ends ##############################
+
         ########################### Drone loop #################################
         # Hover at first
         if dt < hover_duration:
             for d in game_mgr.drones:
                 d.takeoff_in_place(0.5*world.expanse[2])
             sleep(0.01)
-            continue
+        else:
+            altitude_adjust = [0 for _ in range(n_drones)]
+            for idx, d in enumerate(drones):
+                target_current = drone_paths[idx][target_index_drone[idx] + 1]
+                # Temporary
+                current_trajectory = drone_trajectory[idx][target_index_drone[idx]]
+                # Find the target positions: {make indexing as a function for better interpretability}
+                increment = speed_constant * (dt - dt_prev[idx])
+                path_index_drone[idx] += increment
+                picked = min(int(path_index_drone[idx]) + 1, len(current_trajectory))
+                target = [current_trajectory[-picked][0], current_trajectory[-picked][1],
+                        0.5 * world.expanse[2] + altitude_adjust[idx]]
+                drones[idx].set_position(target)
+                
+                # Time
+                dt_prev[idx] = dt
+                sleep(0.01)
 
-        altitude_adjust = [0 for _ in range(n_drones)]
-        for idx, d in enumerate(drones):
-            target_current = drone_paths[idx][target_index_drone[idx] + 1]
-            # Temporary
-            current_trajectory = drone_trajectory[idx][target_index_drone[idx]]
-            # Find the target positions: {make indexing as a function for better interpretability}
-            increment = speed_constant * (dt - dt_prev[idx])
-            path_index_drone[idx] += increment
-            picked = min(int(path_index_drone[idx]) + 1, len(current_trajectory))
-            target = [current_trajectory[-picked][0], current_trajectory[-picked][1],
-                    0.5 * world.expanse[2] + altitude_adjust[idx]]
-            drones[idx].set_position(target)
-            
-            # Time
-            dt_prev[idx] = dt
-            sleep(0.01)
+                # Health
+                drones[idx].health -= 0.01
 
-            # Check distance to the target
-            target_distance_drone[idx] = distance(target_current, drones[idx].position[0:2])
-            # Check stay start time
-            if target_distance_drone[idx] < stay_distance_drone:
-                # Measure stay time
-                if stay_flag_drone[idx]:
-                    # Measure: start point
-                    start_time_drone[idx] = time()
-                    stay_flag_drone[idx] = False
-                # Measure: end point
-                stay_time_drone[idx] = time() - start_time_drone[idx]
+                # Check distance to the target
+                target_distance_drone[idx] = distance(target_current, drones[idx].position[0:2])
+                # Check stay start time
+                if target_distance_drone[idx] < stay_distance_drone:
+                    # Measure stay time
+                    if stay_flag_drone[idx]:
+                        # Measure: start point
+                        start_time_drone[idx] = time()
+                        stay_flag_drone[idx] = False
+                    # Measure: end point
+                    stay_time_drone[idx] = time() - start_time_drone[idx]
 
-            # Check stay duration
-            if stay_time_drone[idx] > stay_duration_drone:
-                if target_index_drone[idx] < len(drone_trajectory[idx]) - 1:
-                    # Generate victim
-                    if not game_mgr.victim_detected[idx]:
-                        game_mgr.victim_id[idx] = survivor_images[survivor_index]
-                        # Send the victim idx to the according user
-                        message['idx_image'] = str(survivor_images[survivor_index])
-                        message_changed = True
-                        survivor_index += 1
-                        game_mgr.victim_detected[idx] = True
-                        # To record response time
-                        game_mgr.victim_timing[idx] = dt
-
-                    # Once victim is selected, close it: only if there is no unassigned target
-                    if game_mgr.target_decided:
-                        if data and data['victim'] is not None:
-                            game_mgr.victim_clicked[idx] = 1 if data['victim'] == 'accept' else 2
-                            data['victim'] = None
-    
-                        if game_mgr.victim_clicked[idx]:
-                            game_mgr.victim_id[idx] = 0
-                            game_mgr.victim_detected[idx] = False
+                # Check stay duration
+                if stay_time_drone[idx] > stay_duration_drone:
+                    if target_index_drone[idx] < len(drone_trajectory[idx]) - 1:
+                        # Generate victim
+                        if not game_mgr.victim_detected[idx]:
+                            game_mgr.victim_id[idx] = survivor_images[survivor_index]
+                            # Send the victim idx to the according user
+                            message['idx_image'] = str(survivor_images[survivor_index])
+                            message_changed = True
+                            survivor_index += 1
+                            game_mgr.victim_detected[idx] = True
                             # To record response time
-                            # game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
-                            # game_mgr.missions[idx].time_stamp.append(dt)
-                            # game_mgr.missions[idx].drone_id.append(idx)
-                            # game_mgr.victim_timing[idx] = 0
+                            game_mgr.victim_timing[idx] = dt
 
-                            # print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
-                            # Print status
-                            print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index_drone[idx] + 1)} accomplished')
-                            # Remove the task whose target matches target_current
-                            for i, task in enumerate(tasks):
-                                if np.allclose(task[1], target_current):
-                                    tasks.pop(i)
-                                    message['tasks'] = tasks
-                                    print('task updated in message')
-                                    message_changed = True
-                                    break
-                            # target_remaining.remove(target_current)
-                            # Update and reset
-                            target_index_drone[idx] += 1
-                            stay_flag_drone[idx] = True
-                            stay_time_drone[idx] = 0
-                            # Temporary
-                            path_index_drone[idx] = 0
-                    else:
-                        game_mgr.victim_block_choice[idx] = True
-                # else:
-                #     mission_complete[idx] = True
+                        # Once victim is selected, close it: only if there is no unassigned target
+                        if game_mgr.target_decided:
+                            if data and data['victim'] is not None:
+                                game_mgr.victim_clicked[idx] = 1 if data['victim'] == 'accept' else 2
+                                data['victim'] = None
+        
+                            if game_mgr.victim_clicked[idx]:
+                                game_mgr.victim_id[idx] = 0
+                                game_mgr.victim_detected[idx] = False
+                                # To record response time
+                                # game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
+                                # game_mgr.missions[idx].time_stamp.append(dt)
+                                # game_mgr.missions[idx].drone_id.append(idx)
+                                # game_mgr.victim_timing[idx] = 0
 
-            # else:
-            #     drones[idx].land_in_place()
-            #     sleep(0.01)
-            #     continue
-
-
+                                # print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
+                                # Print status
+                                print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index_drone[idx] + 1)} accomplished')
+                                # Remove the task whose target matches target_current
+                                for i, task in enumerate(tasks):
+                                    if np.allclose(task[1], target_current):
+                                        tasks.pop(i)
+                                        message['tasks'] = tasks
+                                        print('task updated in message')
+                                        message_changed = True
+                                        break
+                                # target_remaining.remove(target_current)
+                                # Update and reset
+                                target_index_drone[idx] += 1
+                                stay_flag_drone[idx] = True
+                                stay_time_drone[idx] = 0
+                                # Temporary
+                                path_index_drone[idx] = 0
+                        else:
+                            game_mgr.victim_block_choice[idx] = True
         ########################### Drone loop ends ############################
 
         ############################ GV loop ###################################
@@ -330,15 +333,17 @@ if __name__=='__main__':
         ########################### Awareness map ends #################################
 
         ####################### Wind condition #####################################
-        # For every 5 seconds, sample n_wind number of wind positions, each has p_wind probability to be active
+        # For every 5 seconds, sample n_wind number of wind positions
         # Wind is represented as (x, y, radius, speed)
         if time() - wind_time > 5:
             wind_time = time()
-            wind = [(np.random.uniform(-1.9, 1.9), np.random.uniform(-1.25, 1.25), np.random.uniform(0.5, 1.5), np.random.uniform(0.5, 10)) for _ in range(n_wind)]
-            wind = [w for w in wind if np.random.uniform(0, 1) < p_wind]
-            average_wind_speed = np.mean([w[3] for w in wind]) if wind else 0.0
+            wind = [[np.random.uniform(-1.9, 1.9), np.random.uniform(-1.25, 1.25), np.random.uniform(0.05, 0.15)] for _ in range(n_wind)]
+            game_mgr.wind = []
+            for w in wind:
+                game_mgr.set_wind(w)
+            average_wind_speed = np.mean([w[2] for w in wind]) if wind else 0.0
             # Update the wind speed in the message if it has changed significantly
-            if average_wind_speed - old_wind_average_speed > 2:
+            if abs(average_wind_speed - old_wind_average_speed) > 1:
                 # Current way of changing wind speed is not very significant, can change it.
                 message['wind_speed'] = average_wind_speed
                 message_changed = True
@@ -346,6 +351,7 @@ if __name__=='__main__':
         
         if data and data['weather_decision'] is not None:
             if data['weather_decision'] == 'change':
+                print(f'[t={int(dt)}] Weather condition changed by user.')
                 data['weather_decision'] = None
                 current_start = [[drones[idx].position[0], drones[idx].position[1]] for idx in range(n_drones)]
                 drone_paths = assign_targets_to_drones(current_start, target_remaining,
@@ -367,6 +373,7 @@ if __name__=='__main__':
                 path_index = [0 for _ in range(n_drones)]
                 dt_prev = [dt for _ in range(n_drones)]
             elif data['weather_decision'] == 'maintain':
+                print(f'[t={int(dt)}] Weather condition maintained by user.')
                 data['weather_decision'] = None
                 speed_constant = 5.0
         ################## Wind condition ends #####################################
@@ -379,6 +386,7 @@ if __name__=='__main__':
             # print(message)
             clients[idx][0].sendall(json.dumps(message).encode())
             message_changed = False
+            # assert False
         ############################# Socket Send ends #####################################
         game_mgr.render()
         # print('gui rendered')
