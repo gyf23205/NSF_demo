@@ -7,19 +7,6 @@ import socket
 import json
 from constants import *
 
-# for estimator
-import csv
-from TF_raw import TransformerRawClassifier
-import torch
-# import hydra
-import json
-import numpy as np
-import yaml
-
-
-csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
-
-
 
 class Task:
     def __init__(self, surface, task_id, target_loc, task_pos, priority=0):
@@ -188,52 +175,13 @@ class UserGUI:
         # self.screen.fill(WHITE)
 
         ###################### Update workload text ######################
-        # if data and data['workload'] is not None:
-        #     self.workload_text.clear()
-        #     self.workload_text.update('Workload: ' + data['workload'])
+        if data and data['workload'] is not None:
+            self.workload_text.clear()
+            self.workload_text.update('Workload: ' + data['workload'])
+        # [MODIFY HERE] To Do: 
+        # 1. implement trained model here
+        # 2. Read output CSV file (+ erase contents) here
 
-        # 1. load csv file, read last row, delete content
-        with open(csv_path, 'r') as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-            last_row = rows[-1]
-            last_row = list(map(float, last_row))
-
-        # with open(csv_path, 'w', newline='') as f:
-        #     f.truncate()
-
-        # 2. run estimator model
-        with open('config_ecg_gaze.yaml', 'r') as yf:
-            cfg = yaml.safe_load(yf)
-
-        model = TransformerRawClassifier(
-            config=cfg["config_tf"],
-            optim_cfg=cfg["optim"],
-            pre_process=cfg.get("pre_process", None)
-        )
-        state_dict = torch.load('last.pt', map_location='cpu')
-        model.load_state_dict(state_dict, strict=False)
-        model.eval()
-
-        ecg = last_row[:130]
-        gaze = last_row[130:]
-
-        t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-        t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
-
-        with torch.no_grad():
-            out = model(t1, t2)
-            pred_label = torch.argmax(out).item()
-            print(out, pred_label)
-
-        # 3. update workload
-        if pred_label == 1:
-            workload_text = 'high'
-        elif pred_label == 0:
-            workload_text = 'low'
-
-        self.workload_text.clear()
-        self.workload_text.update('Workload: ' + workload_text)               
         ###################### Update workload text ends #####################
 
         ###################### Victim block ######################
@@ -300,7 +248,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '192.168.0.243'  # IP of the server
+    host = '192.168.1.10'  # IP of the server
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -322,22 +270,7 @@ if __name__ == '__main__':
         try:
             data_received = s.recv(1024).decode() 
             if data_received:
-                # data = json.loads(data_received)
-
-                #################### Modified by JW 05 Jul ######################
-                decoder = json.JSONDecoder()
-                pos = 0
-                results = []
-
-                # Loop through the string and decode one object at a time
-                while pos < len(data_received):
-                    data_received = data_received.lstrip()  # Clean up leading spaces
-                    obj, offset = decoder.raw_decode(data_received[pos:])
-                    results.append(obj)
-                    pos += offset
-                data = results[0]
-                ##################################################################
-
+                data = json.loads(data_received)
                 print('Received data from server:')
         except BlockingIOError:
             pass
