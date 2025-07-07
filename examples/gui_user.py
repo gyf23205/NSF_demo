@@ -31,8 +31,8 @@ class Task:
         self.assigned_drone = None
         self.assigned_gv = None
         self.assigned_time = pygame.time.get_ticks()
-        # self.reject_time_limit = 100000
-        # self.reject = False
+        self.reject_time_limit = 100000
+        self.reject = False
         self.spacing = spacing
         self.priority_set = [0, 1]
 
@@ -43,7 +43,7 @@ class Task:
         self.priority_input = TextInput((self.x0 + 2 * (self.grid_width + self.spacing), self.y0,self.grid_width, self.grid_height), color=WHITE, maximum=max(self.priority_set))
         self.assigned_drone_text = Font(FONT, FONT_SIZE, (self.x0 + 3 * (self.grid_width + self.spacing), self.y0))
         self.assigned_gv_text = Font(FONT, FONT_SIZE, (self.x0 + 4 * (self.grid_width + self.spacing), self.y0))
-        # self.rejection_button = Button((self.x0 + 5 * (self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height), RED, "Reject", text_color=WHITE)
+        self.rejection_button = Button((self.x0 + 5 * (self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height), RED, "Reject", text_color=WHITE)
         # self.assigned_gv_input = TextInput((self.x0 + 3 * self.grid_width, self.y0, self.grid_width, self.grid_height), color=WHITE, maximum=n_gvs)
 
         self.task_id_text.update('    ' + f'{self.task_id}')
@@ -68,7 +68,7 @@ class Task:
         self.priority_input.rect.topleft = (self.x0 + 2 * (self.grid_width + self.spacing), self.y0)
         self.assigned_drone_text.pos = (self.x0 + 3 * (self.grid_width + self.spacing), self.y0)
         self.assigned_gv_text.pos = (self.x0 + 4 * (self.grid_width + self.spacing), self.y0)
-        # self.rejection_button.rect.topleft = (self.x0 + 5 * (self.grid_width + self.spacing), self.y0)
+        self.rejection_button.rect.topleft = (self.x0 + 5 * (self.grid_width + self.spacing), self.y0)
 
     def draw(self):
         for text in self.task_id_text.texts:
@@ -83,8 +83,8 @@ class Task:
             self.surface.blit(text[0], text[1])
 
         current_time = pygame.time.get_ticks()
-        # if (current_time - self.assigned_time < self.reject_time_limit) and not self.reject:
-        #     self.rejection_button.draw(self.surface)
+        if (current_time - self.assigned_time < self.reject_time_limit) and not self.reject:
+            self.rejection_button.draw(self.surface)
             
         # self.assigned_gv_input.draw(self.surface)
 
@@ -93,15 +93,14 @@ class Task:
         if self.priority_input.text.isdigit() and int(self.priority_input.text) in self.priority_set: 
             self.priority = int(self.priority_input.text)
 
-        # old_reject = self.reject
+        old_reject = self.reject
         self.priority_input.handle_event(event)
         current_time = pygame.time.get_ticks()
 
-        # if current_time - self.assigned_time < self.reject_time_limit:
-        #     self.reject = self.rejection_button.handle_event(event) 
+        if current_time - self.assigned_time < self.reject_time_limit:
+            self.reject = self.rejection_button.handle_event(event) 
 
-        # if (old_priority != self.priority) or (old_reject != self.reject):
-        if (old_priority != self.priority):
+        if (old_priority != self.priority) or (old_reject != self.reject):
             return True
         return False
         # self.assigned_gv_input.handle_event(event)
@@ -110,7 +109,7 @@ class Task:
         return {
             'task_id': self.task_id,
             'priority': self.priority,
-            # 'reject': self.reject
+            'reject': self.reject
         }
 
 
@@ -123,7 +122,7 @@ class Human:
 class UserGUI:
     def __init__(self):
         pygame.init()
-        self.screen_width = 1300
+        self.screen_width = 1500
         self.screen_height = 750
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.screen.fill(WHITE)
@@ -147,8 +146,8 @@ class UserGUI:
         buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing)
         accept_rect = pygame.Rect(buttons_x, buttons_y, button_width, button_height)
         reject_rect = pygame.Rect(buttons_x + button_width + spacing, buttons_y, button_width, button_height)
-        self.button_accept =  Button(accept_rect, BLUE, 'Accept', text_color=WHITE)
-        self.button_reject = Button(reject_rect, RED, 'Reject', text_color=WHITE)
+        self.button_accept =  Button(accept_rect, BLUE, 'Accept')
+        self.button_reject = Button(reject_rect, RED, 'Reject')
         self.image = None
         self.button_accept.draw(self.screen)
         self.button_reject.draw(self.screen)
@@ -167,10 +166,8 @@ class UserGUI:
         self.weather_text.update('Weather: '+ self.weather)
         self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), (0, 255, 0), "Change routes")
         self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), YELLOW, "Maintain routes")
-        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), BLUE, "Hand over")
         self.button_wind_change.draw(self.screen)
         self.button_wind_maintain.draw(self.screen)
-        self.button_wind_handover.draw(self.screen)
 
         # Task block
         self.task_x = 550
@@ -242,8 +239,6 @@ class UserGUI:
         ###################### Victim block ######################
         if data and data['idx_image'] is not None:
             # print(data['idx_image'])
-            victim_buffer.append(data['idx_image'])
-            data['idx_image'] = None
             image_path = f"examples/images/victim{data['idx_image']}.jpeg"
             pil_image = Image.open(image_path)
             pil_image = pil_image.resize((self.image_width, self.image_height))
@@ -295,20 +290,17 @@ class UserGUI:
             self.weather = data['wind_speed']
             pygame.draw.rect(self.screen, WHITE, self.weather_text.rect)  # Clear the previous weather text
             self.weather_text.clear()
-            self.weather_text.update('Wind speed changes significantly, current speed: ' + "{:.2f}".format(self.weather))
+            self.weather_text.update('Wind speed increase significantly, current speed: ' + "{:.2f}".format(self.weather))
             self.screen.blit(self.weather_text.texts[0][0], self.weather_text.texts[0][1])
         ###################### Weather block ends ######################
         pygame.display.flip()
 
 
+# Example usage:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-<<<<<<< HEAD
-    host = '127.0.0.1'  # IP of the server (localhost)
-=======
     host = '192.168.0.243'  # IP of the server
->>>>>>> fca8361454336acd1c9911c3db524dabc705651c
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -323,20 +315,6 @@ if __name__ == '__main__':
     # response['tasks']: list of Task objects
     response = {'victim': None, 'weather_decision': None, 'tasks': None} # Response to be sent back to the server
     running = True
-<<<<<<< HEAD
-    victim_buffer = []  # Buffer to store victims
-    try:
-        while running:
-            data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None}  # Initialize data
-            response_changed = False
-            # Receive weather, task, victim from server
-            try:
-                data_received = s.recv(1024).decode() 
-                if data_received:
-                    data = json.loads(data_received)
-                    print('Received data from server:')
-            except BlockingIOError:
-=======
     while running:
         data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None}  # Initialize data
         response_changed = False
@@ -386,70 +364,40 @@ if __name__ == '__main__':
                 response_changed = True
                 response['victim'] = 'reject'
             else:
->>>>>>> fca8361454336acd1c9911c3db524dabc705651c
                 pass
-            
 
-            if data and data['tasks'] is not None:
-                tasks = data['tasks']
-                # print('Received tasks from server:', tasks)
+            ########## Humane handling ##############
+            ########## Human handling ends ##########
 
-            # Event handling
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
 
-                # Victim handling
-                if gui.button_accept.handle_event(event):
-                    gui.image = None
-                    # data['idx_image'] = None
+            # Task handling
+            for task in gui.task_list:
+                if task.handle_event(event):
                     response_changed = True
-                    response['victim'] = 'accept'
-                elif gui.button_reject.handle_event(event):
-                    gui.image = None
-                    # data['idx_image'] = None
-                    response_changed = True
-                    response['victim'] = 'reject'
-                else:
-                    pass
 
-                ########## Humane handling ##############
-                ########## Human handling ends ##########
+            # Remove rejected tasks
+            gui.task_list = [ta for ta in gui.task_list if not ta.reject]
 
-
-                # Task handling
-                for task in gui.task_list:
-                    if task.handle_event(event):
-                        response_changed = True
-
-                # # Remove rejected tasks
-                # gui.task_list = [ta for ta in gui.task_list if not ta.reject]
-
-                if response_changed:
-                    response['tasks'] = [task.to_dict() for task in gui.task_list]
-
-                # Weather handling
-                if gui.button_wind_change.handle_event(event):
-                    response_changed = True
-                    response['weather_decision'] = 'change'
-                elif gui.button_wind_maintain.handle_event(event):
-                    response_changed = True
-                    response['weather_decision'] = 'maintain'
-                elif gui.button_wind_handover.handle_event(event):
-                    response_changed = True
-                    response['weather_decision'] = 'handover'
-                else:
-                    pass
-    
-            # Render the GUI and get the response        
-            gui.render()
-            idx_image = None  # Reset image after rendering
-
-            # Send response back to the server if it has changed
             if response_changed:
-                print(response['tasks'])
-                msg = json.dumps(response).encode('utf-8')
-                s.sendall(msg)
-    finally:
-        s.close()
-        pygame.quit()
+                response['tasks'] = [task.to_dict() for task in gui.task_list]
+
+            # Weather handling
+            if gui.button_wind_change.handle_event(event):
+                response_changed = True
+                response['weather_decision'] = 'change'
+            elif gui.button_wind_maintain.handle_event(event):
+                response_changed = True
+                response['weather_decision'] = 'maintain'
+            else:
+                pass
+  
+        # Render the GUI and get the response        
+        gui.render()
+        idx_image = None  # Reset image after rendering
+
+        # Send response back to the server if it has changed
+        if response_changed:
+            print(response['tasks'])
+            msg = json.dumps(response).encode('utf-8')
+            s.sendall(msg)
+    pygame.quit()
