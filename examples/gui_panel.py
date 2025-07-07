@@ -321,7 +321,7 @@ if __name__ == "__main__":
         pos = game_mgr.position_meter_to_gui(pos)
         # print("Drone positions:", pos)
         # assert False
-        game_mgr.update_awareness(pos, radius=70)
+        game_mgr.update_awareness(pos, radius=0)
         game_mgr.render()
 
         # Check for quit event
