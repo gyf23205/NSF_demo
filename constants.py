@@ -1,4 +1,4 @@
-BOUND_X_MAX = 1620
+BOUND_X_MAX = 1920
 BOUND_Y_MAX = 900
 IMAGE_PATH = 'examples/images/'
 
@@ -10,6 +10,7 @@ YELLOW = (255, 255, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 GREY = (160, 160, 160)
+ORANGE = (255, 165, 0)
 
 FONT = 'Helvetica'
 FONT_SIZE = 20

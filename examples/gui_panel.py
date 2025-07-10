@@ -4,6 +4,7 @@ from examples.vehicles import *
 from constants import *
 from util_classes import Font, Button, Bar
 from pygame.font import SysFont
+from shapely.geometry import LineString, box
 
 
 class DroneHealth:
@@ -19,6 +20,7 @@ class DroneHealth:
         self.health_bar = Bar(screen, (self.x0 + 2*(self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height))
         self.current_pos_txt = SysFont(FONT, FONT_SIZE)
         self.current_target = SysFont(FONT, FONT_SIZE)
+        self.status_txt = SysFont(FONT, FONT_SIZE)
 
     def draw(self):
         idx_txt = self.idx_txt.render('         ' + str(self.drone.idx), True, BLACK)
@@ -28,6 +30,8 @@ class DroneHealth:
         pos_str = f"({self.drone.position[0]:.2f}, {self.drone.position[1]:.2f})"
         pos_txt = self.current_pos_txt.render(pos_str, True, BLACK)
         self.screen.blit(pos_txt, (self.x0 + 3*(self.grid_width+self.spacing), self.y0, self.grid_width, self.grid_height))
+        status_txt = self.status_txt.render(self.drone.status, True, BLACK)
+        self.screen.blit(status_txt, (self.x0 + 4*(self.grid_width+self.spacing), self.y0, self.grid_width, self.grid_height))
 
 
 class GVHealth:
@@ -58,8 +62,20 @@ class Background:
     def __init__(self, file_name, bound_x_min, bound_x_max, bound_y_min, bound_y_max):
         self.figure = pygame.image.load(file_name).convert()
         self.surface = self.figure
-        self.surface = pygame.transform.scale(self.surface, (bound_x_max, bound_y_max))
+        self.surface = pygame.transform.scale(self.surface, (bound_x_max - bound_x_min, bound_y_max - bound_y_min))
         self.rect = self.surface.get_rect()
+        self.rect.topleft = (bound_x_min, bound_y_min)
+        print(self.rect)
+        self.min_bound = np.array([bound_x_min, bound_y_min])
+        self.max_bound = np.array([bound_x_max, bound_y_max])
+
+class BackgroundNoScale:
+    def __init__(self, file_name, bound_x_min, bound_x_max, bound_y_min, bound_y_max):
+        self.figure = pygame.image.load(file_name).convert()
+        self.surface = self.figure
+        self.rect = self.surface.get_rect()
+        self.rect.topleft = (bound_x_min, bound_y_min)
+        print(self.rect)
         self.min_bound = np.array([bound_x_min, bound_y_min])
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
@@ -67,7 +83,7 @@ class Background:
 class EnvironmentInfo:
     def __init__(self, screen):
         self.screen = screen
-        self.x0, self.y0 = 950, 700
+        self.x0, self.y0 = 1150, 700
         self.title = Font(FONT, FONT_SIZE, (self.x0, self.y0))
         self.spacing = '               '
         self.title.update('                 Environment Info')
@@ -92,13 +108,14 @@ class GameMgr:
         self.drones = drones
         self.gvs = gvs
         self.n_drones = len(drones)
+        self.n_gvs = len(gvs)
         
         # Define position of blocks, tf=topleft, c=center
         self.tf_map = (100, 100)
-        self.tf_health_drone = (950, 120)
-        self.tf_health_gv = (950, 500)
-        self.c_drone_icon = (950, 70)
-        self.c_gv_icon = (950, 450)
+        self.tf_health_drone = (1150, 120)
+        self.tf_health_gv = (1150, 500)
+        self.c_drone_icon = (1150, 70)
+        self.c_gv_icon = (1150, 450)
 
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (0, 30)
         self.screen = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX), 0)
@@ -122,12 +139,14 @@ class GameMgr:
         # Awareness
         self.awareness_map = np.ones((self.map_height, self.map_width), dtype=np.float32) # Should be zeros, ones is just for testing
         # Time status
-        self.status = Font(FONT, FONT_SIZE, (20, 200))
+        self.status = Font(FONT, FONT_SIZE, (20, 20))
         # Targets
         self.target = []
         self.target_clicked = 0
         self.target_decided = True
         self.task = None
+        # Voronoi diagram
+        self.voronoi = None
         
         # Victim flags
         n_drones = len(drones)
@@ -138,20 +157,23 @@ class GameMgr:
         self.victim_timing = [0 for _ in range(n_drones)]
 
         # Drones
-        self.drone_images = [Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.07, rt=0.0) for _ in range(self.n_drones)]
+        self.drone_images = [Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.06, rt=0.0) for _ in range(self.n_drones)]
         # Take-off position
         self.takeoff_position = None
         # Ground vehicles
-        self.gv_images = [Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.09, rt=0.0) for _ in range(self.n_drones)]
+        self.gv_images = [Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.09, rt=0.0) for _ in range(self.n_gvs)]
         # Hospital. It's not a vehicle, but not much difference
         self.hospital = Vehicle(file_name=IMAGE_PATH + 'hospital.png', surface=self.screen, sc=0.09, rt=0.0)
         ############# Main map ends ####################
 
+        ############# Legends ##########################
+        self.legends = Background(file_name=IMAGE_PATH + 'legend.png',
+                                  bound_x_min=900, bound_x_max=1100, bound_y_min=0, bound_y_max=520)
         ############### Drone health ###################
         # Add title
         self.title_drone_health = Font(FONT, FONT_SIZE, (self.tf_health_drone[0], self.tf_health_drone[1] - 2 * FONT_SIZE * line_height))
-        self.title_drone_health.update('    Drone Health')
-        self.title_drone_health.update('Drone ID           Altitude            Health                Position')
+        self.title_drone_health.update('    Drone condition')
+        self.title_drone_health.update('Drone ID           Altitude            Battery                Position        Status')
         # Small drone icon at the topleft of the drone health block
         self.drone_icon = Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.05, rt=0.0)
         # Drone health table
@@ -161,8 +183,8 @@ class GameMgr:
         ###################### Ground vehicle health #####################
         # Add title
         self.title_gv_health = Font(FONT, FONT_SIZE, (self.tf_health_gv[0], self.tf_health_gv[1] - 2 * FONT_SIZE * line_height))
-        self.title_gv_health.update('     Ground Vehicle Health')
-        self.title_gv_health.update('    GV ID              Health           Carrying            Position')
+        self.title_gv_health.update('     Ground Vehicle condition')
+        self.title_gv_health.update('    GV ID              Fuel           Carrying            Position')
         # Small ground vehicle icon at the topleft of the ground vehicle health block
         self.gv_icon = Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.05, rt=0.0)
         # Ground vehicle health table
@@ -177,7 +199,13 @@ class GameMgr:
         self.environment_info = EnvironmentInfo(self.screen)
         #################### Environment ends ##################
 
-    def render(self):
+    def set_voronoi(self):
+        print(IMAGE_PATH + 'voronoi_regions.png')
+        self.vor = Background(file_name=IMAGE_PATH + 'voronoi_regions_cropped.png',
+                                     bound_x_min=0, bound_x_max=900, bound_y_min=0, bound_y_max=720)
+        self.vor.surface.set_alpha(128)
+
+    def render(self, vor, centroids):
         # Record start time
         pygame.event.get()  # Process events to avoid blocking
         if self.initial:
@@ -187,6 +215,47 @@ class GameMgr:
         # Background
         self.screen.fill(WHITE)
         self.screen.blit(self.background.surface, self.background.rect)
+        # self.screen.blit(self.vor.surface, self.vor.rect)
+
+        # Draw Voronoi boundaries
+        for ridge in vor.ridge_vertices:
+            if -1 in ridge:
+                continue  # Skip infinite ridges
+            pt1 = self.position_meter_to_gui([vor.vertices[ridge[0]]])[0]
+            pt2 = self.position_meter_to_gui([vor.vertices[ridge[1]]])[0]
+            # Clip the line to the background boundary
+
+            # Define the background boundary as a rectangle
+            boundary = box(
+                self.background.rect.left,
+                self.background.rect.top,
+                self.background.rect.right,
+                self.background.rect.bottom
+            )
+
+            line = LineString([pt1, pt2])
+            clipped = line.intersection(boundary)
+
+            if clipped.is_empty:
+                continue
+            if clipped.geom_type == 'LineString':
+                coords = list(clipped.coords)
+                pygame.draw.line(self.screen, (0, 255, 0), coords[0], coords[1], 2)
+            elif clipped.geom_type == 'MultiLineString':
+                for seg in clipped:
+                    coords = list(seg.coords)
+                    pygame.draw.line(self.screen, (0, 255, 0), coords[0], coords[1], 2)
+
+        # Draw centroids as targets
+        centroids_gui = self.position_meter_to_gui(centroids)
+        for idx, centroid in enumerate(centroids_gui):
+            pygame.draw.circle(self.screen, (255, 0, 0), centroid.astype(int), 10)
+            font = pygame.font.Font(None, 24)
+            text = font.render(f'{idx+1}', True, (255,255,255))
+            self.screen.blit(text, (centroid[0]-6, centroid[1]-6))
+
+        # Legends
+        self.screen.blit(self.legends.surface, self.legends.rect)
 
         ##################### Map ##########################
         # Awareness map
@@ -197,16 +266,17 @@ class GameMgr:
         # Drones
         for i, d in enumerate(self.drones):
             pos_image = tuple(self.position_meter_to_gui([d.position[0:2]]))
-            self.drone_images[i].draw(pos_image)
+            height = d.position[2]
+            self.drone_images[i].draw(pos_image, height)
         # GVs
         for i, g in enumerate(self.gvs):
             pos_image = tuple(self.position_meter_to_gui([g.position]))
             self.gv_images[i].draw(pos_image)
         # Hospital
-        self.hospital.draw(tuple(self.position_meter_to_gui([[0, 0]])))
+        self.hospital.draw(tuple(self.position_meter_to_gui([[1.3, -1.2]])))
         # Targets
-        for i, (idx, pos, priority) in enumerate(self.task):
-            pygame.draw.circle(self.screen, BLUE if priority <= 0 else RED, pos, 10)
+        for i, (idx, pos, priority, assigned_drone) in enumerate(self.task):
+            self.draw_target(pos, idx, priority)
         # Takeoff positions
         for i, pos in enumerate(self.takeoff_position):
             pygame.draw.circle(self.screen, BLACK, pos, 10)
@@ -229,13 +299,24 @@ class GameMgr:
         ##################### GV health ends ####################
 
         ####################### Wind ############################
-        for i, value in enumerate(self.wind):
-            pygame.draw.circle(self.screen, (35, 250, 152), [value[0], value[1]], value[2])
+        wind_gui = [self.meter_to_gui(w) for w in self.wind]
+        for i, value in enumerate(wind_gui):
+            wind_circle = pygame.Surface((2*value[2], 2*value[2]), pygame.SRCALPHA)
+            pygame.draw.circle(wind_circle, (35, 250, 152, 100), (value[2], value[2]), value[2])
+            self.screen.blit(wind_circle, (value[0] - value[2], value[1] - value[2]))
         ####################### Wind ends ########################
 
         ####################### Environment ######################
-        self.environment_info.draw(self.wind)
+        self.environment_info.draw(wind_gui)
         ####################### Environment ends ##################
+
+        ##################### Time status ##########################
+        self.status.clear()
+        time_display = (pygame.time.get_ticks() - self.t0) * 1e-3
+        self.status.update('Time: %.1f sec' % time_display, text_color=WHITE)
+        for text in self.status.texts:
+            self.screen.blit(text[0], text[1])
+        ######################## Time status ends ####################
 
         pygame.display.flip()
     
@@ -275,15 +356,122 @@ class GameMgr:
         # if new_target is not None:
         #     self.new_target = new_target
 
+    def draw_target(self, pos, idx, priority):
+        if priority == 0:
+            color = BLUE
+        elif priority == 1:
+            color = ORANGE
+        elif priority == 2:
+            color = RED
+
+        pygame.draw.circle(self.screen, color, pos, 10)
+        font = pygame.font.Font(None, 24)
+        text = font.render(f'{idx}', True, WHITE)
+        self.screen.blit(text, (pos[0]-6, pos[1]-6))
+
     def set_wind(self, wind, meter=True):
-        if meter:
-            wind[0] = self.ratio * wind[0] + self.center[0]
-            wind[1] = -self.ratio * wind[1] + self.center[1]
-            wind[2] = self.ratio * wind[2]
+        # if meter:
+        #     wind[0] = self.ratio * wind[0] + self.center[0]
+        #     wind[1] = -self.ratio * wind[1] + self.center[1]
+        #     wind[2] = self.ratio * wind[2]
         self.wind.append(wind)
 
+    def meter_to_gui(self, p_meter):
+        p_return = p_meter.copy()
+        p_return[0] = self.ratio * p_meter[0] + self.center[0]
+        p_return[1] = -self.ratio * p_meter[1] + self.center[1]
+        p_return[2] = self.ratio * p_meter[2]
+        return p_return
+
     def reset_wind(self):
-        self.wind = []
+        self.wind = []  
+
+    def workload_render(self, event=None):
+        font = pygame.font.Font('freesansbold.ttf', 32)
+        text = font.render('Survey: Workload', True, WHITE, BLACK)
+        text_rect = text.get_rect()
+        text_rect.center = (BOUND_X_MAX // 2, BOUND_Y_MAX // 3)
+        self.screen.fill(BLACK)
+        self.screen.blit(text, text_rect)
+
+        # Survey buttons
+        low_button = Button((360, 400, 200, 200), WHITE, 'LOW', text_color=RED, font_size=2 * FONT_SIZE)
+        medium_button = Button((860, 400, 200, 200), WHITE, 'MEDIUM', text_color=RED, font_size=2 * FONT_SIZE)
+        high_button = Button((1360, 400, 200, 200), WHITE, 'HIGH', text_color=RED, font_size=2 * FONT_SIZE)
+        low_button.draw(self.screen)
+        medium_button.draw(self.screen)
+        high_button.draw(self.screen)
+
+        # Descriptions
+        # Low
+        lows = [font.render('When there is sufficient', True, WHITE, BLACK),
+                font.render('capacity to handle current', True, WHITE, BLACK),
+                font.render('tasks comfortably with room', True, WHITE, BLACK),
+                font.render('to take on additional tasks.', True, WHITE, BLACK)]
+        for i, low in enumerate(lows):
+            low_rect = low.get_rect()
+            low_rect.topleft = (160, 700 + 35 * i)
+            self.screen.blit(low, low_rect)
+        # Medium
+        mediums = [font.render('When there is limited spare', True, WHITE, BLACK),
+                   font.render('capacity to take on a few', True, WHITE, BLACK),
+                   font.render('additional tasks without significantly', True, WHITE, BLACK),
+                   font.render('impacting overall performance.', True, WHITE, BLACK)]
+        for i, medium in enumerate(mediums):
+            medium_rect = medium.get_rect()
+            medium_rect.topleft = (720, 700 + 35 * i)
+            self.screen.blit(medium, medium_rect)
+        # High
+        highs = [font.render('When the volume of tasks meets', True, WHITE, BLACK),
+                 font.render('or exceeds your capacity to', True, WHITE, BLACK),
+                 font.render('respond efficiently, leaving no', True, WHITE, BLACK),
+                 font.render('room for additional tasks.', True, WHITE, BLACK)]
+        for i, high in enumerate(highs):
+            high_rect = high.get_rect()
+            high_rect.topleft = (1360, 700 + 35 * i)
+            self.screen.blit(high, high_rect)
+
+        # Update
+        pygame.display.flip()
+        if any([low_button.handle_event(event), medium_button.handle_event(event), high_button.handle_event(event)]):
+            return True
+        else:
+            return False
+
+        
+
+    def perceived_risk_render(self, event=None):
+        font = pygame.font.Font('freesansbold.ttf', 32)
+        text = font.render('Survey: Perceived-Risk', True, WHITE, (50, 50, 50))
+        text_rect = text.get_rect()
+        text_rect.center = (BOUND_X_MAX // 2, BOUND_Y_MAX // 3)
+        self.screen.fill((50, 50, 50))
+        self.screen.blit(text, text_rect)
+
+        # Survey buttons
+        low_button = Button((360, 400, 200, 200), WHITE, 'LOW', text_color=BLUE, font_size=2 * FONT_SIZE)
+        medium_button = Button((860, 400, 200, 200), WHITE, 'MEDIUM', text_color=BLUE, font_size=2 * FONT_SIZE)
+        high_button = Button((1360, 400, 200, 200), WHITE, 'HIGH', text_color=BLUE, font_size=2 * FONT_SIZE)
+        low_button.draw(self.screen)
+        medium_button.draw(self.screen)
+        high_button.draw(self.screen)
+
+        # Description
+        definitions = [font.render('During the mission, how high', True, WHITE, BLACK),
+                       font.render('was the risk of misidentifying humans', True, WHITE, BLACK),
+                       font.render('in need of assistance and', True, WHITE, BLACK),
+                       font.render('misinforming the command center?', True, WHITE, BLACK)]
+        for i, line in enumerate(definitions):
+            line_rect = line.get_rect()
+            line_rect.topleft = (720, 700 + 35 * i)
+            self.screen.blit(line, line_rect)
+
+        pygame.display.flip()
+
+        if any([low_button.handle_event(event), medium_button.handle_event(event), high_button.handle_event(event)]):
+            return True
+        else:
+            return False
 
 
 if __name__ == "__main__":

@@ -35,8 +35,8 @@ class Font:
         self.texts = []
         self.rect = pygame.Rect((pos[0], pos[1], 0, 0))  # Initialize rect with position
 
-    def update(self, content):
-        text = self.font.render(self.set_digits(content), True, BLACK)
+    def update(self, content, text_color=BLACK):
+        text = self.font.render(self.set_digits(content), True, text_color)
         posx = self.pos[0]
         posy = self.pos[1] + len(self.texts) * int(self.size * line_height)  # Stack text vertically
         self.texts.append((text, (posx, posy)))
@@ -55,7 +55,7 @@ class Font:
 
 
 class Button:
-    def __init__(self, rect, color, text, text_color=BLACK, font_name=FONT, font_size=FONT_SIZE):
+    def __init__(self, rect, color, text, text_color=WHITE, font_name=FONT, font_size=FONT_SIZE):
         self.rect = pygame.Rect(rect)
         self.color = color
         self.text = text
@@ -135,4 +135,58 @@ class TextInput:
         txt_surface = self.font.render(self.text, True, self.text_color)
         surface.blit(txt_surface, (self.rect.x+5, self.rect.y+5))
 
+class TextInputResponse:
+    def __init__(self, rect, color, maximum, text_color=BLACK, font_name=FONT, font_size=FONT_SIZE):
+        self.rect = pygame.Rect(rect)
+        self.color = color
+        self.maximum = maximum  # Maximum number of characters
+        self.text_color = text_color
+        self.font = pygame.font.SysFont(font_name, font_size)
+        self.text = ""
+        self.text_send = ""
+        self.active = False
+        self.lock = False  # Lock to prevent multiple activations
+        self.temp_flag = False  # Temporary flag to track active state changes
+        self.finish = False
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and not self.lock:
+            # Toggle active state if clicked
+            if self.rect.collidepoint(event.pos):
+                self.active = not self.active
+                if self.active:
+                    self.finish = False
+            else:
+                self.active = False
+            self.lock = True
+        
+        if self.temp_flag != self.active:
+            print(f"TextInput active state changed: {self.active}")
+            print(f"TextInput text updated: {self.text}")
+            self.temp_flag = self.active
+
+        if event.type == pygame.MOUSEBUTTONUP and self.lock:
+            # Reset lock on mouse button release
+           self.lock = False
+
+        if event.type == pygame.KEYDOWN and self.active:
+            if event.key == pygame.K_RETURN:
+                self.active = False  # Optionally finish editing on Enter
+                self.finish = True
+                self.text_send = self.text
+            elif event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+                print(f"TextInput text after backspace: {self.text}")
+            else:
+                self.text += event.unicode
+
+
+    def draw(self, surface):
+        # Fill the input box background
+        pygame.draw.rect(surface, self.color, self.rect)  # Fill the rect
+        # Draw the rim (border)
+        pygame.draw.rect(surface, BLACK, self.rect, 5 if self.active else 1)
+        # Render the text   
+        txt_surface = self.font.render(self.text, True, self.text_color)
+        surface.blit(txt_surface, (self.rect.x+5, self.rect.y+5))
 
