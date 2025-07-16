@@ -47,6 +47,7 @@ class TransformerRawClassifier(pl.LightningModule):
         a2: [B, *, 8] Gaze
         """
         ecg_mean = a1.mean(dim=-1, keepdim=True)  # [B, 1]
+        a2 = a2.view(a2.size(0), -1) 
         x = torch.cat([a1, a2, ecg_mean], dim=-1)  # [B, 139]
         x = x.view(x.size(0), x.size(1), 1)        # [B, 139, 1]
         x = self.input_proj(x)  # [B, 139, d_model]
