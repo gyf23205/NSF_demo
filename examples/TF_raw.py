@@ -3,9 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.optim import AdamW
+<<<<<<< Estimator
+# from utils import get_cosine_schedule_with_warmup 
+import numpy as np
+
+=======
 # from utils import get_cosine_schedule_with_warmup
 import numpy as np
  
+>>>>>>> main
 class TransformerRawClassifier(pl.LightningModule):
     def __init__(self, config, optim_cfg, pre_process):
         super().__init__()
@@ -13,12 +19,20 @@ class TransformerRawClassifier(pl.LightningModule):
         self.optim_cfg = optim_cfg
         self.pre_process = pre_process
         self.save_hyperparameters()
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
         self.ecg_len = 130
         self.gaze_len = 10
         self.aux_len = 1  # e.g., ECG mean
         self.seq_len = self.ecg_len + self.gaze_len + self.aux_len
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
         self.input_dim = config.get("input_dim")
         self.d_model = config.get("dim_model")
         self.nhead = config.get("num_heads")
@@ -27,10 +41,17 @@ class TransformerRawClassifier(pl.LightningModule):
         self.num_classes = config.get("num_classes")
         self.dropout = config.get("dropout")
         self.seq_len = config.get("max_len")
+<<<<<<< Estimator
+
+        self.input_proj = nn.Linear(1, self.d_model)
+        self.pos_encoder = PositionalEncoding(self.d_model, self.dropout, self.seq_len)
+
+=======
  
         self.input_proj = nn.Linear(1, self.d_model)
         self.pos_encoder = PositionalEncoding(self.d_model, self.dropout, self.seq_len)
  
+>>>>>>> main
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.d_model,
             nhead=self.nhead,
@@ -38,32 +59,54 @@ class TransformerRawClassifier(pl.LightningModule):
             batch_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=self.num_layers)
+<<<<<<< Estimator
+
+        self.classifier = nn.Linear(self.d_model, self.num_classes)
+
+=======
  
         self.classifier = nn.Linear(self.d_model, self.num_classes)
  
+>>>>>>> main
     def forward(self, a1, a2, pre_process=None):
         """
         a1: [B, *, 130] ECG
         a2: [B, *, 8] Gaze
         """
         ecg_mean = a1.mean(dim=-1, keepdim=True)  # [B, 1]
+<<<<<<< Estimator
+        a2 = a2.view(a2.size(0), -1) 
+=======
+>>>>>>> main
         x = torch.cat([a1, a2, ecg_mean], dim=-1)  # [B, 139]
         x = x.view(x.size(0), x.size(1), 1)        # [B, 139, 1]
         x = self.input_proj(x)  # [B, 139, d_model]
         x = self.pos_encoder(x)
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
         encoded = self.transformer_encoder(x)  # [B, 139, d_model]
         pooled = encoded.mean(dim=1)  # [B, d_model]
         logits = self.classifier(pooled)  # [B, num_classes]
         return logits
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
     def training_step(self, batch, batch_idx):
         t1, t2, labels = batch
         logits = self.forward(t1, t2, self.pre_process)
         loss = F.cross_entropy(logits, labels)
         self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=False, sync_dist=True)
         return loss
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         t1, t2, labels = batch
@@ -71,7 +114,11 @@ class TransformerRawClassifier(pl.LightningModule):
         loss = F.cross_entropy(logits, labels)
         self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         return loss
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
     def configure_optimizers(self):
         lr = float(self.optim_cfg["lr"])
         optimizer = AdamW(self.parameters(), lr=lr, weight_decay=1e-3)
@@ -88,21 +135,36 @@ class TransformerRawClassifier(pl.LightningModule):
             "frequency": 1,
         }
         return [optimizer], [scheduler]
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
     def freeze_backbone(self):
         for param in self.transformer_encoder.parameters():
             param.requires_grad = False
         for param in self.classifier.parameters():
             param.requires_grad = True
+<<<<<<< Estimator
+
+    def freeze_astencoder_most(self):
+        self.freeze_backbone()
+
+=======
  
     def freeze_astencoder_most(self):
         self.freeze_backbone()
  
+>>>>>>> main
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
@@ -110,9 +172,17 @@ class PositionalEncoding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)  # shape [1, max_len, d_model]
         self.register_buffer('pe', pe)
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
     def forward(self, x):
         # x: [B, seq_len, d_model]
         x = x + self.pe[:, :x.size(1), :]
         return self.dropout(x)
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
