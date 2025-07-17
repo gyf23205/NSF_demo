@@ -8,9 +8,15 @@ from torch.optim import AdamW
 import numpy as np
 
 =======
+<<<<<<< Estimator
+# from utils import get_cosine_schedule_with_warmup 
+import numpy as np
+
+=======
 # from utils import get_cosine_schedule_with_warmup
 import numpy as np
  
+>>>>>>> main
 >>>>>>> main
 class TransformerRawClassifier(pl.LightningModule):
     def __init__(self, config, optim_cfg, pre_process):
@@ -22,7 +28,11 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
         self.ecg_len = 130
         self.gaze_len = 10
@@ -31,7 +41,11 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
         self.input_dim = config.get("input_dim")
         self.d_model = config.get("dim_model")
@@ -42,15 +56,21 @@ class TransformerRawClassifier(pl.LightningModule):
         self.dropout = config.get("dropout")
         self.seq_len = config.get("max_len")
 <<<<<<< Estimator
+=======
+<<<<<<< Estimator
+>>>>>>> main
 
         self.input_proj = nn.Linear(1, self.d_model)
         self.pos_encoder = PositionalEncoding(self.d_model, self.dropout, self.seq_len)
 
+<<<<<<< Estimator
+=======
 =======
  
         self.input_proj = nn.Linear(1, self.d_model)
         self.pos_encoder = PositionalEncoding(self.d_model, self.dropout, self.seq_len)
  
+>>>>>>> main
 >>>>>>> main
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.d_model,
@@ -64,9 +84,15 @@ class TransformerRawClassifier(pl.LightningModule):
         self.classifier = nn.Linear(self.d_model, self.num_classes)
 
 =======
+<<<<<<< Estimator
+
+        self.classifier = nn.Linear(self.d_model, self.num_classes)
+
+=======
  
         self.classifier = nn.Linear(self.d_model, self.num_classes)
  
+>>>>>>> main
 >>>>>>> main
     def forward(self, a1, a2, pre_process=None):
         """
@@ -77,6 +103,10 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
         a2 = a2.view(a2.size(0), -1) 
 =======
+<<<<<<< Estimator
+        a2 = a2.view(a2.size(0), -1) 
+=======
+>>>>>>> main
 >>>>>>> main
         x = torch.cat([a1, a2, ecg_mean], dim=-1)  # [B, 139]
         x = x.view(x.size(0), x.size(1), 1)        # [B, 139, 1]
@@ -85,7 +115,11 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
         encoded = self.transformer_encoder(x)  # [B, 139, d_model]
         pooled = encoded.mean(dim=1)  # [B, d_model]
@@ -94,7 +128,11 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
     def training_step(self, batch, batch_idx):
         t1, t2, labels = batch
@@ -105,7 +143,11 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
@@ -117,7 +159,11 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
     def configure_optimizers(self):
         lr = float(self.optim_cfg["lr"])
@@ -138,7 +184,11 @@ class TransformerRawClassifier(pl.LightningModule):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
     def freeze_backbone(self):
         for param in self.transformer_encoder.parameters():
@@ -146,15 +196,21 @@ class TransformerRawClassifier(pl.LightningModule):
         for param in self.classifier.parameters():
             param.requires_grad = True
 <<<<<<< Estimator
+=======
+<<<<<<< Estimator
+>>>>>>> main
 
     def freeze_astencoder_most(self):
         self.freeze_backbone()
 
+<<<<<<< Estimator
+=======
 =======
  
     def freeze_astencoder_most(self):
         self.freeze_backbone()
  
+>>>>>>> main
 >>>>>>> main
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
@@ -163,7 +219,11 @@ class PositionalEncoding(nn.Module):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
@@ -175,7 +235,11 @@ class PositionalEncoding(nn.Module):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
     def forward(self, x):
         # x: [B, seq_len, d_model]
@@ -184,5 +248,9 @@ class PositionalEncoding(nn.Module):
 <<<<<<< Estimator
 
 =======
+<<<<<<< Estimator
+
+=======
  
+>>>>>>> main
 >>>>>>> main
