@@ -4,7 +4,7 @@
 ### Create a new conda env, replace <env_name> with your env name
     conda create --name <env_name> python=3.10.18
     conda activate <env_name>
-### Install packages using the requirements.txt file
+### Install packages using the requirements.txt file, and install PyTorch separately given you CUDA version
     pip install -r requirements.txt
 
 ## Run the main GUI
