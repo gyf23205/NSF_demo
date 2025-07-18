@@ -225,6 +225,7 @@ class UserGUI:
         ###################### Task block ######################
         if data and data['tasks'] is not None:
             print('Received tasks from server:')
+            self.task_list = []
             for i, task in enumerate(data['tasks']):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
                 task_id, target_loc, priority, assigned_drone = task

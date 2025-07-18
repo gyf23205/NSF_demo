@@ -36,11 +36,10 @@ def assign_targets_to_drones(starts, targets, landing=None):
     while remaining_targets:
         # Find the nearest target for each drone
         for i in range(n_drones):
-            if remaining_targets:
-                current_position = paths[i][-1]
-                nearest_target = min(remaining_targets, key=lambda p: distance(current_position, p))
-                paths[i].append(nearest_target)
-                remaining_targets.remove(nearest_target)
+            current_position = paths[i][-1]
+            nearest_target = min(remaining_targets, key=lambda p: distance(current_position, p))
+            paths[i].append(nearest_target)
+            remaining_targets.remove(nearest_target)
 
     if landing is not None:
         for i in range(len(landing)):
@@ -106,7 +105,7 @@ def generate_voronoi_plots(map, centroids):
         plt.ylim(fig_height, 0)  # Invert y for image coordinates if needed
         plt.figure(figsize=(fig_width/dpi, fig_height/dpi), dpi=dpi)
         plt.axis('off')
-        plt.scatter(target_gui[:,0], target_gui[:,1], c='red', edgecolors='black', s=80, label='Sites')
+        # plt.scatter(target_gui[:,0], target_gui[:,1], c='red', edgecolors='black', s=80, label='Sites')
         for i, contour in region_vertices.items():
             plt.plot(contour[:,1], contour[:,0], linewidth=1.5, label=f'Region {i}')
 
@@ -144,9 +143,9 @@ if __name__=='__main__':
         fa = 1  # {0:Automatic allocation; 1: human supervision}
 
         # Constants
-        n_drones = 4
+        n_drones = 2
         n_gvs = 2
-        n_targets = 14
+        n_targets = 6
         speed_constant = 2.0  # Speed of the drones
         stay_duration_drone = 8
         hover_duration = 10
@@ -179,7 +178,7 @@ if __name__=='__main__':
         # Define flags and time limits
         fly = True
         last_key_pressed = None
-        mission_complete = False
+        # mission_complete = False
         message_changed = True
         stay_flag_drone = [True for _ in range(n_drones)]
         stay_time_drone = [0 for _ in range(n_drones)]
@@ -188,7 +187,7 @@ if __name__=='__main__':
         # Randomly generate targets
         random_positions = []
         while len(random_positions) < n_targets:
-            print('Generating random target positions')
+            # print('Generating random target positions')
             new_position = [np.random.uniform(-1.9, 1.9), np.random.uniform(-1.2, 1.2)]
 
             # Check distance to existing positions
@@ -219,8 +218,8 @@ if __name__=='__main__':
                 centroids.append(centroid.tolist())
 
         # Known target and new target
-        new_target = random_positions[-1]
-        target_positions = random_positions[0:n_targets]
+        # new_target = random_positions[-1]
+        target_positions = random_positions
         target_index_drone = [0 for _ in range(n_drones)]
         target_distance_drone = [0 for _ in range(n_drones)]
         print('Target positions generated')
@@ -263,12 +262,10 @@ if __name__=='__main__':
         game_mgr = GameMgr(drones, gvs)
         target_gui = game_mgr.position_meter_to_gui(target_positions)
         takeoff_gui = game_mgr.position_meter_to_gui(takeoff_positions)
-        # Voronoi diagram
-        # generate_voronoi_plots(game_mgr.awareness_map, target_gui)
-        # game_mgr.set_voronoi()
         # Remaining paths for re-planning
         target_remaining = target_positions.copy()
         tasks = []
+        # mission_complete = [False for _ in range(n_drones)]
         for idx, (t_gui, t_pos) in enumerate(zip(target_gui, target_positions)):
             tasks.append([idx + 1, t_gui.tolist(), 0, assignment[str(t_pos)]])
         game_mgr.set_target(target=target_gui)
@@ -284,7 +281,8 @@ if __name__=='__main__':
         ######################## Environmental setting ends ###################################
 
         ########################## Main loop ################################################
-
+        centers = [None for _ in range(n_drones)]
+        just_taken_off = [True for _ in range(n_drones)]
         while fly:
             sleep(0.01)  # To avoid high CPU usage
             # print('flying')
@@ -294,16 +292,19 @@ if __name__=='__main__':
             # Land with ESC
             if last_key_pressed == pynput.keyboard.Key.esc:
                 print(f'[t={int(dt)}] Escape by keyboard.')
-                break
+                fly = False
 
             dt = time() - t
 
-            if mission_complete: # Mission_flag should be given by the function allocation module
-                print(f'[t={int(dt)}] All missions completed!')
-                break
+            # if mission_complete: # Mission_flag should be given by the function allocation module
+            #     print(f'[t={int(dt)}] All missions completed!')
+            #     break
 
-            if len(tasks) > 0:
-                mission_complete = False
+            if not tasks:  # If no tasks left and all the drones are at the takeoff position
+                print(f'[t={int(dt)}] No tasks left, all drones at takeoff position.')
+                if all(np.allclose(d.position[0:2], takeoff_positions[i]) for i, d in enumerate(drones)):
+                    print(f'[t={int(dt)}] All drones at takeoff position.')
+                    fly = False
 
             ############################ Socket receive ########################### !!!
             try:
@@ -323,15 +324,15 @@ if __name__=='__main__':
                 for task in data['tasks']:
                     exist_task_idx.append(task['task_id'])
                     for j, ta in enumerate(tasks):
-                        if ta[0] == task['task_id']:
-                            tasks[j][2] = task['priority']
+                        if ta[0] == task['task_id'] and ta[2] != task['priority']:
+                            ta[2] = task['priority']
                             print(f'reset task {task["task_id"]} priority to {task["priority"]}')
                             break
                     
-                for j, ta in enumerate(tasks):
-                    if ta[0] not in exist_task_idx:
-                        tasks.pop(j)
-                        print(f'[t={int(dt)}] Task {ta[0]} removed from the task list.')
+                # for j, ta in enumerate(tasks):
+                #     if ta[0] not in exist_task_idx:
+                #         tasks.pop(j)
+                #         print(f'[t={int(dt)}] Task {ta[0]} removed from the task list.')
             ############################## Task update ends ##############################
 
             ########################### Drone loop #################################
@@ -345,6 +346,9 @@ if __name__=='__main__':
             else:
                 # altitude_adjust = [0 for _ in range(n_drones)]
                 for idx, d in enumerate(drones):
+                    if just_taken_off[idx]:
+                        d.status = 'flying'
+                        just_taken_off[idx] = False
                     target_current = drone_paths[idx][target_index_drone[idx] + 1]
                     # Temporary
                     current_trajectory = drone_trajectory[idx][target_index_drone[idx]]
@@ -355,7 +359,10 @@ if __name__=='__main__':
                     target = [current_trajectory[-picked][0], current_trajectory[-picked][1],
                             d.position[2]]  # Keep the altitude same as the drone's current position
                     drones[idx].set_position(target)
-                    
+
+                    # if target_index_drone[idx] == len(drone_paths[idx]) - 1:
+                    #     mission_complete[idx] = True
+
                     # Time
                     dt_prev[idx] = dt
                     sleep(0.01)
@@ -367,45 +374,41 @@ if __name__=='__main__':
                     target_distance_drone[idx] = distance(target_current, drones[idx].position[0:2])
                     # Check stay start time
                     if target_distance_drone[idx] < stay_distance_drone:
-                        # Measure stay time
-                        if stay_flag_drone[idx]:
-                            # Measure: start point
-                            start_time_drone[idx] = time()
-                            stay_flag_drone[idx] = False
-                            # Save the current trajectory to restore later
-                            if not hasattr(d, 'saved_trajectory'):
-                                d.saved_trajectory = current_trajectory
-                            # Generate a circular trajectory around the target
-                            center = np.array(target_current)
-                            radius = 0.3  # Circle radius in meters
-                            num_points = 40
-                            theta = np.linspace(0, 2 * np.pi, num_points)
-                            circle_traj = [
-                                [center[0] + radius * np.cos(t), center[1] + radius * np.sin(t), d.position[2]]
-                                for t in theta
-                            ]
-                            d.circle_trajectory = circle_traj
-                            d.circle_index = 0
+                        if target_index_drone[idx] < len(drone_trajectory[idx]) - 1:
+                            # Measure stay time
+                            if stay_flag_drone[idx]:
+                                # Measure: start point
+                                start_time_drone[idx] = time()
+                                stay_flag_drone[idx] = False
+                                # Save the current trajectory to restore later
+                                if not hasattr(d, 'saved_trajectory'):
+                                    d.saved_trajectory = current_trajectory
+                                # Generate a circular trajectory around the target
+                                centers[idx] = np.array(target_current)
+                                radius = 0.3  # Circle radius in meters
+                                num_points = 80
+                                theta = np.linspace(0, 2 * np.pi, num_points)
+                                circle_traj = [
+                                    [centers[idx][0] + radius * np.cos(t), centers[idx] [1] + radius * np.sin(t), d.position[2]]
+                                    for t in theta
+                                ]
+                                d.circle_trajectory = circle_traj
+                                d.circle_index = 0
 
-                        # Follow the circular trajectory
-                        if hasattr(d, 'circle_trajectory'):
-                            d.set_position(d.circle_trajectory[d.circle_index])
-                            d.circle_index = (d.circle_index + 1) % len(d.circle_trajectory)
-
+                            # Follow the circular trajectory
+                            if hasattr(d, 'circle_trajectory'):
+                                d.set_position(d.circle_trajectory[d.circle_index])
+                                d.circle_index = (d.circle_index + 1) % len(d.circle_trajectory)
                         # Measure: end point
                         stay_time_drone[idx] = time() - start_time_drone[idx]
-                        d.down4inspect()
+                        # d.down4inspect()
                         d.status = 'inspecting'
-                    else:
-                        # Restore previous trajectory if needed
-                        if hasattr(d, 'saved_trajectory'):
-                            current_trajectory = d.saved_trajectory
-                            del d.saved_trajectory
-                        if hasattr(d, 'circle_trajectory'):
-                            del d.circle_trajectory
-                            del d.circle_index
+
+                    # Adjust altitude given status
+                    if d.status == 'inspecting':
+                        d.down4inspect()
+                    elif d.status == 'flying':
                         d.up4move()
-                        d.status = 'flying'
 
                     # Check stay duration
                     if stay_time_drone[idx] > stay_duration_drone:
@@ -426,44 +429,57 @@ if __name__=='__main__':
                                 game_mgr.victim_timing[idx] = dt
 
                             # Once victim is selected, close it: only if there is no unassigned target
-                            if game_mgr.target_decided:
-                                if data and data['victim'] is not None:
-                                    if data['victim'] == 'accept':
-                                        game_mgr.victim_clicked[idx] = 1
-                                    elif data['victim'] == 'reject':
-                                        game_mgr.victim_clicked[idx] = 2
-                                    elif data['victim'] == 'handover':
-                                        # !!! Need hand over logic
-                                        game_mgr.victim_clicked[idx] = 3
-                                    data['victim'] = None
-            
-                                if game_mgr.victim_clicked[idx]:
-                                    game_mgr.victim_id[idx] = 0
-                                    game_mgr.victim_detected[idx] = False
-                                    # To record response time
-                                    # game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
-                                    # game_mgr.missions[idx].time_stamp.append(dt)
-                                    # game_mgr.missions[idx].drone_id.append(idx)
-                                    # game_mgr.victim_timing[idx] = 0
+                            # if game_mgr.target_decided:
+                            if data and data['victim'] is not None:
+                                if data['victim'] == 'accept':
+                                    game_mgr.victim_clicked[idx] = 1
+                                elif data['victim'] == 'reject':
+                                    game_mgr.victim_clicked[idx] = 2
+                                elif data['victim'] == 'handover':
+                                    # !!! Need hand over logic
+                                    game_mgr.victim_clicked[idx] = 3
+                                data['victim'] = None
+        
+                            if game_mgr.victim_clicked[idx]:
+                                # Reset the clicked status
+                                game_mgr.victim_clicked[idx] = 0
+                                game_mgr.victim_id[idx] = 0
+                                game_mgr.victim_detected[idx] = False
+                                # To record response time
+                                # game_mgr.missions[idx].response_time.append(dt - game_mgr.victim_timing[idx])
+                                # game_mgr.missions[idx].time_stamp.append(dt)
+                                # game_mgr.missions[idx].drone_id.append(idx)
+                                # game_mgr.victim_timing[idx] = 0
 
-                                    # print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
-                                    # Print status
-                                    print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index_drone[idx] + 1)} accomplished')
-                                    # Remove the task whose target matches target_current
-                                    for i, task in enumerate(tasks):
-                                        if np.allclose(task[1], target_current):
-                                            tasks.pop(i)
-                                            message['tasks'] = tasks
-                                            print('task updated in message')
-                                            message_changed = True
-                                            break
-                                    # target_remaining.remove(target_current)
-                                    # Update and reset
-                                    target_index_drone[idx] += 1
-                                    stay_flag_drone[idx] = True
-                                    stay_time_drone[idx] = 0
-                                    # Temporary
-                                    path_index_drone[idx] = 0
+                                # print(f'Response time by drone {int(idx + 1)}: {game_mgr.missions[idx].response_time[-1]:.2f} sec')
+                                # Print status
+                                print(f'[t={int(dt)}] Drone {int(idx + 1)}: target {int(target_index_drone[idx] + 1)} accomplished')
+                                # Remove the task whose target matches center
+                                for i, task in enumerate(tasks):
+                                    if np.allclose(task[1], game_mgr.position_meter_to_gui([centers[idx]])[0], atol=1):
+                                        centers[idx] = None  # Reset the center
+                                        tasks.pop(i)
+                                        message['tasks'] = tasks
+                                        print('task updated in message')
+                                        message_changed = True
+                                        break
+                                # target_remaining.remove(target_current)
+                                # Update and reset
+                                target_index_drone[idx] += 1
+                                stay_flag_drone[idx] = True
+                                stay_time_drone[idx] = 0
+                                # Temporary
+                                path_index_drone[idx] = 0
+                                stay_time_drone[idx] = 0
+                                # Restore previous trajectory if needed
+                                if hasattr(d, 'saved_trajectory'):
+                                    current_trajectory = d.saved_trajectory
+                                    del d.saved_trajectory
+                                if hasattr(d, 'circle_trajectory'):
+                                    del d.circle_trajectory
+                                    del d.circle_index
+                                # d.up4move()
+                                d.status = 'flying'
                             else:
                                 game_mgr.victim_block_choice[idx] = True
             ########################### Drone loop ends ############################
@@ -558,6 +574,7 @@ if __name__=='__main__':
         while max([drones[idx].position[2] for idx in range(n_drones)]) > 0.01:
             for idx in range(n_drones):
                 drones[idx].land_in_place()
+                drones[idx].status = 'landing'
                 sleep(0.01)
                 # drones[idx].position = game_mgr.position_meter_to_gui([drones[idx].position])
                 drones[idx].rt = np.random.normal(0, 0.01, 1)[0]
