@@ -11,8 +11,10 @@ class Bar:
         self.rect = pygame.Rect(rect)
 
     def draw(self, val):
-        # Set val in [0, 100]
-        val = max(0, min(100, val))
+        # Set val in [0, self.maximum]
+        val = max(0, min(self.maximum, val))
+        if val > self.maximum:
+            assert False, f"Value {val} exceeds maximum {self.maximum}"
         if val >= 60:
             self.color = GREEN
         elif 30 <= val < 60:

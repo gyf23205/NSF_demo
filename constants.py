@@ -9,7 +9,7 @@ SEE = (0, 119, 190)
 YELLOW = (255, 255, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
-GREY = (160, 160, 160)
+GREY = (180, 180, 180)
 ORANGE = (255, 165, 0)
 
 FONT = 'Helvetica'
@@ -20,9 +20,6 @@ base_altitude = 200
 range_altitude = 150
 min_altitude = 0
 max_altitude = 2
-
-n_drones = 2
-n_gvs = 2
 
 spacing = 40
 grid_width = 100

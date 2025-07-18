@@ -65,7 +65,7 @@ class Background:
         self.surface = pygame.transform.scale(self.surface, (bound_x_max - bound_x_min, bound_y_max - bound_y_min))
         self.rect = self.surface.get_rect()
         self.rect.topleft = (bound_x_min, bound_y_min)
-        print(self.rect)
+        # print(self.rect)
         self.min_bound = np.array([bound_x_min, bound_y_min])
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
@@ -75,7 +75,7 @@ class BackgroundNoScale:
         self.surface = self.figure
         self.rect = self.surface.get_rect()
         self.rect.topleft = (bound_x_min, bound_y_min)
-        print(self.rect)
+        # print(self.rect)
         self.min_bound = np.array([bound_x_min, bound_y_min])
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
@@ -143,7 +143,7 @@ class GameMgr:
         # Targets
         self.target = []
         self.target_clicked = 0
-        self.target_decided = True
+        # self.target_decided = True
         self.task = None
         # Voronoi diagram
         self.voronoi = None
@@ -199,12 +199,6 @@ class GameMgr:
         self.environment_info = EnvironmentInfo(self.screen)
         #################### Environment ends ##################
 
-    def set_voronoi(self):
-        print(IMAGE_PATH + 'voronoi_regions.png')
-        self.vor = Background(file_name=IMAGE_PATH + 'voronoi_regions_cropped.png',
-                                     bound_x_min=0, bound_x_max=900, bound_y_min=0, bound_y_max=720)
-        self.vor.surface.set_alpha(128)
-
     def render(self, vor, centroids):
         # Record start time
         pygame.event.get()  # Process events to avoid blocking
@@ -249,7 +243,7 @@ class GameMgr:
         # Draw centroids as targets
         centroids_gui = self.position_meter_to_gui(centroids)
         for idx, centroid in enumerate(centroids_gui):
-            pygame.draw.circle(self.screen, (255, 0, 0), centroid.astype(int), 10)
+            pygame.draw.circle(self.screen, GREY, centroid.astype(int), 10)
             font = pygame.font.Font(None, 24)
             text = font.render(f'{idx+1}', True, (255,255,255))
             self.screen.blit(text, (centroid[0]-6, centroid[1]-6))
