@@ -574,6 +574,7 @@ if __name__=='__main__':
         while max([drones[idx].position[2] for idx in range(n_drones)]) > 0.01:
             for idx in range(n_drones):
                 drones[idx].land_in_place()
+                print(f'Drone {idx + 1} landing, altitude: {drones[idx].position[2]:.2f}')
                 drones[idx].status = 'landing'
                 sleep(0.01)
                 # drones[idx].position = game_mgr.position_meter_to_gui([drones[idx].position])
