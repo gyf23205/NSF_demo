@@ -34,8 +34,9 @@ def assign_targets_to_drones(starts, targets, landing=None):
     remaining_targets = targets.copy()
 
     while remaining_targets:
-        # Find the nearest target for each drone
         for i in range(n_drones):
+            if not remaining_targets:
+                break
             current_position = paths[i][-1]
             nearest_target = min(remaining_targets, key=lambda p: distance(current_position, p))
             paths[i].append(nearest_target)
@@ -143,9 +144,9 @@ if __name__=='__main__':
         fa = 1  # {0:Automatic allocation; 1: human supervision}
 
         # Constants
-        n_drones = 2
+        n_drones = 4
         n_gvs = 2
-        n_targets = 6
+        n_targets = 14
         speed_constant = 2.0  # Speed of the drones
         stay_duration_drone = 8
         hover_duration = 10
@@ -242,7 +243,7 @@ if __name__=='__main__':
             for pos in positions:
                 assignment[str(pos)] = idx + 1  # Assign drone index starting from 1
         # print(assignment)
-        # assert False
+
         # Wind
         old_wind_average_speed = 0.0
 
@@ -283,6 +284,7 @@ if __name__=='__main__':
         ########################## Main loop ################################################
         centers = [None for _ in range(n_drones)]
         just_taken_off = [True for _ in range(n_drones)]
+        recv_buffer = ''
         while fly:
             sleep(0.01)  # To avoid high CPU usage
             # print('flying')
@@ -308,9 +310,14 @@ if __name__=='__main__':
 
             ############################ Socket receive ########################### !!!
             try:
-                data = clients[0][0].recv(1024).decode() # !!! Decide which client to listen
-                if data:
-                    data = json.loads(data)
+                chunk = clients[0][0].recv(4096).decode()
+                if chunk:
+                    recv_buffer += chunk
+                    while '\n' in recv_buffer:
+                        line, recv_buffer = recv_buffer.split('\n', 1)
+                        if line.strip():
+                            data = json.loads(line)
+                            print("Received data:", repr(data))
             except BlockingIOError:
                 pass
             ############################# Socket receive ends ###########################
@@ -463,7 +470,7 @@ if __name__=='__main__':
                                         print('task updated in message')
                                         message_changed = True
                                         break
-                                # target_remaining.remove(target_current)
+                                target_remaining.remove(target_current)
                                 # Update and reset
                                 target_index_drone[idx] += 1
                                 stay_flag_drone[idx] = True
@@ -500,25 +507,28 @@ if __name__=='__main__':
             if time() - wind_time > 3:
                 wind_time = time()
                 if not game_mgr.wind:
-                    wind = [[np.random.uniform(-1.9, 1.9), np.random.uniform(-1.25, 1.25), np.random.uniform(0.1, 0.25)] for _ in range(n_wind)]
+                    wind = [[np.random.uniform(-1.9, 1.9), np.random.uniform(-1.25, 1.25), np.random.uniform(0.06, 0.15), np.random.uniform(0.0, 10)] for _ in range(n_wind)]
                 else:
                     wind = game_mgr.wind.copy()
-                    increment = [[np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(-0.03, 0.03)] for _ in range(n_wind)]
+                    increment = [[np.random.uniform(-0.1, 0.1), np.random.uniform(-0.1, 0.1), np.random.uniform(-0.05, 0.05), np.random.uniform(-2, 2)] for _ in range(n_wind)]
                     for i in range(n_wind):
                         wind[i][0] += increment[i][0]
                         wind[i][1] += increment[i][1]
                         wind[i][2] += increment[i][2]
+                        wind[i][3] += increment[i][3]
                         # Ensure the wind position is within the world bounds
                         wind[i][0] = np.clip(wind[i][0], -1.9, 1.9)
                         wind[i][1] = np.clip(wind[i][1], -1.25, 1.25)
-                        wind[i][2] = np.clip(wind[i][2], 0.05, 0.15)
+                        wind[i][2] = np.clip(wind[i][2], 0.06, 0.15)
+                        wind[i][3] = np.clip(wind[i][3], 0.0, 10.0)
                 game_mgr.reset_wind()
                 for w in wind:
                     game_mgr.set_wind(w)
-                average_wind_speed = np.mean([w[2] for w in wind]) if wind else 0.0
+                average_wind_speed = np.mean([w[3] for w in wind]) if wind else 0.0
                 # Update the wind speed in the message if it has changed significantly
-                if abs(average_wind_speed - old_wind_average_speed) > 1:
+                if abs(average_wind_speed - old_wind_average_speed) > 1.0:
                     # Current way of changing wind speed is not very significant, can change it.
+                    print(f'[t={int(dt)}] Wind speed changed to {average_wind_speed:.2f} m/s.')
                     message['wind_speed'] = average_wind_speed
                     message_changed = True
                     old_wind_average_speed = average_wind_speed
@@ -537,7 +547,7 @@ if __name__=='__main__':
                     for d_inx in range(n_drones):
                         for p_idx in range(len(drone_paths[d_inx]) - 1):
                             rrt_conn = rrt_connect.RrtConnect(drone_paths[d_inx][p_idx],
-                                                            drone_paths[d_inx][p_idx + 1], 0.08, 0.05, 5000)
+                                                            drone_paths[d_inx][p_idx + 1], 0.08, 0.05, 5000) # !!! rrt can return None
                             rrt_conn.utils.update_obs(obs, [], [])
                             rrt_conn.planning()
                             rrt_conn.smoothing()
@@ -574,7 +584,7 @@ if __name__=='__main__':
         while max([drones[idx].position[2] for idx in range(n_drones)]) > 0.01:
             for idx in range(n_drones):
                 drones[idx].land_in_place()
-                print(f'Drone {idx + 1} landing, altitude: {drones[idx].position[2]:.2f}')
+                # print(f'Drone {idx + 1} landing, altitude: {drones[idx].position[2]:.2f}')
                 drones[idx].status = 'landing'
                 sleep(0.01)
                 # drones[idx].position = game_mgr.position_meter_to_gui([drones[idx].position])

@@ -118,7 +118,7 @@ class UserGUI:
     def __init__(self):
         pygame.init()
         self.screen_width = 1300
-        self.screen_height = 850
+        self.screen_height = 930
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.screen.fill(WHITE)
         
@@ -271,7 +271,7 @@ class UserGUI:
 
         ####################### Response block ##########################
         response_region_width = 500  # Adjust as needed
-        response_region_height = 3 * FONT_SIZE * line_height + 20
+        response_region_height = 3 * FONT_SIZE * line_height + 40
         pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
         # Draw the response title every frame
         for text in self.response_title.texts:
@@ -401,8 +401,8 @@ if __name__ == '__main__':
             # Send response back to the server if it has changed
             if response_changed:
                 print(response['tasks'])
-                msg = json.dumps(response).encode('utf-8')
-                s.sendall(msg)
+                msg = json.dumps(response) + '\n'
+                s.sendall(msg.encode('utf-8'))
     finally:
         s.close()
         pygame.quit()
