@@ -221,34 +221,13 @@ class GameMgr:
         self.screen.blit(self.background.surface, self.background.rect)
         # self.screen.blit(self.vor.surface, self.vor.rect)
 
-        # Draw grid-based base area (e.g., 3x3 at bottom-left)
-        for (x, y) in self.workspace.base_area:
-            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(900, 720))
-            rect = pygame.Rect(px, py, 18, 18)  # 18x18 = 900/50, 720/40
-            pygame.draw.rect(self.screen, (173, 216, 230), rect)  # light blue
-        
-        bx = sum([x for (x, y) in self.workspace.base_area]) / len(self.workspace.base_area)
-        by = sum([y for (x, y) in self.workspace.base_area]) / len(self.workspace.base_area)
-        px, py = self.workspace.meter_to_pixel((bx + 0.5, by + 0.5), screen_size=(900, 720))
-        pygame.draw.circle(self.screen, (0, 0, 0), (px - 2, py + 18), 15)
-
-        # Draw hospital area and icon
-        for (x, y) in self.workspace.hospital_area:
-            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(900, 720))
-            rect = pygame.Rect(px, py, 18, 18)  # Adjust cell size if needed
-            pygame.draw.rect(self.screen, (255, 182, 193), rect)  # light pink
-
-        hx = sum([x for (x, y) in self.workspace.hospital_area]) / len(self.workspace.hospital_area)
-        hy = sum([y for (x, y) in self.workspace.hospital_area]) / len(self.workspace.hospital_area)
-        hx_px, hy_px = self.workspace.meter_to_pixel((hx + 0.5, hy + 0.5), screen_size=(900, 720))
-        self.hospital.draw((hx_px, hy_px))
-
         # Draw Voronoi boundaries
         for ridge in vor.ridge_vertices:
             if -1 in ridge:
                 continue  # Skip infinite ridges
-            pt1 = self.position_meter_to_gui([vor.vertices[ridge[0]]])[0]
-            pt2 = self.position_meter_to_gui([vor.vertices[ridge[1]]])[0]
+            # ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(900, 720))
+            pt1 = self.workspace.grid_to_pixel(vor.vertices[ridge[0]])
+            pt2 = self.workspace.grid_to_pixel(vor.vertices[ridge[1]])
             # Clip the line to the background boundary
 
             # Define the background boundary as a rectangle
@@ -273,7 +252,7 @@ class GameMgr:
                     pygame.draw.line(self.screen, (0, 255, 0), coords[0], coords[1], 2)
 
         # Draw centroids as targets
-        centroids_gui = self.position_meter_to_gui(centroids)
+        centroids_gui = self.workspace.grid_to_pixel_array(centroids)
         for idx, centroid in enumerate(centroids_gui):
             pygame.draw.circle(self.screen, (255, 0, 0), centroid.astype(int), 10)
             font = pygame.font.Font(None, 24)
@@ -289,15 +268,6 @@ class GameMgr:
         shadow_surface = pygame.surfarray.make_surface(np.stack([shadow]*3, axis=-1))
         shadow_surface.set_alpha(128)  # semi-transparent
         self.screen.blit(shadow_surface, (0, 0))
-        # Drones
-        for i, d in enumerate(self.drones):
-            pos_image = tuple(self.position_meter_to_gui([d.position[0:2]]))
-            height = d.position[2]
-            self.drone_images[i].draw(pos_image, height)
-        # GVs
-        for i, g in enumerate(self.gvs):
-            pos_image = tuple(self.position_meter_to_gui([g.position]))
-            self.gv_images[i].draw(pos_image)
         # Hospital
         # self.hospital.draw(tuple(self.position_meter_to_gui([[1.3, -1.2]])))
         # Targets
@@ -307,6 +277,42 @@ class GameMgr:
         # for i, pos in enumerate(self.takeoff_position):
             # pygame.draw.circle(self.screen, BLACK, pos, 10)
         ##################### Map ends ##########################
+
+        ###################### Legends #####################
+        # Draw grid-based base area (e.g., 3x3 at bottom-left)
+        for (x, y) in self.workspace.base_area:
+            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(900, 720))
+            rect = pygame.Rect(px - 30, py, 18, 18)  # 18x18 = 900/50, 720/40
+            pygame.draw.rect(self.screen, (173, 216, 230), rect)  # light blue
+        
+        bx = sum([x for (x, y) in self.workspace.base_area]) / len(self.workspace.base_area)
+        by = sum([y for (x, y) in self.workspace.base_area]) / len(self.workspace.base_area)
+        px, py = self.workspace.meter_to_pixel((bx + 0.5, by + 0.5), screen_size=(900, 720))
+        pygame.draw.circle(self.screen, (0, 0, 0), (px - 30, py + 18), 15)
+
+        # Draw hospital area and icon
+        for (x, y) in self.workspace.hospital_area:
+            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(900, 720))
+            rect = pygame.Rect(px, py, 18, 18)  # Adjust cell size if needed
+            pygame.draw.rect(self.screen, (255, 182, 193), rect)  # light pink
+
+        hx = sum([x for (x, y) in self.workspace.hospital_area]) / len(self.workspace.hospital_area)
+        hy = sum([y for (x, y) in self.workspace.hospital_area]) / len(self.workspace.hospital_area)
+        hx_px, hy_px = self.workspace.meter_to_pixel((hx + 0.5, hy + 0.5), screen_size=(900, 720))
+        self.hospital.draw((hx_px, hy_px))
+        ##################### Legends ends ####################
+
+        ##################### Agents ##########################
+        # Drones
+        for i, d in enumerate(self.drones):
+            pos_image = tuple(self.position_meter_to_gui([d.position[0:2]]))
+            height = d.position[2]
+            self.drone_images[i].draw(pos_image, height)
+        # GVs
+        for i, g in enumerate(self.gvs):
+            pos_image = tuple(self.position_meter_to_gui([g.position]))
+            self.gv_images[i].draw(pos_image)
+        ################### Agents ends #######################
 
         ###################### Drone health #####################
         for text, pos in self.title_drone_health.texts:
