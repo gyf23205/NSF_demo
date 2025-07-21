@@ -211,7 +211,7 @@ class UserGUI:
             optim_cfg=cfg["optim"],
             pre_process=cfg.get("pre_process", None)
         )
-        state_dict = torch.load('last.pt', map_location='cpu')
+        state_dict = torch.load('last_new.pt', map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
         model.eval()
 
