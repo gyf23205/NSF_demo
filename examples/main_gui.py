@@ -275,7 +275,7 @@ if __name__=='__main__':
         # Send initial tasks to the clients
         message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None} # Message to be sent to the clients
         for idx in range(len(clients)):
-            clients[idx][0].sendall(json.dumps(message).encode())
+            clients[idx][0].sendall((json.dumps(message) + '\n').encode())
         print('Init finished')
         game_mgr.render(vor, random_positions)
         print('GUI rendered')
@@ -310,7 +310,7 @@ if __name__=='__main__':
 
             ############################ Socket receive ########################### !!!
             try:
-                chunk = clients[0][0].recv(4096).decode()
+                chunk = clients[0][0].recv(4096).decode() # !!! Need to hear from all clients
                 if chunk:
                     recv_buffer += chunk
                     while '\n' in recv_buffer:
@@ -426,7 +426,7 @@ if __name__=='__main__':
                                 # Send the victim idx to the according user
                                 message['idx_image'] = str(survivor_images[survivor_index])
                                 need_help = np.random.choice([True, False], p=[0.5, 0.5])
-                                if need_help:
+                                if need_help and (1 <= survivor_images[survivor_index] <= 14):
                                     pos_rounded = [round(coord, 2) for coord in d.position[0:2]]
                                     message['vic_msg'] = f'Drone {idx + 1} receive a survivor message at {pos_rounded}, please response!'
                                 message_changed = True
@@ -572,9 +572,8 @@ if __name__=='__main__':
                 idx = 0
                 # print('Message changed')
                 # print(message)
-                clients[idx][0].sendall(json.dumps(message).encode())
+                clients[idx][0].sendall((json.dumps(message) + '\n').encode())
                 message_changed = False
-                # assert False
             ############################# Socket Send ends #####################################
             game_mgr.render(vor, random_positions)
             # print('gui rendered')
