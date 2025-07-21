@@ -1,7 +1,7 @@
 import pygame
 from PIL import Image
 import os
-from util_classes import Font, Button, TextInput, TextInputResponse
+from util_classes import Font, Button, TextInput
 import multiprocessing as mp
 import socket
 import json
@@ -34,7 +34,7 @@ class Task:
         self.reject_time_limit = 100000
         self.reject = False
         self.spacing = spacing
-        self.priority_set = [0, 1, 2]
+        self.priority_set = [0, 1]
 
         self.grid_width = grid_width
         self.grid_height = line_height * FONT_SIZE
@@ -165,7 +165,7 @@ class UserGUI:
         self.weather = 'sunny'
         self.weather_text.update('Weather: '+ self.weather)
         self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), (0, 255, 0), "Change routes")
-        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Maintain routes")
+        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), YELLOW, "Maintain routes")
         self.button_wind_change.draw(self.screen)
         self.button_wind_maintain.draw(self.screen)
 
@@ -182,14 +182,6 @@ class UserGUI:
         self.task_list_y = self.task_y + len(self.task_text.texts) * line_height * FONT_SIZE
         self.task_list = []
         self.n_previous_tasks = len(self.task_list)
-
-        # Response block
-        response_x = 550
-        response_y = 600
-        self.response_title = Font(FONT, FONT_SIZE, (response_x, response_y))
-        self.response_title.update('Messages from victims')
-        self.response_text = Font(FONT, FONT_SIZE, (response_x, response_y + FONT_SIZE * line_height))
-        self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 500, FONT_SIZE * line_height), color=WHITE, maximum=1000)
 
 
     def render(self):
@@ -219,20 +211,15 @@ class UserGUI:
             optim_cfg=cfg["optim"],
             pre_process=cfg.get("pre_process", None)
         )
-        state_dict = torch.load('last.pt', map_location='cpu')
+        state_dict = torch.load('last_new.pt', map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
         model.eval()
 
         ecg = last_row[:130]
-        # gaze = last_row[130:]
-        gaze_au_matrix = row[130:].reshape(10, 30)
+        gaze = last_row[130:]
 
         t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-        # t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
-        t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
-
-        if torch.isnan(t2).any() or torch.isinf(t2).any():
-            print("⚠️ NaN or Inf detected in t2 (gaze input)")
+        t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
 
         with torch.no_grad():
             out = model(t1, t2)
@@ -270,9 +257,8 @@ class UserGUI:
             # print('Received tasks from server:')
             for i, task in enumerate(data['tasks']):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
-                task_id, target_loc, priority, assigned_drone = task
+                task_id, target_loc, priority = task
                 new_task = Task(self.screen, task_id, target_loc, task_pos, priority)
-                new_task.assigned_drone = assigned_drone
                 self.task_list.append(new_task)
                 # print(new_task.priority_input.text)
 
@@ -307,15 +293,6 @@ class UserGUI:
             self.weather_text.update('Wind speed increase significantly, current speed: ' + "{:.2f}".format(self.weather))
             self.screen.blit(self.weather_text.texts[0][0], self.weather_text.texts[0][1])
         ###################### Weather block ends ######################
-
-        ####################### Response block ##########################
-        if  data and data['vic_msg'] is not None:
-            # print('Received response from victim:', data['vic_msg'])
-            self.response_text.clear()
-            self.response_text.update(data['vic_msg'])
-            self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
-
-        ###################### Response block ends ######################
         pygame.display.flip()
 
 
@@ -323,7 +300,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server
+    host = '192.168.0.243'  # IP of the server
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
