@@ -1,5 +1,6 @@
 import numpy as np
 import pygame
+from constants import *
 
 
 class Vehicle:
@@ -69,7 +70,7 @@ class VirtualDrone:
         self.position[2] = max([self.position[2] - 0.01, self.inspecting_alt])
     
     def up4move(self):
-        self.position[2] = min([self.position[2] + 0.01, 100.0])
+        self.position[2] = min([self.position[2] + 0.01, max_altitude])
 
 
 
