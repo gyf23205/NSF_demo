@@ -30,6 +30,8 @@ class Specification:
         self.case = []
         self.hierarchy = []
         self.binding_manager = None
+        self.dag = []
+        self.automata = []
 
     def get_task_specification(self, case, s=None, binding_manager=None):
         self.case = case
@@ -79,8 +81,7 @@ class Specification:
                     f"<> (p_navscan_{tid} && <> (p_confirm_{tid} && <> (p_rescue_{tid} || p_skip_{tid})))"
                 )
             # Structural node
-            conjunct = " && ".join(f"p_101_aux_{tid}" for tid in physical_target_ids)
-            level_two["p_101"] = f"<> ({conjunct})"
+            level_two["p_101"] = " && ".join(f"<> p_101_aux_{tid}" for tid in physical_target_ids)
 
             hierarchy.append(level_two)
 

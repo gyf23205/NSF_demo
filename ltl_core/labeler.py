@@ -16,8 +16,12 @@ class Labeler:
     (levels 1–3) are updated bottom-up once all children are complete.
     """
 
-    def __init__(self, spec, dag: nx.DiGraph, automata: Dict[str, Any]):
+    def __init__(self, spec):
         self.spec = spec
+
+        dag = spec.dag
+        automata = spec.automata
+
         self.dag = dag
         self.automata = automata
 

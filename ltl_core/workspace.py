@@ -8,7 +8,7 @@ from .specification import get_ap_prefix, AP_TYPE_PREFIX_MAP
 
 class Workspace:
     def __init__(self, size=(30, 30), target_mask=None,
-                 num_drones=2, num_gvs=2, num_humans=2, seed=119, margin=3):
+                 num_drones=2, num_gvs=2, num_humans=2, seed=120, margin=3):
         self.size = size
         self.grid = np.zeros(size, dtype=int)
         self.rng = random.Random(seed)
@@ -16,7 +16,7 @@ class Workspace:
         self.target_mask = target_mask or []
         self.margin = margin
 
-        self.base_area = [(x, y) for x in range(1, 4) for y in range(2, 5)]
+        self.base_area = [(x, y) for x in range(3, 6) for y in range(2, 5)]
         self.hospital_area = [(x, y) for x in range(size[0] - 4, size[0] - 1)
                               for y in range(2, 5)]
 
@@ -84,12 +84,11 @@ class Workspace:
                 if (x, y) not in exclude]
 
     def _assign_dropoff_locations(self):
-        """Assign each target a unique hospital cell for dropoff."""
+        """Assign each target a hospital cell for dropoff (reuse hospital cells if needed)."""
         assigned = {}
-        for i, cell in enumerate(self.hospital_area):
-            assigned[i] = cell  # tid → (x, y)
-            if i + 1 >= len(self.target_mask):
-                break
+        hospital_cells = self.hospital_area
+        for i in range(len(self.target_mask)):
+            assigned[i] = hospital_cells[i % len(hospital_cells)]
         return assigned
 
     @staticmethod
@@ -257,6 +256,23 @@ class Workspace:
         py = screen_h - int(y_grid * scale_y)  # flip Y for Pygame
 
         return px, py
+    
+    @staticmethod
+    def grid_to_pixel_array(positions, grid_size=(50, 40), screen_size=(900, 720)):
+        """
+        Convert list of (x, y) grid positions to a NumPy array of pixel coordinates
+        scaled ×10 and with y flipped and negated (for downstream geometric use).
+        """
+        scale_x = screen_size[0] / grid_size[0]
+        scale_y = screen_size[1] / grid_size[1]
+
+        result = []
+        for x, y in positions:
+            px = x * scale_x * 10           # pixel, scaled
+            py = -(screen_size[1] - y * scale_y) * 10  # flipped + scaled + negated
+            result.append([int(px), int(py)])
+
+        return np.array(result)
     
     @staticmethod
     def grid_to_game_mgr(pos, grid_size=(50, 40)):
