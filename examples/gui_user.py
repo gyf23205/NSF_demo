@@ -210,11 +210,6 @@ class UserGUI:
         # self.screen.fill(WHITE)
 
         ###################### Update workload text ######################
-        # if data and data['workload'] is not None:
-        #     self.workload_text.clear()
-        #     self.workload_text.update('Workload: ' + data['workload'])
-
-        # 1. load csv file, read last row, delete content
         with open(csv_path, 'r') as f:
             reader = csv.reader(f)
             rows = list(reader)
@@ -238,10 +233,16 @@ class UserGUI:
         model.eval()
 
         ecg = last_row[:130]
-        gaze = last_row[130:]
+        # gaze = last_row[130:]
+        # gaze_au_matrix = rows[130:].reshape(10, 30)
+        gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
 
         t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-        t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
+        # t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
+        t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
+
+        if torch.isnan(t2).any() or torch.isinf(t2).any():
+            print("⚠️ NaN or Inf detected in t2 (gaze input)")
 
         with torch.no_grad():
             out = model(t1, t2)
