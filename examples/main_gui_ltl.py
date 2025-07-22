@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     # === Constants ===
     hover_duration = 10
-    n_targets = 10
+    n_targets = 4
     n_drones = 4
     n_gvs = 2
     n_humans = 2
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     game_mgr.set_task(tasks)
 
     # === Labeler setup ===
-    labeler = Labeler(spec, spec.dag, spec.automata)
+    labeler = Labeler(spec)
 
     # === Allocator ===
     allocator = RandomAllocator(spec, agents_by_type, binding_manager, labeler)
