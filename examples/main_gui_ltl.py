@@ -91,7 +91,7 @@ if __name__ == "__main__":
     game_mgr.set_task(tasks)
 
     # === Labeler setup ===
-    labeler = Labeler(spec, spec.dag, spec.automata)
+    labeler = Labeler(spec)
 
     # === Allocator ===
     allocator = RandomAllocator(spec, agents_by_type, binding_manager, labeler)
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         # === Step the simulation ===
         if running_time < hover_duration:
             for drone in drones:
-                drone.takeoff_in_place(1.4)
+                drone.takeoff_in_place(2.0)
         else:
             sim_outputs = sim.step(dt=dt, verbose=False)
             # Optional: atomic propositions
