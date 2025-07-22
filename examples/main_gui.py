@@ -275,7 +275,7 @@ if __name__=='__main__':
         # Send initial tasks to the clients
         message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None} # Message to be sent to the clients
         for idx in range(len(clients)):
-            clients[idx][0].sendall(json.dumps(message).encode())
+            clients[idx][0].sendall((json.dumps(message) + '\n').encode())
         print('Init finished')
         game_mgr.render(vor, random_positions)
         print('GUI rendered')
@@ -309,17 +309,18 @@ if __name__=='__main__':
                     fly = False
 
             ############################ Socket receive ########################### !!!
-            try:
-                chunk = clients[0][0].recv(4096).decode()
-                if chunk:
-                    recv_buffer += chunk
-                    while '\n' in recv_buffer:
-                        line, recv_buffer = recv_buffer.split('\n', 1)
-                        if line.strip():
-                            data = json.loads(line)
-                            print("Received data:", repr(data))
-            except BlockingIOError:
-                pass
+            for conn, addr in clients:
+                try:
+                    chunk = conn.recv(4096).decode() # !!! Need to hear from all clients
+                    if chunk:
+                        recv_buffer += chunk
+                        while '\n' in recv_buffer:
+                            line, recv_buffer = recv_buffer.split('\n', 1)
+                            if line.strip():
+                                data = json.loads(line)
+                                print("Received data:", repr(data))
+                except BlockingIOError:
+                    pass
             ############################# Socket receive ends ###########################
             
             ########################### Update human progress and workload ##############
@@ -336,10 +337,8 @@ if __name__=='__main__':
                             print(f'reset task {task["task_id"]} priority to {task["priority"]}')
                             break
                     
-                # for j, ta in enumerate(tasks):
-                #     if ta[0] not in exist_task_idx:
-                #         tasks.pop(j)
-                #         print(f'[t={int(dt)}] Task {ta[0]} removed from the task list.')
+                message['tasks'] = tasks
+                message_changed = True
             ############################## Task update ends ##############################
 
             ########################### Drone loop #################################
@@ -426,7 +425,7 @@ if __name__=='__main__':
                                 # Send the victim idx to the according user
                                 message['idx_image'] = str(survivor_images[survivor_index])
                                 need_help = np.random.choice([True, False], p=[0.5, 0.5])
-                                if need_help:
+                                if need_help and (1 <= survivor_images[survivor_index] <= 14):
                                     pos_rounded = [round(coord, 2) for coord in d.position[0:2]]
                                     message['vic_msg'] = f'Drone {idx + 1} receive a survivor message at {pos_rounded}, please response!'
                                 message_changed = True
@@ -569,12 +568,16 @@ if __name__=='__main__':
             ########################### Socket Send #####################################
             # Decide which client to send the message!!!
             if message_changed:
-                idx = 0
-                # print('Message changed')
-                # print(message)
-                clients[idx][0].sendall(json.dumps(message).encode())
-                message_changed = False
-                # assert False
+                if message['tasks'] or message['wind_speed']:
+                    # Send the message to all clients
+                    for conn, addr in clients:
+                        conn.sendall((json.dumps(message) + '\n').encode())
+                else:
+                    # Randomly select a client to send the message
+                    selected_client = np.random.choice(range(len(clients)))
+                    conn, addr = clients[selected_client]
+                    conn.sendall((json.dumps(message) + '\n').encode())
+                    message_changed = False
             ############################# Socket Send ends #####################################
             game_mgr.render(vor, random_positions)
             # print('gui rendered')

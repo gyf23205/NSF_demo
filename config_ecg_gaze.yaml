@@ -103,11 +103,11 @@ config_lstm: # (16,5) 62% -> (32,7) -> (16, 9) 65% best_so_far (8, large)?
 ###############################################################################
 config_tf:
   num_classes: 2        # Output classes (binary classification: hi vs lo)
-  input_dim: 140        # Raw input size: ECG (130) + Gaze (8)
-  dim_model: 24        # Embedding dimension (transformer input/output)
-  num_heads: 6          # Number of attention heads in multi-head attention
-  num_layers: 3         # Number of Transformer encoder layers
-  dim_feedforward: 48  # Dimension of feedforward network inside transformer
+  # input_dim: 430 #140   # Raw input size: ECG (130) + Gaze (300)
+  dim_model: 32        # Embedding dimension (transformer input/output)
+  num_heads: 4          # Number of attention heads in multi-head attention
+  num_layers: 4         # Number of Transformer encoder layers
+  dim_feedforward: 64  # Dimension of feedforward network inside transformer
   dropout: 0.1          # Dropout rate used in transformer & classifier
   max_len: 1            # Sequence length; default is 1 for raw input
 

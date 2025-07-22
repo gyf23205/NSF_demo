@@ -224,7 +224,7 @@ class UserGUI:
 
         ###################### Task block ######################
         if data and data['tasks'] is not None:
-            print('Received tasks from server:')
+            # print('Received tasks from server:')
             self.task_list = []
             for i, task in enumerate(data['tasks']):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
@@ -270,8 +270,8 @@ class UserGUI:
         ###################### Weather block ends ######################
 
         ####################### Response block ##########################
-        response_region_width = 500  # Adjust as needed
-        response_region_height = 3 * FONT_SIZE * line_height + 40
+        response_region_width = 520  # Adjust as needed
+        response_region_height = 3 * FONT_SIZE * line_height + 20
         pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
         # Draw the response title every frame
         for text in self.response_title.texts:
@@ -280,6 +280,8 @@ class UserGUI:
         if data and data['vic_msg'] is not None:
             vic_msg_buffer.append(data['vic_msg'])
             data['vic_msg'] = None
+
+        self.response_text.clear()
         if vic_msg_buffer:
             self.response_text.update(vic_msg_buffer[0])
             self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
@@ -309,18 +311,22 @@ if __name__ == '__main__':
     victim_buffer = []  # Buffer to store victims
     vic_msg_buffer = []  # Buffer to store messages from victims
     try:
+        recv_buffer = ''
         while running:
             data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None, 'vic_msg': None}  # Initialize data
             response_changed = False
             # Receive weather, task, victim from server
             try:
-                data_received = s.recv(1024).decode() 
+                data_received = s.recv(4096).decode()
                 if data_received:
-                    data = json.loads(data_received)
-                    print('Received data from server:')
-            except BlockingIOError: 
+                    recv_buffer += data_received
+                    while '\n' in recv_buffer:
+                        line, recv_buffer = recv_buffer.split('\n', 1)
+                        if line.strip():
+                            data = json.loads(line)
+                            print('Received data from server:', repr(data))
+            except BlockingIOError:
                 pass
-            
 
             if data and data['tasks'] is not None:
                 tasks = data['tasks']
@@ -387,12 +393,14 @@ if __name__ == '__main__':
                 # Response handling
                 gui.response_input.handle_event(event)
                 if gui.response_input.finish:
-                    response_changed = True
-                    response['vic_response'] = gui.response_input.text_send
+                    # response_changed = True
+                    # response['vic_response'] = gui.response_input.text_send
                     gui.response_input.finish = False  # Reset finish flag
                     gui.response_input.text = ""
+                    # print(vic_msg_buffer)
                     if vic_msg_buffer:
                         vic_msg_buffer.pop(0)
+                        # print(vic_msg_buffer)
 
             # Render the GUI and get the response
             gui.render()

@@ -210,11 +210,6 @@ class UserGUI:
         # self.screen.fill(WHITE)
 
         ###################### Update workload text ######################
-        # if data and data['workload'] is not None:
-        #     self.workload_text.clear()
-        #     self.workload_text.update('Workload: ' + data['workload'])
-
-        # 1. load csv file, read last row, delete content
         with open(csv_path, 'r') as f:
             reader = csv.reader(f)
             rows = list(reader)
@@ -238,10 +233,16 @@ class UserGUI:
         model.eval()
 
         ecg = last_row[:130]
-        gaze = last_row[130:]
+        # gaze = last_row[130:]
+        # gaze_au_matrix = rows[130:].reshape(10, 30)
+        gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
 
         t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-        t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
+        # t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
+        t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
+
+        if torch.isnan(t2).any() or torch.isinf(t2).any():
+            print("⚠️ NaN or Inf detected in t2 (gaze input)")
 
         with torch.no_grad():
             out = model(t1, t2)
@@ -325,7 +326,7 @@ class UserGUI:
         ###################### Weather block ends ######################
 
         ####################### Response block ##########################
-        response_region_width = 500  # Adjust as needed
+        response_region_width = 520  # Adjust as needed
         response_region_height = 3 * FONT_SIZE * line_height + 40
         pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
         # Draw the response title every frame
@@ -335,6 +336,8 @@ class UserGUI:
         if data and data['vic_msg'] is not None:
             vic_msg_buffer.append(data['vic_msg'])
             data['vic_msg'] = None
+        
+        self.response_text.clear()
         if vic_msg_buffer:
             self.response_text.update(vic_msg_buffer[0])
             self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
@@ -364,16 +367,21 @@ if __name__ == '__main__':
     victim_buffer = []  # Buffer to store victims
     vic_msg_buffer = []  # Buffer to store messages from victims
     try:
+        recv_buffer = ''
         while running:
             data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None, 'vic_msg': None}  # Initialize data
             response_changed = False
             # Receive weather, task, victim from server
             try:
-                data_received = s.recv(1024).decode() 
+                data_received = s.recv(4096).decode()
                 if data_received:
-                    data = json.loads(data_received)
-                    print('Received data from server:')
-            except BlockingIOError: 
+                    recv_buffer += data_received
+                    while '\n' in recv_buffer:
+                        line, recv_buffer = recv_buffer.split('\n', 1)
+                        if line.strip():
+                            data = json.loads(line)
+                            print('Received data from server:', repr(data))
+            except BlockingIOError:
                 pass
             
 
@@ -442,12 +450,14 @@ if __name__ == '__main__':
                 # Response handling
                 gui.response_input.handle_event(event)
                 if gui.response_input.finish:
-                    response_changed = True
-                    response['vic_response'] = gui.response_input.text_send
+                    # response_changed = True
+                    # response['vic_response'] = gui.response_input.text_send
                     gui.response_input.finish = False  # Reset finish flag
                     gui.response_input.text = ""
+                    # print(vic_msg_buffer)
                     if vic_msg_buffer:
                         vic_msg_buffer.pop(0)
+                        # print(vic_msg_buffer)
 
             # Render the GUI and get the response
             gui.render()
