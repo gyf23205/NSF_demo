@@ -323,7 +323,6 @@ if __name__ == '__main__':
                     while '\n' in recv_buffer:
                         line, recv_buffer = recv_buffer.split('\n', 1)
                         if line.strip():
-                            print("Trying to decode:", repr(line))
                             data = json.loads(line)
                             print('Received data from server:', repr(data))
             except BlockingIOError:
@@ -394,8 +393,8 @@ if __name__ == '__main__':
                 # Response handling
                 gui.response_input.handle_event(event)
                 if gui.response_input.finish:
-                    response_changed = True
-                    response['vic_response'] = gui.response_input.text_send
+                    # response_changed = True
+                    # response['vic_response'] = gui.response_input.text_send
                     gui.response_input.finish = False  # Reset finish flag
                     gui.response_input.text = ""
                     # print(vic_msg_buffer)
