@@ -257,6 +257,7 @@ class UserGUI:
 
         self.workload_text.clear()
         self.workload_text.update('Workload: ' + workload_text)  
+        pygame.draw.rect(self.screen, WHITE, self.workload_text.rect)
         self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])             
         ###################### Update workload text ends #####################
 
