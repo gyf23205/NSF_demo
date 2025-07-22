@@ -256,7 +256,8 @@ class UserGUI:
             workload_text = 'low'
 
         self.workload_text.clear()
-        self.workload_text.update('Workload: ' + workload_text)               
+        self.workload_text.update('Workload: ' + workload_text)  
+        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])             
         ###################### Update workload text ends #####################
 
         ###################### Victim block ######################

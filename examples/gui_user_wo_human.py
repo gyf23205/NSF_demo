@@ -201,6 +201,7 @@ class UserGUI:
         if data and data['workload'] is not None:
             self.workload_text.clear()
             self.workload_text.update('Workload: ' + data['workload'])
+            self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
         ###################### Update workload text ends #####################
 
         ###################### Victim block ######################
