@@ -133,13 +133,12 @@ class UserGUI:
         self.screen_height = 930
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.screen.fill(WHITE)
-        
 
         # Victim block
         self.image_width = 400
         self.image_height = 280
         self.image_rect = pygame.Rect(
-            1300,
+            130,
             200,
             self.image_width,
             self.image_height
@@ -150,7 +149,7 @@ class UserGUI:
         spacing = 50
         buttons_y = self.image_rect.bottom + 10
         # total_buttons_width = button_width * 2 + spacing
-        buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing)
+        buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing) - 120
         accept_rect = pygame.Rect(buttons_x, buttons_y, button_width, button_height)
         reject_rect = pygame.Rect(buttons_x + button_width + spacing, buttons_y, button_width, button_height)
         handover_rect = pygame.Rect(buttons_x + 2 * (button_width + spacing), buttons_y, button_width, button_height)
@@ -203,8 +202,6 @@ class UserGUI:
         self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
         self.response_text = Font(FONT, FONT_SIZE, (response_x, response_y + FONT_SIZE * line_height))
         self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 400, FONT_SIZE * line_height), color=WHITE, maximum=1000)
-
-
 
     def render(self):
         # self.screen.fill(WHITE)
