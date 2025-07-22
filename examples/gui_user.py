@@ -245,12 +245,15 @@ class UserGUI:
             out = model(t1, t2)
             pred_label = torch.argmax(out).item()
             print(out, pred_label)
+      
 
         # 3. update workload
         if pred_label == 1:
             workload_text = 'high'
         elif pred_label == 0:
-            workload_text = 'low'
+            workload_text = 'low'      
+
+        workload_text = np.random.choice(['low', 'medium', 'high'], p=[0.3, 0.4, 0.3])
 
         self.workload_text.clear()
         self.workload_text.update('Workload: ' + workload_text)               
@@ -346,13 +349,15 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server (localhost)
+    host = '192.168.123.225'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
     s.setblocking(False)
     # tasks = [(1, (100, 200), 0), (2, (300, 400), 1)]  # Example tasks
     # workload = 'low'  # Example workload
+
+    fff = True
 
     gui = UserGUI()
 
