@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     # === Constants ===
     hover_duration = 10
-    n_targets = 4
+    n_targets = 10
     n_drones = 4
     n_gvs = 2
     n_humans = 2
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         # === Step the simulation ===
         if running_time < hover_duration:
             for drone in drones:
-                drone.takeoff_in_place(1.4)
+                drone.takeoff_in_place(2.0)
         else:
             sim_outputs = sim.step(dt=dt, verbose=False)
             # Optional: atomic propositions

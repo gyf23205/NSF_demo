@@ -81,7 +81,8 @@ class Specification:
                     f"<> (p_navscan_{tid} && <> (p_confirm_{tid} && <> (p_rescue_{tid} || p_skip_{tid})))"
                 )
             # Structural node
-            level_two["p_101"] = " && ".join(f"<> p_101_aux_{tid}" for tid in physical_target_ids)
+            # level_two["p_101"] = " && ".join(f"<> p_101_aux_{tid}" for tid in physical_target_ids)
+            level_two["p_101"] = ""
 
             hierarchy.append(level_two)
 
