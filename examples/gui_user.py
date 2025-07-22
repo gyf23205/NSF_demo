@@ -263,6 +263,17 @@ class UserGUI:
         self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])             
         ###################### Update workload text ends #####################
 
+
+        # ###################### Update workload text ######################
+        # if data and data['workload'] is not None:
+        #     self.workload_text.clear()
+        #     self.workload_text.update('Workload: ' + data['workload'])
+        #     # clean the previous workload text
+        #     pygame.draw.rect(self.screen, WHITE, self.workload_text.rect)
+        #     self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
+        # ###################### Update workload text ends #####################
+
+
         ###################### Victim block ######################
         if data and data['idx_image'] is not None:
             # print(data['idx_image'])
@@ -331,7 +342,7 @@ class UserGUI:
 
         ####################### Response block ##########################
         response_region_width = 520  # Adjust as needed
-        response_region_height = 3 * FONT_SIZE * line_height + 40
+        response_region_height = 3 * FONT_SIZE * line_height + 20
         pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
         # Draw the response title every frame
         for text in self.response_title.texts:
@@ -360,8 +371,6 @@ if __name__ == '__main__':
     s.setblocking(False)
     # tasks = [(1, (100, 200), 0), (2, (300, 400), 1)]  # Example tasks
     # workload = 'low'  # Example workload
-
-    fff = True
 
     gui = UserGUI()
 
