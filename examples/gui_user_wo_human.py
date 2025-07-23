@@ -201,6 +201,9 @@ class UserGUI:
         if data and data['workload'] is not None:
             self.workload_text.clear()
             self.workload_text.update('Workload: ' + data['workload'])
+            # clean the previous workload text
+            pygame.draw.rect(self.screen, WHITE, self.workload_text.rect)
+            self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
         ###################### Update workload text ends #####################
 
         ###################### Victim block ######################
@@ -293,7 +296,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server (localhost)
+    host = '192.168.123.225'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))

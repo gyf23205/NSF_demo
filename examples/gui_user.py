@@ -133,13 +133,12 @@ class UserGUI:
         self.screen_height = 930
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.screen.fill(WHITE)
-        
 
         # Victim block
         self.image_width = 400
         self.image_height = 280
         self.image_rect = pygame.Rect(
-            1300,
+            130,
             200,
             self.image_width,
             self.image_height
@@ -150,7 +149,7 @@ class UserGUI:
         spacing = 50
         buttons_y = self.image_rect.bottom + 10
         # total_buttons_width = button_width * 2 + spacing
-        buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing)
+        buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing) - 120
         accept_rect = pygame.Rect(buttons_x, buttons_y, button_width, button_height)
         reject_rect = pygame.Rect(buttons_x + button_width + spacing, buttons_y, button_width, button_height)
         handover_rect = pygame.Rect(buttons_x + 2 * (button_width + spacing), buttons_y, button_width, button_height)
@@ -204,8 +203,6 @@ class UserGUI:
         self.response_text = Font(FONT, FONT_SIZE, (response_x, response_y + FONT_SIZE * line_height))
         self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 400, FONT_SIZE * line_height), color=WHITE, maximum=1000)
 
-
-
     def render(self):
         # self.screen.fill(WHITE)
 
@@ -248,16 +245,34 @@ class UserGUI:
             out = model(t1, t2)
             pred_label = torch.argmax(out).item()
             print(out, pred_label)
+      
 
         # 3. update workload
         if pred_label == 1:
             workload_text = 'high'
         elif pred_label == 0:
-            workload_text = 'low'
+            workload_text = 'low'      
+
+        workload_text = np.random.choice(['low', 'medium', 'high'], p=[0.3, 0.4, 0.3])
 
         self.workload_text.clear()
-        self.workload_text.update('Workload: ' + workload_text)               
+        self.workload_text.update('Workload: ' + workload_text)  
+        area = self.workload_text.rect.copy()
+        area.width += 100  # Adjust width to fit the screen
+        pygame.draw.rect(self.screen, WHITE, area)
+        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])             
         ###################### Update workload text ends #####################
+
+
+        # ###################### Update workload text ######################
+        # if data and data['workload'] is not None:
+        #     self.workload_text.clear()
+        #     self.workload_text.update('Workload: ' + data['workload'])
+        #     # clean the previous workload text
+        #     pygame.draw.rect(self.screen, WHITE, self.workload_text.rect)
+        #     self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
+        # ###################### Update workload text ends #####################
+
 
         ###################### Victim block ######################
         if data and data['idx_image'] is not None:
@@ -327,7 +342,7 @@ class UserGUI:
 
         ####################### Response block ##########################
         response_region_width = 520  # Adjust as needed
-        response_region_height = 3 * FONT_SIZE * line_height + 40
+        response_region_height = 3 * FONT_SIZE * line_height + 20
         pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
         # Draw the response title every frame
         for text in self.response_title.texts:
@@ -349,7 +364,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server (localhost)
+    host = '192.168.123.225'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
