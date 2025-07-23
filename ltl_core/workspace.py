@@ -90,6 +90,17 @@ class Workspace:
         for i in range(len(self.target_mask)):
             assigned[i] = hospital_cells[i % len(hospital_cells)]
         return assigned
+    
+    def all_mobile_agents_at_base(self, tol=0.1):
+        """
+        Check whether all drones and GVs are within tolerance of any base cell.
+        """
+        base_cells = set(self.base_area)
+        for agent in self.agents["drones"] + self.agents["gvs"]:
+            pos = tuple(np.round(agent.pos[:2]))
+            if not any(np.linalg.norm(agent.pos[:2] - np.array(base)) < tol for base in base_cells):
+                return False
+        return True
 
     @staticmethod
     def _distance(pos1, pos2):

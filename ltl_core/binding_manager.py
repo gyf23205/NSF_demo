@@ -158,7 +158,7 @@ class BindingManager:
         """Return the next task in the group that is not yet completed."""
         ordered_tasks = labeler.get_group_ordered_tasks(group)
         for task in ordered_tasks:
-            if task not in self.completed:
+            if task not in self.completed_tasks:
                 return task
         return None
 

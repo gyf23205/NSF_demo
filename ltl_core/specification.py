@@ -82,7 +82,8 @@ class Specification:
                 )
             # Structural node
             # level_two["p_101"] = " && ".join(f"<> p_101_aux_{tid}" for tid in physical_target_ids)
-            level_two["p_101"] = ""
+            # level_two["p_101"] = ""
+            level_two["p_101"] = " && ".join(f"p_101_aux_{tid}" for tid in physical_target_ids)
 
             hierarchy.append(level_two)
 
@@ -95,9 +96,8 @@ class Specification:
                 level_three[f"p_confirm_{tid}"] = f"<> p_verify_{tid})"
                 # your existing rescue and skip
                 level_three[f"p_rescue_{tid}"] = (
-                    f"<> (p_foundgate_{tid} && <> (p_pickup_{tid} && <> p_dropoff_{tid}))"
-                )
-                level_three[f"p_skip_{tid}"] = f"<> p_notfoundgate_{tid}"
+                    f"<> (p_verify_{tid} && <> (p_foundgate_{tid} && <> (p_pickup_{tid} && <> p_dropoff_{tid})))")
+                level_three[f"p_skip_{tid}"] = f"<> (p_verify_{tid} && <> p_notfoundgate_{tid})"
 
             # oversight unchanged
             level_three["p_oversight"] = "<> (p_monitor_0 && <> p_submit_0) && <> p_rank_0"

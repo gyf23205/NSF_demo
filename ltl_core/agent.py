@@ -2,7 +2,7 @@ import numpy as np
 
 
 class Agent:
-    def __init__(self, pos, role, label=None, speed=1.0):
+    def __init__(self, pos, role, label=None, speed=10.0):
         self.pos = np.array(pos, dtype=float)   # Continuous 2D position
         self.role = role                        # "drone", "gv", or "human"
         self.label = label                      # Optional string label like "D0", "H1"

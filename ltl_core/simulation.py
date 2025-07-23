@@ -18,6 +18,9 @@ class Simulation:
         # Episode trace for logging
         self.episode_trace = []
 
+        # Wait for human verification responses
+        self.verify_response_pending = set()
+
     @staticmethod
     def parse_ap_target_index(ap: str) -> int:
         return int(ap.split("_")[2])
@@ -60,9 +63,13 @@ class Simulation:
                     agent.goal = np.array(self.workspace.target_locations[idx], dtype=float)
             
             elif ap_type == "symbolic":
+                # Block symbolic APs if they're pending verification
+                if hasattr(self, "verify_response_pending"):
+                    if ap in self.verify_response_pending:
+                        continue  # Skip this AP until human responds
                 if agent.current_symbolic_task is None:
                     agent.start_symbolic_task(ap)
-                    agent.set_symbolic_task_speed(ap, speed=0.2)
+                    agent.set_symbolic_task_speed(ap, speed=1.0)
 
         # Idle return-to-base for unassigned drones/GVs
         for agent in self.workspace.get_all_agents():
@@ -101,6 +108,8 @@ class Simulation:
             "aps": sorted(current_aps),
             "completed": completed
         })
+
+        # print("[Labeling] APs = ", sorted(aps))
 
         return {
             "unlocked": unlocked,

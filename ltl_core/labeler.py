@@ -195,8 +195,9 @@ class Labeler:
         for node in self.dag.nodes:
             if node.startswith(("p_foundgate_", "p_notfoundgate_")):
                 if node in self.unlocked and node not in self._completed:
-                    group = "_".join(node.split("_")[2:6])  # e.g., 0_0_0_0
-                    gates_by_group.setdefault(group, []).append(node)
+                    # group = "_".join(node.split("_")[2:6])  # e.g., 0_0_0_0
+                    tid = node.split("_")[2]  # shared group
+                    gates_by_group.setdefault(tid, []).append(node)
 
         # Found or Not found
         for group, gate_list in gates_by_group.items():
@@ -208,6 +209,9 @@ class Labeler:
                 # Fixed: found
                 # chosen = next((g for g in gate_list if g.startswith("p_foundgate_")), gate_list[0])
                 self.chosen_gate_per_group[group] = chosen
+
+            # print(f"[DEBUG] Disjunctive group: {group}, candidates: {gate_list}, chosen: {chosen}")
+
             if chosen not in self._completed:
                 self._completed.add(chosen)
                 updated.add(chosen)
