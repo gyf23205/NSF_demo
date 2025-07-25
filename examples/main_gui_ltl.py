@@ -73,6 +73,37 @@ def update_wind(game_mgr, wind_time, old_avg_speed, n_wind, message, threshold=1
     return new_time, avg_speed, message_changed
 
 
+def compute_spiral_position(agent, dt, r_max=1.5, r_rate=0.03, angular_speed=1.0):
+    """
+    Update and return the agent's spiral (x, y) position for circling motion.
+
+    Args:
+        agent: object with .scan_center, .scan_radius, .scan_angle, .scan_time
+        dt: timestep (seconds)
+        r_max: maximum radius of spiral
+        r_rate: radial growth rate (units/sec)
+        angular_speed: angular velocity (radians/sec)
+
+    Returns:
+        np.array([x, y]) - new 2D position on spiral
+    """
+
+    # Time update
+    agent.scan_time += dt
+
+    # Radial distance grows linearly
+    r = min(r_rate * agent.scan_time, r_max)
+
+    # Angle increases
+    agent.scan_angle = angular_speed * agent.scan_time
+
+    # Compute position
+    x = agent.scan_center[0] + r * np.cos(agent.scan_angle)
+    y = agent.scan_center[1] + r * np.sin(agent.scan_angle)
+
+    return np.array([x, y])
+
+
 if __name__ == "__main__":
     try:
         # === Setup socket for GUI communication ===
@@ -279,7 +310,7 @@ if __name__ == "__main__":
                     if ap.startswith("p_scan_") and ap not in victim_detected:
                         for agent in agents_by_type["drone"]:
                             if agent.has_completed(ap):
-                                if agent.label.startswith("D"):
+                                if agent.label.startswith("D"): # Not necessary?
                                     drone_idx = int(agent.label[1:])
                                 else:
                                     continue
@@ -287,7 +318,6 @@ if __name__ == "__main__":
                                 victim_detected.add(ap)
 
                                 image_id = survivor_images[survivor_index]
-                                victim_id[drone_idx] = image_id
                                 survivor_index += 1
 
                                 # Store image_id -> target_id map
@@ -297,14 +327,12 @@ if __name__ == "__main__":
                                 message['idx_image'] = str(image_id)
                                 pos_rounded = [round(coord, 2) for coord in agent.pos[:2]]
                                 message['vic_msg'] = f'Drone {drone_idx + 1} finished scan at {pos_rounded}, please respond!'
-                                victim_timing[drone_idx] = running_time
                                 message_changed = True
 
                                 # Block corresponding p_verify AP until human responds
                                 verify_ap = f"p_verify_{target_id}_3_1_0"
                                 verify_response_pending.add(verify_ap)
                                 sim.verify_response_pending = verify_response_pending
-                                # print("[DEBUG] victim_target_map:", victim_target_map)               
 
             # === GUI response handling ===
             if data and data['victim'] is not None:
@@ -314,56 +342,62 @@ if __name__ == "__main__":
                     target_id = next(iter(victim_target_map.values()))
                     image_id = next(iter(victim_target_map))
                     verify_ap = f"p_verify_{target_id}_3_1_0"
-                    group_key = "_".join(verify_ap.split("_")[2:6])
+                    idx = int(target_id)
                     
                     victim_target_map.pop(image_id, None)
-                    print("[DEBUG] victim_target_map values:", list(victim_target_map.values()))
+                    # print("[DEBUG] victim_target_map values:", list(victim_target_map.values()))
 
                     if data['victim'] == 'accept':
-                        for idx in range(n_targets):
-                            if victim_id[idx] == image_id:
-                                victim_clicked[idx] = 1
-                                break
-                        group_key = str(target_id)
-                        labeler.chosen_gate_per_group[group_key] = f"p_foundgate_{target_id}"
-                        labeler._completed.add(verify_ap)
-                        labeler.advance({verify_ap})
+                        victim_clicked[idx] = 1
+                        labeler.chosen_gate_per_group[target_id] = f"p_foundgate_{target_id}"
 
                     elif data['victim'] == 'reject':
-                        for idx in range(n_targets):
-                            if victim_id[idx] == image_id:
-                                victim_clicked[idx] = 2
-                                break
-                        group_key = str(target_id)
-                        labeler.chosen_gate_per_group[group_key] = f"p_notfoundgate_{target_id}"
-                        labeler._completed.add(verify_ap)
-                        labeler.advance({verify_ap})
+                        victim_clicked[idx] = 2
+                        labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
 
                     elif data['victim'] == 'handover':
-                        for idx in range(n_targets):
-                            if victim_id[idx] == image_id:
-                                victim_clicked[idx] = 3
-                                break
-                        group_key = str(target_id)
-                        labeler.chosen_gate_per_group[group_key] = f"p_notfoundgate_{target_id}"
-                        labeler._completed.add(verify_ap)
-                        labeler.advance({verify_ap})
+                        victim_clicked[idx] = 3
+                        labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
+
+                    # Atomic proposition update
+                    labeler._completed.add(verify_ap)
+                    labeler.advance({verify_ap})
+
+                    # Survivor information
+                    victim_id[idx] = image_id
+                    victim_timing[idx] = running_time
+                    
+                    # Pop task
+                    print(f'[t={int(dt)}] Target {idx + 1} accomplished')
+                    tasks = [item for item in tasks if item[0] != idx + 1]
+                    message['tasks'] = tasks
+                    message_changed = True
+                    # Update GUI
+                    game_mgr.task = [item for item in game_mgr.task if item[0] != idx + 1]
+
+                    print("[DEBUG] Survivor ID:", victim_id)
+                    print("[DEBUG] Survivor Clicked:", victim_clicked)
+                    # print("[DEBUG] Survivor Timing:", victim_timing)
 
                 data['victim'] = None
-
-                # Clear drone-level GUI status after click is handled
-                for idx in range(n_targets):
-                    if victim_clicked[idx] > 0:
-                        game_mgr.victim_clicked[idx] = 0
-                        game_mgr.victim_id[idx] = 0
-                        game_mgr.victim_detected[idx] = False
-                        victim_clicked[idx] = 0
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
-                pos = agent.pos
-                pos = ws.grid_to_game_mgr(pos, grid_size=grid_size)
+                pos = ws.grid_to_game_mgr(agent.pos)
                 if hasattr(agent, "role") and agent.role == "drones":
+                    # Drone circling movement for p_scan_i
+                    task = getattr(agent, "current_symbolic_task", None)
+                    if isinstance(task, str) and task.startswith("p_scan"):
+                        # Initialize scan parameters
+                        if getattr(agent, "last_scan_ap", None) != task:
+                            print(f"time = {int(running_time)}, task = {task}, drone = {agent.label}")
+                            agent.scan_center = np.copy(pos)
+                            agent.scan_time = 0.0
+                            agent.scan_angle = 0.0
+                            agent.last_scan_ap = task  # track currently handled scan
+                        # Compute new position on spiral
+                        pos = compute_spiral_position(agent, dt)
+                        agent.pos = ws.game_mgr_to_grid(pos)
                     # Drones need altitude
                     visual.position = np.append(pos, visual.position[2])
                 else:

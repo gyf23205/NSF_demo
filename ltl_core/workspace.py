@@ -91,13 +91,12 @@ class Workspace:
             assigned[i] = hospital_cells[i % len(hospital_cells)]
         return assigned
     
-    def all_mobile_agents_at_base(self, tol=0.1):
+    def all_mobile_agents_at_base(self, tol=2.0):
         """
         Check whether all drones and GVs are within tolerance of any base cell.
         """
         base_cells = set(self.base_area)
         for agent in self.agents["drones"] + self.agents["gvs"]:
-            pos = tuple(np.round(agent.pos[:2]))
             if not any(np.linalg.norm(agent.pos[:2] - np.array(base)) < tol for base in base_cells):
                 return False
         return True
@@ -279,19 +278,30 @@ class Workspace:
 
         result = []
         for x, y in positions:
-            px = x * scale_x * 10           # pixel, scaled
-            py = -(screen_size[1] - y * scale_y) * 10  # flipped + scaled + negated
+            px = x * scale_x * 1           # pixel, scaled
+            py = (screen_size[1] - y * scale_y) * 1  # flipped + scaled + negated
             result.append([int(px), int(py)])
 
         return np.array(result)
     
     @staticmethod
-    def grid_to_game_mgr(pos, grid_size=(50, 40)):
+    def grid_to_game_mgr(pos, grid_size=(50, 40), world_size=(4.0, 3.0)):
         """
         Convert from grid-space meters (e.g. [0, 50] * [0, 40]) 
         to GameMgr-style world meters (e.g. [-2, 2] * [-1.5, 1.5]).
         """
         x, y = pos
-        x_scaled = (x / grid_size[0]) * 4.0 - 2.0      # maps 0→50 → -2→2
-        y_scaled = (y / grid_size[1]) * 3.0 - 1.5      # maps 0→40 → -1.5→1.5
+        x_scaled = (x / grid_size[0]) * world_size[0] - world_size[0] * 0.5      # maps 0→50 → -2→2
+        y_scaled = (y / grid_size[1]) * world_size[1] - world_size[1] * 0.5      # maps 0→40 → -1.5→1.5
         return np.array([x_scaled, y_scaled])
+    
+    @staticmethod
+    def game_mgr_to_grid(pos, grid_size=(50, 40), world_size=(4.0, 3.0)):
+        """
+        Convert from GameMgr-style world meters (e.g. [-2, 2] × [-1.5, 1.5]) 
+        to grid-space meters (e.g. [0, 50] × [0, 40]).
+        """
+        x, y = pos
+        x_unscaled = ((x + world_size[0] * 0.5) / world_size[0]) * grid_size[0]  # maps -2→2 → 0→50
+        y_unscaled = ((y + world_size[1] * 0.5) / world_size[1]) * grid_size[1]  # maps -1.5→1.5 → 0→40
+        return np.array([x_unscaled, y_unscaled])

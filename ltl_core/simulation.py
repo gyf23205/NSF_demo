@@ -21,6 +21,10 @@ class Simulation:
         # Wait for human verification responses
         self.verify_response_pending = set()
 
+        # Check logical progress
+        self.prev_completed = set()
+        self.prev_actions = {}
+
     @staticmethod
     def parse_ap_target_index(ap: str) -> int:
         return int(ap.split("_")[2])
@@ -43,7 +47,11 @@ class Simulation:
         unlocked = self.labeler.get_unlocked_APs()
         completed = self.labeler.get_completed()
         current_aps = self.labeler.current_aps
-        actions = self.allocator.choose(unlocked, completed, current_aps)
+
+        if completed != self.prev_completed:
+            self.prev_actions = self.allocator.choose(unlocked, completed, current_aps)
+            self.prev_completed = completed
+        actions = self.prev_actions
 
         if verbose:
             print(f"[GUI-STEP] Unlocked: {sorted(unlocked)}")
@@ -54,6 +62,9 @@ class Simulation:
         for agent, ap in actions.items():
             prefix = get_ap_prefix(ap)
             ap_type = AP_TYPE_PREFIX_MAP.get(prefix)
+
+            # Reset goal
+            agent.goal = None
 
             if ap_type == "physical":
                 idx = self.parse_ap_target_index(ap)
@@ -69,7 +80,7 @@ class Simulation:
                         continue  # Skip this AP until human responds
                 if agent.current_symbolic_task is None:
                     agent.start_symbolic_task(ap)
-                    agent.set_symbolic_task_speed(ap, speed=1.0)
+                    agent.set_symbolic_task_speed(ap, speed=0.1)
 
         # Idle return-to-base for unassigned drones/GVs
         for agent in self.workspace.get_all_agents():
@@ -77,9 +88,7 @@ class Simulation:
                 continue
 
             is_idle = (
-                agent.current_symbolic_task is None
-                and agent not in actions
-                and (agent.goal is None or agent.has_arrived())
+                (agent.goal is None or agent.has_arrived())
                 and tuple(agent.pos.astype(int)) not in self.workspace.base_area
             )
 
@@ -110,6 +119,7 @@ class Simulation:
         })
 
         # print("[Labeling] APs = ", sorted(aps))
+        # print(sorted(list(completed)))
 
         return {
             "unlocked": unlocked,

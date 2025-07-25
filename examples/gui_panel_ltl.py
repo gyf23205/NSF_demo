@@ -65,7 +65,7 @@ class Background:
         self.surface = pygame.transform.scale(self.surface, (bound_x_max - bound_x_min, bound_y_max - bound_y_min))
         self.rect = self.surface.get_rect()
         self.rect.topleft = (bound_x_min, bound_y_min)
-        print(self.rect)
+        # print(self.rect)
         self.min_bound = np.array([bound_x_min, bound_y_min])
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
@@ -75,7 +75,7 @@ class BackgroundNoScale:
         self.surface = self.figure
         self.rect = self.surface.get_rect()
         self.rect.topleft = (bound_x_min, bound_y_min)
-        print(self.rect)
+        # print(self.rect)
         self.min_bound = np.array([bound_x_min, bound_y_min])
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
@@ -143,7 +143,7 @@ class GameMgr:
         # Targets
         self.target = []
         self.target_clicked = 0
-        self.target_decided = True
+        # self.target_decided = True
         self.task = None
         # Voronoi diagram
         self.voronoi = None
@@ -254,7 +254,7 @@ class GameMgr:
         # Draw centroids as targets
         centroids_gui = self.workspace.grid_to_pixel_array(centroids)
         for idx, centroid in enumerate(centroids_gui):
-            pygame.draw.circle(self.screen, (255, 0, 0), centroid.astype(int), 10)
+            pygame.draw.circle(self.screen, GREY, centroid.astype(int), 10)
             font = pygame.font.Font(None, 24)
             text = font.render(f'{idx+1}', True, (255,255,255))
             self.screen.blit(text, (centroid[0]-6, centroid[1]-6))
@@ -268,14 +268,9 @@ class GameMgr:
         shadow_surface = pygame.surfarray.make_surface(np.stack([shadow]*3, axis=-1))
         shadow_surface.set_alpha(128)  # semi-transparent
         self.screen.blit(shadow_surface, (0, 0))
-        # Hospital
-        # self.hospital.draw(tuple(self.position_meter_to_gui([[1.3, -1.2]])))
         # Targets
         for i, (idx, pos, priority, assigned_drone) in enumerate(self.task):
             self.draw_target(pos, idx, priority)
-        # Takeoff positions
-        # for i, pos in enumerate(self.takeoff_position):
-            # pygame.draw.circle(self.screen, BLACK, pos, 10)
         ##################### Map ends ##########################
 
         ###################### Legends #####################

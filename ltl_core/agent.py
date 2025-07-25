@@ -15,6 +15,10 @@ class Agent:
         self.symbolic_task_speed = {}           # task_name → speed (0.1, 1.0, etc.)
         self.symbolic_progress = {}             # task_name → progress [0.0 ~ 1.0]
 
+        self.scan_center = None                 # Center of scan area (x,y)
+        self.scan_angle = 0.0                   # Scan angle in degrees
+        self.scan_time = 0.0                    # Time spent in scan area
+
     def move_toward_goal(self, dt=1.0):
         """Move the agent toward its current goal, if any."""
         if self.goal is None:
@@ -61,7 +65,7 @@ class Agent:
         """Check if symbolic task has been completed (progress == 1.0)."""
         return self.get_progress(task_name) >= 1.0
 
-    def has_arrived(self, tol: float = 0.2) -> bool:
+    def has_arrived(self, tol: float = 1e-5) -> bool:
         """Check if agent is within tol distance of a goal position."""
         if self.goal is None:
             return False
