@@ -16,8 +16,7 @@ import numpy as np
 import yaml
 
 
-csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
-
+csv_path = 'D:\\Projects\\qualisys_drone_sdk\\dummy_log\\aggregated_output.csv'
 
 
 class Task:
@@ -244,7 +243,7 @@ class UserGUI:
         with torch.no_grad():
             out = model(t1, t2)
             pred_label = torch.argmax(out).item()
-            print(out, pred_label)
+            # print(out, pred_label)
       
 
         # 3. update workload
@@ -294,8 +293,9 @@ class UserGUI:
 
 
         ###################### Task block ######################
-        if data and data['tasks'] is not None:
-            print('Received tasks from server:')
+        # print('data before receiving tasks: ', data)
+        if data is not None and data['tasks'] is not None:
+            # print('Received tasks from server: ', data['tasks'])
             self.task_list = []
             for i, task in enumerate(data['tasks']):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
@@ -364,7 +364,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '192.168.123.225'  # IP of the server (localhost)
+    host = '127.0.0.1'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -381,10 +381,10 @@ if __name__ == '__main__':
     running = True
     victim_buffer = []  # Buffer to store victims
     vic_msg_buffer = []  # Buffer to store messages from victims
+    data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None, 'vic_msg': None}  # Initialize data
     try:
         recv_buffer = ''
         while running:
-            data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None, 'vic_msg': None}  # Initialize data
             response_changed = False
             # Receive weather, task, victim from server
             try:
@@ -394,14 +394,19 @@ if __name__ == '__main__':
                     while '\n' in recv_buffer:
                         line, recv_buffer = recv_buffer.split('\n', 1)
                         if line.strip():
-                            data = json.loads(line)
-                            print('Received data from server:', repr(data))
+                            data_temp = json.loads(line)
+                            # print('Received data from server:', repr(data_temp))
+                            for key, value in data_temp.items():
+                                if value is not None:
+                                    # print(value)
+                                    data[key] = value
+                    data_received = None
             except BlockingIOError:
                 pass
             
 
-            if data and data['tasks'] is not None:
-                tasks = data['tasks']
+            # if data and data['tasks'] is not None:
+            #     tasks = data['tasks']
                 # print('Received tasks from server:', tasks)
 
             # Event handling

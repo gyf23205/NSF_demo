@@ -277,4 +277,4 @@ docs/.jekyll-metadata
 venv/
 
 # Produced data
-# *.csv
+*.csv
