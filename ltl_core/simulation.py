@@ -48,6 +48,13 @@ class Simulation:
         completed = self.labeler.get_completed()
         current_aps = self.labeler.current_aps
 
+        # Mark symbolic task complete
+        for agent in self.workspace.get_all_agents():
+            task = agent.current_symbolic_task
+            if task and task in completed:
+                agent.current_symbolic_task = None
+
+        # New function allocation only when completed APs changed
         if completed != self.prev_completed:
             self.prev_actions = self.allocator.choose(unlocked, completed, current_aps)
             self.prev_completed = completed
@@ -105,12 +112,6 @@ class Simulation:
 
                 if available_bases:
                     agent.goal = np.array(available_bases[0], dtype=float)
-
-        # Mark symbolic task complete
-        for agent in self.workspace.get_all_agents():
-            task = agent.current_symbolic_task
-            if task and task in completed:
-                agent.current_symbolic_task = None
 
         # Optional logging
         self.episode_trace.append({

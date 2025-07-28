@@ -65,7 +65,7 @@ class Agent:
         """Check if symbolic task has been completed (progress == 1.0)."""
         return self.get_progress(task_name) >= 1.0
 
-    def has_arrived(self, tol: float = 1e-5) -> bool:
+    def has_arrived(self, tol: float = 0.2) -> bool:
         """Check if agent is within tol distance of a goal position."""
         if self.goal is None:
             return False

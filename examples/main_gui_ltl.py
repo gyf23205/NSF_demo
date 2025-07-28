@@ -360,7 +360,6 @@ if __name__ == "__main__":
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
 
                     # Atomic proposition update
-                    labeler._completed.add(verify_ap)
                     labeler.advance({verify_ap})
 
                     # Survivor information
@@ -368,15 +367,15 @@ if __name__ == "__main__":
                     victim_timing[idx] = running_time
                     
                     # Pop task
-                    print(f'[t={int(dt)}] Target {idx + 1} accomplished')
+                    # print(f'[t={int(running_time)}] Target {idx + 1} accomplished')
                     tasks = [item for item in tasks if item[0] != idx + 1]
                     message['tasks'] = tasks
                     message_changed = True
                     # Update GUI
                     game_mgr.task = [item for item in game_mgr.task if item[0] != idx + 1]
 
-                    print("[DEBUG] Survivor ID:", victim_id)
-                    print("[DEBUG] Survivor Clicked:", victim_clicked)
+                    # print("[DEBUG] Survivor ID:", victim_id)
+                    # print("[DEBUG] Survivor Clicked:", victim_clicked)
                     # print("[DEBUG] Survivor Timing:", victim_timing)
 
                 data['victim'] = None
