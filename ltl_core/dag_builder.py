@@ -52,9 +52,9 @@ def build_dag(specification) -> nx.DiGraph:
         G.add_node(n)
 
     for lvl, level in enumerate(specification.hierarchy, start=1):
-        print(f"\n--- Level {lvl} ---")
+        # print(f"\n--- Level {lvl} ---")
         for parent, formula in level.items():
-            print(f"    ▶ {parent}: {formula}")
+            # print(f"    ▶ {parent}: {formula}")
             children = _all_children(formula)
 
             # Manually add auxiliary children if formula is empty but pattern matches
@@ -65,13 +65,13 @@ def build_dag(specification) -> nx.DiGraph:
             for child in children:
                 if (child in composite_names or child in atomic_names) and not G.has_edge(parent, child):
                     G.add_edge(parent, child)
-                    print(f"parent→child:    {parent} → {child}")
+                    # print(f"parent→child:    {parent} → {child}")
 
             if formula.strip():
                 for a, b in extract_pairwise_order_ltl2ba(formula):
                     if a in G and b in G and not G.has_edge(a, b):
                         G.add_edge(a, b)
-                        print(f"pairwise order:  {parent}: {a} → {b}")
+                        # print(f"pairwise order:  {parent}: {a} → {b}")
                     pairwise_preds[b].append(a)
 
             alt_groups = _extract_alt_groups(formula)
@@ -107,13 +107,16 @@ def extract_pairwise_order_ltl2ba(formula: str) -> List[Tuple[str, str]]:
                 traces.append(trace)
                 return
             for _, v, d in nba.out_edges(u, data=True):
-                dfs(v, trace + [d["label"]])
+                lbl = d["label"]
+                if isinstance(lbl, set):
+                    lbl = ",".join(sorted(lbl))
+                dfs(v, trace + [lbl])
 
         dfs(init, [])
 
         before, co = defaultdict(int), defaultdict(int)
         for tr in traces:
-            unique = set(tr)
+            unique = {frozenset(item) if isinstance(item, set) else item for item in tr}
             for a in unique:
                 for b in unique:
                     if a != b:

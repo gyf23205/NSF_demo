@@ -92,17 +92,14 @@ class Labeler:
         self._update_locked()
 
     def extract_APs(self, state) -> Set[str]:
-        """
-        Convert the workspace state into a set of currently true atomic propositions (APs),
-        including physical arrival checks and symbolic progress.
-        """
         base_aps: Set[str] = state.get_true_aps()
         valid_aps: Set[str] = set()
 
-        # 1. Include environment-driven APs directly
+        # 1. Environment APs
         env_aps = {ap for ap in base_aps if is_environment_ap(ap)}
         valid_aps.update(env_aps)
 
+        # 2. Physical APs (agent must be at goal)
         for ap in base_aps:
             prefix = get_ap_prefix(ap)
             ap_type = AP_TYPE_PREFIX_MAP.get(prefix)
@@ -115,10 +112,7 @@ class Labeler:
                 agent_type = self._get_agent_type(ap)
                 agent = self.binding_manager.get_bound_agent_for_group(group, agent_type=agent_type)
 
-                if agent is None:
-                    continue
-
-                if agent.has_arrived():
+                if agent and agent.has_arrived():
                     valid_aps.add(ap)
 
             elif ap_type == "symbolic":
@@ -131,6 +125,10 @@ class Labeler:
 
             else:
                 print(f"[WARN] Unrecognized AP type: {ap}")
+
+        # 3. Add completed group-level names as virtual APs
+        # valid_aps.update(self._completed)
+        pass
 
         self.current_aps = valid_aps
         return valid_aps
@@ -160,66 +158,66 @@ class Labeler:
         """Advance the labeler one step, given the set of true AP tokens."""
         updated: Set[str] = set()
 
-        # Step 1 — advance DFA transitions for atomic nodes that have a DFA
+        # Step 0 — advance all DFAs (groups, atomic, and high-level nodes like p_0)
+        # for name, dfa in self.automata.items():
+        #     if name not in self.states:
+        #         self.states[name] = dfa.initial_state
+
+        #     state = self.states[name]
+        #     next_state = dfa.delta(state, true_APs)
+        #     self.states[name] = next_state
+
+        #     if self._is_accepting(dfa, next_state):
+        #         if name not in self._completed:
+        #             # print(f"[DFA:Group] {name} reached accepting state {next_state} — marking complete")
+        #             self._completed.add(name)
+        #             updated.add(name)
+
+        # Step 1 — advance DFA transitions for atomic nodes (redundant now but kept for clarity)
         for node in self.dag.nodes:
             if node in self.automata and self._is_atomic_node(node):
                 state = self.states[node]
                 next_state = state
-                advanced = False
-
                 for _, tgt, data in self.automata[node].out_edges(state, data=True):
                     label = data.get("label")
-                    label_set: Set[str] = {label} if isinstance(label, str) else set(label)
-
-                    if label_set & true_APs:
+                    if isinstance(label, str) and label in true_APs:
                         next_state = tgt
-                        advanced = True
                         break
-
                 self.states[node] = next_state
-
                 if self._is_accepting(self.automata[node], next_state):
                     if node not in self._completed:
                         self._completed.add(node)
                         updated.add(node)
 
-        # Step 2 — environment-driven atomic nodes with no DFA (p_found, p_notfound, etc.)
+        # Step 2 — env-driven APs with no DFA (e.g., p_found_)
         for node in self.dag.nodes:
             if self._is_atomic_node(node) and node not in self.automata:
                 if node in true_APs and node not in self._completed:
                     self._completed.add(node)
                     updated.add(node)
 
-        # Step 3 — env-disjunctive gates (e.g., p_foundgate_0_0_0_0 or p_notfoundgate_0_0_0_0)
+        # Step 3 — handle disjunctive gates (env-driven)
         gates_by_group = {}
         for node in self.dag.nodes:
             if node.startswith(("p_foundgate_", "p_notfoundgate_")):
                 if node in self.unlocked and node not in self._completed:
-                    # group = "_".join(node.split("_")[2:6])  # e.g., 0_0_0_0
-                    tid = node.split("_")[2]  # shared group
+                    tid = node.split("_")[2]
                     gates_by_group.setdefault(tid, []).append(node)
 
-        # Found or Not found
         for group, gate_list in gates_by_group.items():
             if group in self.chosen_gate_per_group:
                 chosen = self.chosen_gate_per_group[group]
             else:
-                # Random
                 chosen = random.choice(gate_list)
-                # Fixed: found
-                # chosen = next((g for g in gate_list if g.startswith("p_foundgate_")), gate_list[0])
                 self.chosen_gate_per_group[group] = chosen
-
-            # print(f"[DEBUG] Disjunctive group: {group}, candidates: {gate_list}, chosen: {chosen}")
-
             if chosen not in self._completed:
                 self._completed.add(chosen)
                 updated.add(chosen)
 
-        # Step 4 — propagate completions upward in the DAG
+        # Step 4 — propagate completions upward
         self._propagate_completions(updated)
 
-        # Step 5 — refresh unlocked / locked lists
+        # Step 5 — update unlocked/locked sets
         self._update_unlocked()
         self._update_locked()
 
@@ -421,13 +419,32 @@ class Labeler:
     def _is_accepting(dfa: Any, state: Any) -> bool:
         """
         Test whether a DFA state is accepting.
+        Supports multiple graph formats: 
+        • custom .accepting_states set,
+        • .graph["accepting_states"] list,
+        • node attribute 'accepting': True
         """
+        # 1. Custom attribute: accepting_states
         if hasattr(dfa, "accepting_states"):
             return state in dfa.accepting_states
-        if isinstance(getattr(dfa, "graph", None), dict):
-            if "accepting_states" in dfa.graph:
-                return state in dfa.graph["accepting_states"]
-        return dfa.nodes[state].get("accepting", False)
+
+        # 2. NetworkX-style .graph dictionary
+        graph_dict = getattr(dfa, "graph", None)
+        if isinstance(graph_dict, dict) and "accepting_states" in graph_dict:
+            return state in graph_dict["accepting_states"]
+
+        # 3. NetworkX node attribute
+        node_data = dfa.nodes.get(state, {})
+        if "accepting" in node_data:
+            return node_data["accepting"]
+
+        # 4. Fallback: brute-force search (just in case)
+        for node, data in dfa.nodes(data=True):
+            if node == state and data.get("accepting", False):
+                return True
+
+        # 5. Final fallback: not accepting
+        return False
 
     # ------------------------------------------------------------------ #
     # Completion rules with AND/OR children

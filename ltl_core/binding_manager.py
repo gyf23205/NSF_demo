@@ -109,11 +109,16 @@ class BindingManager:
         if labeler and group in self.group_to_automaton:
             dfa = self.group_to_automaton[group]
             dfa_state = labeler.states.get(group)
+
+            # print(f"[DFA] Current DFA state for group {group}: {dfa_state}")
+            # for node in dfa.nodes:
+                # print(f"[DFA] Node: {node}, accepting = {dfa.nodes[node].get('accepting', False)}")
+
             if dfa_state is not None and labeler._is_accepting(dfa, dfa_state):
-                print(f"[BindingManager] DFA for group {group} is accepting — releasing binding.")
+                # print(f"[BindingManager] DFA for group {group} is accepting — releasing binding.")
                 self.bindings.pop(group, None)
-            else:
-                print(f"[BindingManager] DFA for group {group} not accepting yet — keep binding.")
+            # else:
+                # print(f"[BindingManager] DFA for group {group} not accepting yet — keep binding.")
         else:
             group_tasks = self.group_to_tasks[group]
             if group_tasks.issubset(self.completed_tasks):

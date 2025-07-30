@@ -16,8 +16,8 @@ def compile_automata(spec) -> Dict[str, nx.DiGraph]:
 
     for level in spec.hierarchy:
         for name, formula in level.items():
-            if not formula.strip():
-                continue  # skip structural/auxiliary node like p_101
+            if formula.strip() in ("", "True"):
+                continue  # Only skip if formula is really trivial
 
             # 1) parse the Buchi automaton into a directed graph
             raw = run_ltl2ba(formula)
@@ -64,21 +64,37 @@ def compile_automata(spec) -> Dict[str, nx.DiGraph]:
             G.graph['initial_state'] = q0
             G.graph['accepting_states'] = accepting
 
+            # 4.5 Explicitly flag accepting nodes
+            for acc in accepting:
+                if acc in G.nodes:
+                    G.nodes[acc]['accepting'] = True
+
             # 5) attach as attributes for easy access
             G.initial_state = q0
             G.accepting_states = accepting
 
             # 6) implement the transition function
             def delta(state: Any, inputs: Set[str], G=G) -> Any:
-                """
-                From `state`, follow any outgoing edge whose label set is a subset of inputs.
-                If none match, remain in `state`.
-                """
                 for _, nxt, data in G.out_edges(state, data=True):
-                    lbl = data.get('label', set())
-                    lbl_set: Set[str] = set(lbl) if not isinstance(lbl, set) else lbl
+                    lbl = data.get("label", set())
+
+                    # PATCH HERE — fix label parsing
+                    if isinstance(lbl, str):
+                        label_str = lbl.strip()
+                        if "&&" in label_str:
+                            lbl_set = set(map(str.strip, label_str.split("&&")))
+                        elif label_str:
+                            lbl_set = {label_str}
+                        else:
+                            lbl_set = set()
+                    elif isinstance(lbl, (list, set, tuple)):
+                        lbl_set = set(lbl)
+                    else:
+                        lbl_set = set()
+
                     if lbl_set <= inputs:
                         return nxt
+
                 return state
 
             G.delta = delta

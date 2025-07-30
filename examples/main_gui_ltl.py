@@ -212,7 +212,7 @@ if __name__ == "__main__":
         victim_id = [0 for _ in range(n_targets)]
         victim_clicked = [0 for _ in range(n_targets)]
         victim_timing = [0.0 for _ in range(n_targets)]
-        survivor_images = list(np.random.choice(range(1, 21), size=n_targets, replace=False))
+        survivor_images = list(np.random.choice(range(1, 20), size=n_targets, replace=False))
         survivor_index = 0
         verify_response_pending = set()  # APs like p_verify_0_3_1_0 waiting for user
         victim_target_map = {}
@@ -227,6 +227,9 @@ if __name__ == "__main__":
         prev_time = time()
         init_time = time()
         wind_time = 0
+
+        # === Working area: temporary ===
+        prev_completed = labeler.get_completed()
 
         # The main loop for the GUI
         print('Main GUI initialized')
@@ -305,16 +308,16 @@ if __name__ == "__main__":
                 assignments = sim_outputs["assignments"]
                 completed = sim_outputs["completed"]
 
+                # === Working area: temporary ===
+                # if completed != prev_completed:
+                    # print(sorted(labeler.get_completed()))
+
                 # === Victim detection after p_scan_i ===
                 for ap in completed:
                     if ap.startswith("p_scan_") and ap not in victim_detected:
                         for agent in agents_by_type["drone"]:
                             if agent.has_completed(ap):
-                                if agent.label.startswith("D"): # Not necessary?
-                                    drone_idx = int(agent.label[1:])
-                                else:
-                                    continue
-
+                                drone_idx = int(agent.label[1:])
                                 victim_detected.add(ap)
 
                                 image_id = survivor_images[survivor_index]
@@ -327,12 +330,16 @@ if __name__ == "__main__":
                                 message['idx_image'] = str(image_id)
                                 pos_rounded = [round(coord, 2) for coord in agent.pos[:2]]
                                 message['vic_msg'] = f'Drone {drone_idx + 1} finished scan at {pos_rounded}, please respond!'
+                                # print(f"Drone {drone_idx + 1} finished scan at {pos_rounded} (image={str(image_id)}), please respond!")
                                 message_changed = True
 
                                 # Block corresponding p_verify AP until human responds
                                 verify_ap = f"p_verify_{target_id}_3_1_0"
                                 verify_response_pending.add(verify_ap)
                                 sim.verify_response_pending = verify_response_pending
+
+                                # Only one AP considered for each drone
+                                break
 
             # === GUI response handling ===
             if data and data['victim'] is not None:
@@ -360,14 +367,18 @@ if __name__ == "__main__":
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
 
                     # Atomic proposition update
-                    labeler.advance({verify_ap})
+                    chosen_gate = labeler.chosen_gate_per_group.get(target_id)
+                    if chosen_gate:
+                        labeler.advance({verify_ap, chosen_gate})
+                    else:
+                        labeler.advance({verify_ap})
 
                     # Survivor information
                     victim_id[idx] = image_id
                     victim_timing[idx] = running_time
                     
                     # Pop task
-                    # print(f'[t={int(running_time)}] Target {idx + 1} accomplished')
+                    # print(f'[t={int(running_time)}] Verification {verify_ap} accomplished')
                     tasks = [item for item in tasks if item[0] != idx + 1]
                     message['tasks'] = tasks
                     message_changed = True
@@ -389,7 +400,7 @@ if __name__ == "__main__":
                     if isinstance(task, str) and task.startswith("p_scan"):
                         # Initialize scan parameters
                         if getattr(agent, "last_scan_ap", None) != task:
-                            print(f"time = {int(running_time)}, task = {task}, drone = {agent.label}")
+                            # print(f"time = {int(running_time)}, task = {task}, drone = {agent.label}")
                             agent.scan_center = np.copy(pos)
                             agent.scan_time = 0.0
                             agent.scan_angle = 0.0

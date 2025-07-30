@@ -44,6 +44,10 @@ class Simulation:
         aps = self.labeler.extract_APs(state)
         self.labeler.advance(aps)
 
+        # Binding update
+        for ap in self.labeler.current_aps:
+            self.binding_manager.mark_completed(ap, labeler=self.labeler)
+
         unlocked = self.labeler.get_unlocked_APs()
         completed = self.labeler.get_completed()
         current_aps = self.labeler.current_aps

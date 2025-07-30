@@ -86,13 +86,13 @@ def parse_ltl2ba_output(ba_raw: str) -> nx.MultiDiGraph:
             for part in parts:
                 ap = part.strip('() ')
                 if re.fullmatch(r'p_[A-Za-z0-9_]+', ap):
-                    G.add_edge(current, tgt, label=ap)
+                    G.add_edge(current, tgt, label={ap})
             continue
 
         # 5) Keep plain single-AP guards "(A)"
         ap = guard.strip('() ')
         if re.fullmatch(r'p_[A-Za-z0-9_]+', ap):
-            G.add_edge(current, tgt, label=ap)
+            G.add_edge(current, tgt, label={ap})
 
     return G
 
