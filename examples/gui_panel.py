@@ -79,6 +79,49 @@ class BackgroundNoScale:
         self.min_bound = np.array([bound_x_min, bound_y_min])
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
+class SpecialRegions:
+    def __init__(self, screen):
+        self.screen = screen
+        self.regions = [] # Each region is a tuple (center, radius, color)
+        self.num2color_dict = {
+            1: ORANGE,  # Orange
+            2: RED   # Red
+        }
+        self.color2num_dict = {v: k for k, v in self.num2color_dict.items()}
+
+    def draw(self):
+        for i in range(len(self.regions)):
+            center, radius, color = self.regions[i]
+            surface = pygame.Surface((2*radius, 2*radius), pygame.SRCALPHA)
+            pygame.draw.circle(surface, color + (100,), (radius, radius), radius)
+            self.screen.blit(surface, (center[0] - radius, center[1] - radius))
+
+        
+    def add_region(self, center, radius, priority):
+        # Ensure the new region does not overlap with existing ones
+        color = self.num2color_dict[priority]
+        for existing_center, existing_radius, _ in self.regions:
+            if np.linalg.norm(np.array(center) - np.array(existing_center)) < (radius + existing_radius):
+                print("Region overlaps with an existing region. Not added.")
+                return
+
+        # If no overlap, add the new region
+        self.regions.append((np.array(center), radius, color))
+
+    def remove_region(self, idx):
+        if 0 <= idx < len(self.regions):
+            self.regions.pop(idx)
+        else:
+            print("Index out of range. No region removed.")
+
+    def check_tasks_priority(self, tasks):
+        priority = [0 for _ in range(len(tasks))]  # Default priority is 0 (no special region)
+        # Check if any task is within any special region
+        for task in tasks:
+            for center, radius, color in self.regions:
+                if np.linalg.norm(task[1] - center) < radius:
+                    priority[task[0] - 1] = self.color2num_dict[color]
+        return priority
 
 class EnvironmentInfo:
     def __init__(self, screen):
@@ -164,6 +207,9 @@ class GameMgr:
         self.gv_images = [Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.09, rt=0.0) for _ in range(self.n_gvs)]
         # Hospital. It's not a vehicle, but not much difference
         self.hospital = Vehicle(file_name=IMAGE_PATH + 'hospital.png', surface=self.screen, sc=0.09, rt=0.0)
+
+        # Special regions
+        self.special_regions = SpecialRegions(self.screen)
         ############# Main map ends ####################
 
         ############# Legends ##########################
@@ -248,6 +294,7 @@ class GameMgr:
             text = font.render(f'{idx+1}', True, (255,255,255))
             self.screen.blit(text, (centroid[0]-6, centroid[1]-6))
 
+
         # Legends
         self.screen.blit(self.legends.surface, self.legends.rect)
 
@@ -299,6 +346,11 @@ class GameMgr:
             pygame.draw.circle(wind_circle, (35, 250, 152, 100), (value[2], value[2]), value[2])
             self.screen.blit(wind_circle, (value[0] - value[2], value[1] - value[2]))
         ####################### Wind ends ########################
+
+        ####################### Special regions ##################
+        # Draw special regions
+        self.special_regions.draw()
+        ####################### Special regions end #############
 
         ####################### Environment ######################
         self.environment_info.draw(wind_gui)
