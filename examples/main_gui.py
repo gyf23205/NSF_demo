@@ -285,6 +285,7 @@ if __name__=='__main__':
         centers = [None for _ in range(n_drones)]
         just_taken_off = [True for _ in range(n_drones)]
         recv_buffer = ''
+        special_region_time = time()  # !!!Reset special region time
         while fly:
             sleep(0.01)  # To avoid high CPU usage
             # print('flying')
@@ -318,7 +319,7 @@ if __name__=='__main__':
                             line, recv_buffer = recv_buffer.split('\n', 1)
                             if line.strip():
                                 data = json.loads(line)
-                                print("Received data:", repr(data))
+                                # print("Received data:", repr(data))
                 except BlockingIOError:
                     pass
             ############################# Socket receive ends ###########################
@@ -499,6 +500,23 @@ if __name__=='__main__':
             drone_gui_positions = game_mgr.position_meter_to_gui(pos)
             game_mgr.update_awareness(drone_gui_positions, radius=40)
             ########################### Awareness map ends #################################
+
+            ########################### Special regions #####################################
+            # Generate a random special regions every 5 seconds
+            if time() - special_region_time > 5:
+                print(f'[t={int(dt)}] Generating a new special region.')
+                special_region_time = time()
+                top = np.random.uniform(-1, 1)
+                left = np.random.uniform(-1.5, 1.5)
+                center = np.array([left, top])
+                radius = np.random.uniform(0.2, 0.5)
+                priority = np.random.randint(1, 3)
+                region = game_mgr.meter_to_gui(np.concatenate((center, [radius])))
+                game_mgr.special_regions.add_region(region[0:2], region[2], priority)
+                priority_prospective = game_mgr.special_regions.check_tasks_priority(tasks)
+                print(f'current priority prospective: {priority_prospective}')
+
+            ########################### Special regions ends ################################
 
             ####################### Wind condition #####################################
             # For every 5 seconds, sample n_wind number of wind positions
