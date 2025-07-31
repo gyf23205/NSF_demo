@@ -1,3 +1,5 @@
+# import sys
+# sys.path.append('C:/Users/sooyung/Research/NSF_demo')
 import pygame
 from PIL import Image
 import os
@@ -127,8 +129,8 @@ class UserGUI:
         self.image_width = 400
         self.image_height = 280
         self.image_rect = pygame.Rect(
-            130,
-            200,
+            80,
+            100,
             self.image_width,
             self.image_height
         )
@@ -212,7 +214,7 @@ class UserGUI:
             victim_buffer.append(data['idx_image'])
             data['idx_image'] = None
         if victim_buffer:
-            image_path = f"examples/images/victim{victim_buffer[0]}.jpeg"
+            image_path = f"examples/images/victim{victim_buffer[0]}.jpg"
             pil_image = Image.open(image_path)
             pil_image = pil_image.resize((self.image_width, self.image_height))
             image = pygame.image.fromstring(pil_image.tobytes(), pil_image.size, pil_image.mode)

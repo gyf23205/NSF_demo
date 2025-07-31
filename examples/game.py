@@ -297,7 +297,7 @@ class GameMgr:
 
     def correct_victim(self):
         for ind in range(2):
-            if 0 < self.victim_id[ind] < 15:
+            if 0 < self.victim_id[ind] < 433:
                 if self.victim_clicked[ind] == 1:
                     self.missions[ind].accepted += 1
                     self.missions[ind].correctness.append(1)

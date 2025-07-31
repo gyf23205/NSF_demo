@@ -213,7 +213,7 @@ if __name__ == "__main__":
         victim_id = [0 for _ in range(n_targets)]
         victim_clicked = [0 for _ in range(n_targets)]
         victim_timing = [0.0 for _ in range(n_targets)]
-        survivor_images = list(np.random.choice(range(1, 20), size=n_targets, replace=False))
+        survivor_images = list(np.random.choice(range(1, 596), size=n_targets, replace=False))
         survivor_index = 0
         verify_response_pending = set()  # APs like p_verify_0_3_1_0 waiting for user
         victim_target_map = {}
