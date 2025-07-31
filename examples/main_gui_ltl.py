@@ -67,11 +67,9 @@ def update_wind(game_mgr, wind_time, old_avg_speed, n_wind, message, threshold=1
 
     if abs(avg_speed - old_avg_speed) > threshold:
         message["wind_speed"] = avg_speed
-        message_changed = True
-    else:
-        message_changed = False
+        buffers['wind_speed'].append(avg_speed)
 
-    return new_time, avg_speed, message_changed
+    return new_time, avg_speed
 
 
 def compute_spiral_position(agent, dt, r_max=1.5, r_rate=0.03, angular_speed=1.0):
@@ -151,7 +149,7 @@ if __name__ == "__main__":
         spec.get_task_specification(case, s=s_mask, binding_manager=binding_manager)
 
         # === Workspace Setup ===
-        ws = Workspace(size=grid_size, target_mask=s_mask, num_drones=n_drones, num_gvs=n_gvs, num_humans=n_humans, margin=4)
+        ws = Workspace(size=grid_size, target_mask=s_mask, num_drones=n_drones, num_gvs=n_gvs, num_humans=n_humans, seed=120, margin=4)
         centroids = ws.target_locations
         vor = Voronoi(np.array(centroids))
 
@@ -238,13 +236,23 @@ if __name__ == "__main__":
 
         # The main loop for the GUI
         print('Main GUI initialized')
+
+        # Message buffers  message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
+        buffers = {
+            'idx_image':[],
+            'tasks':[],
+            'wind_speed':[],
+            'progress':[],
+            'workload':[],
+            'vic_msg':[]
+            }
         while running:
             # === Avoid high CPU usage ===
             sleep(0.01)
 
             # === Message update ===
             data = None # Data received from the clients
-            message = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
+            # message = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
 
             # === Socket receive ===
             for conn, addr in clients:
@@ -270,9 +278,10 @@ if __name__ == "__main__":
                             ta[2] = task['priority']
                             print(f'reset task {task["task_id"]} priority to {task["priority"]}')
                             break
-                    
-                message['tasks'] = tasks
-                message_changed = True
+                
+                buffers['tasks'].append(tasks)
+                # message['tasks'] = tasks
+                # message_changed = True
 
             # === Compute timestep ===
             current_time = time()
@@ -327,17 +336,19 @@ if __name__ == "__main__":
 
                                 image_id = survivor_images[survivor_index]
                                 survivor_index += 1
-                                print(f"survivor_index: {survivor_index}, AP: {ap}, Image: {image_id}")
+                                print(f"time: {running_time}, survivor_index: {survivor_index}, AP: {ap}, Image: {image_id}")
 
                                 # Store image_id -> target_id map
                                 target_id = ap.split("_")[2]
                                 victim_target_map[image_id] = target_id
 
-                                message['idx_image'] = str(image_id)
+                                # message['idx_image'] = str(image_id)
+                                buffers['idx_image'].append(str(image_id))
                                 pos_rounded = [round(coord, 2) for coord in agent.pos[:2]]
-                                message['vic_msg'] = f'Drone {drone_idx + 1} finished scan at {pos_rounded}, please respond!'
+                                # message['vic_msg'] = f'Drone {drone_idx + 1} finished scan at {pos_rounded}, please respond!'
+                                buffers['vic_msg'].append(f'Drone {drone_idx + 1} finished scan at {pos_rounded}, please respond!')
                                 # print(f"Drone {drone_idx + 1} finished scan at {pos_rounded} (image={str(image_id)}), please respond!")
-                                message_changed = True
+                                # message_changed = True
 
                                 # Block corresponding p_verify AP until human responds
                                 verify_ap = f"p_verify_{target_id}_3_1_0"
@@ -361,15 +372,15 @@ if __name__ == "__main__":
                     # print("[DEBUG] victim_target_map values:", list(victim_target_map.values()))
 
                     if data['victim'] == 'accept':
-                        victim_clicked[idx] = 1
+                        # victim_clicked[idx] = 1
                         labeler.chosen_gate_per_group[target_id] = f"p_foundgate_{target_id}"
 
                     elif data['victim'] == 'reject':
-                        victim_clicked[idx] = 2
+                        # victim_clicked[idx] = 2
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
 
                     elif data['victim'] == 'handover':
-                        victim_clicked[idx] = 3
+                        # victim_clicked[idx] = 3
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
 
                     # Atomic proposition update
@@ -386,8 +397,9 @@ if __name__ == "__main__":
                     # Pop task
                     # print(f'[t={int(running_time)}] Verification {verify_ap} accomplished')
                     tasks = [item for item in tasks if item[0] != idx + 1]
-                    message['tasks'] = tasks
-                    message_changed = True
+                    buffers['tasks'].append(tasks)
+                    # message['tasks'] = tasks
+                    # message_changed = True
                     # Update GUI
                     game_mgr.task = [item for item in game_mgr.task if item[0] != idx + 1]
 
@@ -431,12 +443,32 @@ if __name__ == "__main__":
 
             # === Busy airspace ===
             if time() - wind_time > 3:
-                wind_time, old_wind_average_speed, message_changed = update_wind(
+                wind_time, old_wind_average_speed = update_wind(
                     game_mgr, wind_time, old_wind_average_speed, n_wind, message)
                 
             # === Soket send ===
             # Decide which client to send the message!!!
-            if message_changed:
+            if any(len(v) > 0 for v in buffers.values()):
+                message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
+                if buffers['idx_image']:
+                    message['idx_image'] = buffers['idx_image'].pop(0)
+
+                if buffers['tasks']:
+                    message['tasks'] = buffers['tasks'].pop(0)
+
+                if buffers['wind_speed']:
+                    message['wind_speed'] = buffers['wind_speed'].pop(0)
+                
+                if buffers['progress']:
+                    message['progress'] = buffers['progress'].pop(0)
+                
+                if buffers['workload']:
+                    message['workload'] = buffers['workload'].pop(0)
+                
+                if buffers['vic_msg']:
+                    message['vic_msg'] = buffers['vic_msg'].pop(0)
+                
+                print(f"{survivor_index}. message sent!!!!!!!!!!!!!!!!!!!")
                 if message['tasks'] or message['wind_speed']:
                     # Send the message to all clients
                     for conn, addr in clients:
@@ -446,7 +478,6 @@ if __name__ == "__main__":
                     selected_client = np.random.choice(range(len(clients)))
                     conn, addr = clients[selected_client]
                     conn.sendall((json.dumps(message) + '\n').encode())
-                    message_changed = False
 
             # === Draw GUI: simple ===
             # draw_workspace(screen, ws, screensize=screen_size)

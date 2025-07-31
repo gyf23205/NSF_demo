@@ -126,8 +126,8 @@ class UserGUI:
         
 
         # Victim block
-        self.image_width = 400
-        self.image_height = 280
+        self.image_width = 450
+        self.image_height = 300
         self.image_rect = pygame.Rect(
             80,
             100,
@@ -298,7 +298,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server (localhost)
+    host = '10.184.50.117'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -324,12 +324,14 @@ if __name__ == '__main__':
             try:
                 data_received = s.recv(4096).decode()
                 if data_received:
+                    print("data received!!!!!!!!")
                     recv_buffer += data_received
+                    print(recv_buffer)
                     while '\n' in recv_buffer:
                         line, recv_buffer = recv_buffer.split('\n', 1)
                         if line.strip():
                             data = json.loads(line)
-                            print('Received data from server:', repr(data))
+                            # print('Received data from server:', repr(data))
             except BlockingIOError:
                 pass
 
