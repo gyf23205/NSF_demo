@@ -44,6 +44,7 @@ class Specification:
 
         self.dag = build_dag(self)
         self.automata = compile_automata(self)
+        self.formula = self.hierarchy
 
     def get_sar_specification_with_mask(self, case, s, binding_manager=None):
         # Use the passed-in binding manager, or fallback to internal one
