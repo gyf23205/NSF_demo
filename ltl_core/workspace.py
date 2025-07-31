@@ -224,7 +224,7 @@ class Workspace:
 
     def step_dynamics(self, dt=1.0):
         for agent in self.get_all_agents():
-            agent.move_toward_goal(dt)
+            agent.move_along_path()
             agent.step_symbolic(dt)
         self.update_true_aps()
 

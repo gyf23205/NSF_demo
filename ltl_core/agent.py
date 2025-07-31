@@ -19,6 +19,19 @@ class Agent:
         self.scan_angle = 0.0                   # Scan angle in degrees
         self.scan_time = 0.0                    # Time spent in scan area
 
+        self.path = [self.pos]                  # Path
+        self.path_idx = 0                       # Path index
+
+    def move_along_path(self):
+        if self.path_idx >= len(self.path):
+            self.goal = None
+            self.path = [self.pos]
+            self.path_idx = 0
+            return
+        # print(f"Agent: {self.label}, Path length: {len(self.path)}, Path idx: {self.path_idx}")
+        self.pos = self.path[self.path_idx]
+        self.path_idx += 1
+    
     def move_toward_goal(self, dt=1.0):
         """Move the agent toward its current goal, if any."""
         if self.goal is None:

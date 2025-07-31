@@ -2,6 +2,7 @@ import numpy as np
 from ltl_core.dag_builder import build_dag
 from ltl_core.automaton_generator import compile_automata
 from ltl_core.specification import get_ap_prefix, AP_TYPE_PREFIX_MAP
+from rrt_2D import rrt_connect
 
 class Simulation:
     def __init__(self, spec, workspace, allocator, labeler):
@@ -74,15 +75,18 @@ class Simulation:
             prefix = get_ap_prefix(ap)
             ap_type = AP_TYPE_PREFIX_MAP.get(prefix)
 
-            # Reset goal
-            agent.goal = None
-
             if ap_type == "physical":
-                idx = self.parse_ap_target_index(ap)
-                if prefix == "p_dropoff":
-                    agent.goal = np.array(self.workspace.dropoff_locations[idx], dtype=float)
-                else:
-                    agent.goal = np.array(self.workspace.target_locations[idx], dtype=float)
+                if agent.goal is None:
+                    idx = self.parse_ap_target_index(ap)
+                    if prefix == "p_dropoff":
+                        agent.goal = np.array(self.workspace.dropoff_locations[idx], dtype=float)
+                    else:
+                        agent.goal = np.array(self.workspace.target_locations[idx], dtype=float)
+                    rrt_conn = rrt_connect.RrtConnect(agent.pos, agent.goal, 0.08, 0.05, 5000)
+                    rrt_conn.planning()
+                    rrt_conn.smoothing()
+                    path = np.flip(rrt_conn.path, axis = 0)
+                    agent.path = path.copy()
             
             elif ap_type == "symbolic":
                 # Block symbolic APs if they're pending verification

@@ -14,12 +14,13 @@ class RandomAllocator:
         assigned = set()
 
         # Track GV agents currently bound to active dropoff groups
-        busy_gvs = set()
-        for group, bindings in self.binding_manager.bindings.items():
-            if group.startswith("p_dropoff_"):  # could also check p_pickup_ or entire group DFA
-                gv_id = bindings.get("gv")
-                if gv_id:
-                    busy_gvs.add(gv_id)
+        # busy_gvs = set()
+        # for group, tasks in self.binding_manager.group_to_tasks.items():
+        #     if any(t.startswith("p_dropoff_") for t in tasks):
+        #         gv_agent = self.binding_manager.get_bound_agent_for_group(group, agent_type="gv")
+        #         if gv_agent:
+        #             print(gv_agent.label)
+        #             busy_gvs.add(gv_agent.label)
 
         for group in self.binding_manager.group_to_tasks:
             tasks = self.labeler.get_group_ordered_tasks(group)
@@ -39,8 +40,8 @@ class RandomAllocator:
                         continue
 
                     # BLOCK: GV should not take new pickup if already assigned dropoff
-                    if agent_type == "gv" and agent.label in busy_gvs and task.startswith("p_pickup_"):
-                        continue
+                    # if agent_type == "gv" and agent.label in busy_gvs and task.startswith("p_pickup_"):
+                        # continue
 
                     success = self.binding_manager.record_assignment(task, agent, agent_type)
                     if not success:
@@ -49,6 +50,6 @@ class RandomAllocator:
                     actions[agent] = task
                     assigned.add(agent)
                     break  # one agent per group/type
-            # one task per group
+            # break  # one task per group
         return actions
 

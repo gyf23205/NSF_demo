@@ -173,6 +173,27 @@ class Labeler:
         #             self._completed.add(name)
         #             updated.add(name)
 
+        # Step 0 — DFA transition for groups and high-level nodes (non-atomic)
+        # for name, dfa in self.automata.items():
+        #     if name in self.dag.nodes and not self._is_atomic_node(name):
+        #         if name not in self.states:
+        #             self.states[name] = dfa.initial_state
+
+        #         state = self.states[name]
+        #         next_state = dfa.delta(state, true_APs)
+        #         self.states[name] = next_state
+
+        #         if self._is_accepting(dfa, next_state):
+        #             if name not in self._completed:
+        #                 print(f"[DFA:Group] {name} reached accepting state {next_state} — marking complete")
+        #                 self._completed.add(name)
+        #                 updated.add(name)
+
+        #                 # Mark group complete in binding manager
+        #                 if self.binding_manager:
+        #                     self.binding_manager.mark_completed(name, labeler=self)
+
+
         # Step 1 — advance DFA transitions for atomic nodes (redundant now but kept for clarity)
         for node in self.dag.nodes:
             if node in self.automata and self._is_atomic_node(node):

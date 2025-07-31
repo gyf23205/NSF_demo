@@ -158,6 +158,7 @@ class Specification:
                             group_roles.add(role)
 
                 if group_tasks:
+                    # print(f"Parent: {parent}, Group tasks: {group_tasks}, Group roles: {group_roles}")
                     bm.register_group(group_key=parent, tasks=group_tasks, group_type=group_roles)
 
     def get_sar_specification(self, case):
