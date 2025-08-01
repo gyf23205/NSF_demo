@@ -17,7 +17,6 @@ from ltl_core.labeler import Labeler
 from ltl_core.allocator import RandomAllocator
 from ltl_core.simulation import Simulation
 from ltl_core.visualization import draw_workspace
-from rrt_2D import rrt_connect
 
 
 grid_size = (50, 40)
@@ -72,7 +71,7 @@ def update_wind(game_mgr, wind_time, old_avg_speed, n_wind, message, threshold=1
     return new_time, avg_speed
 
 
-def compute_spiral_position(agent, dt, r_max=1.5, r_rate=0.03, angular_speed=1.0):
+def compute_spiral_position(agent, dt, r_max=1.0, r_rate=0.02, angular_speed=0.6):
     """
     Update and return the agent's spiral (x, y) position for circling motion.
 
@@ -229,10 +228,6 @@ if __name__ == "__main__":
 
         # === Working area: temporary ===
         # prev_completed = labeler.get_completed()
-        rrt_conn = rrt_connect.RrtConnect((-2.0, -1.0), (1.8, 0.9), 0.08, 0.05, 500)
-        rrt_conn.planning()
-        rrt_conn.smoothing()
-        # rrt_conn.plotting.animation_connect(rrt_conn.V1, rrt_conn.V2, rrt_conn.path, "Test")
 
         # The main loop for the GUI
         print('Main GUI initialized')
@@ -468,7 +463,7 @@ if __name__ == "__main__":
                 if buffers['vic_msg']:
                     message['vic_msg'] = buffers['vic_msg'].pop(0)
                 
-                print(f"{survivor_index}. message sent!!!!!!!!!!!!!!!!!!!")
+                # print(f"{survivor_index}. message sent!!!!!!!!!!!!!!!!!!!")
                 if message['tasks'] or message['wind_speed']:
                     # Send the message to all clients
                     for conn, addr in clients:

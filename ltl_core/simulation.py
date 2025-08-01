@@ -2,7 +2,7 @@ import numpy as np
 from ltl_core.dag_builder import build_dag
 from ltl_core.automaton_generator import compile_automata
 from ltl_core.specification import get_ap_prefix, AP_TYPE_PREFIX_MAP
-from rrt_2D import rrt_connect
+from ltl_core.rrt_connect_ltl import RrtConnect
 
 class Simulation:
     def __init__(self, spec, workspace, allocator, labeler):
@@ -76,17 +76,17 @@ class Simulation:
             ap_type = AP_TYPE_PREFIX_MAP.get(prefix)
 
             if ap_type == "physical":
-                if agent.goal is None:
+                if agent.goal is None or agent.return_base:
+                    agent.return_base = False
                     idx = self.parse_ap_target_index(ap)
                     if prefix == "p_dropoff":
                         agent.goal = np.array(self.workspace.dropoff_locations[idx], dtype=float)
                     else:
                         agent.goal = np.array(self.workspace.target_locations[idx], dtype=float)
-                    rrt_conn = rrt_connect.RrtConnect(agent.pos, agent.goal, 0.08, 0.05, 5000)
+                    rrt_conn = RrtConnect(agent, 0.08, 0.05, 5000)
                     rrt_conn.planning()
                     rrt_conn.smoothing()
-                    path = np.flip(rrt_conn.path, axis = 0)
-                    agent.path = path.copy()
+                    agent.path = rrt_conn.path.copy()
             
             elif ap_type == "symbolic":
                 # Block symbolic APs if they're pending verification
@@ -103,7 +103,8 @@ class Simulation:
                 continue
 
             is_idle = (
-                (agent.goal is None or agent.has_arrived())
+                actions.get(agent) is None
+                and agent.goal is None
                 and tuple(agent.pos.astype(int)) not in self.workspace.base_area
             )
 
@@ -120,6 +121,11 @@ class Simulation:
 
                 if available_bases:
                     agent.goal = np.array(available_bases[0], dtype=float)
+                    agent.return_base = True
+                    rrt_conn = RrtConnect(agent, 0.08, 0.05, 5000)
+                    rrt_conn.planning()
+                    rrt_conn.smoothing()
+                    agent.path = rrt_conn.path.copy()
 
         # Optional logging
         self.episode_trace.append({

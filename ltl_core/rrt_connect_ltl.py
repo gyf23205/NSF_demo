@@ -27,10 +27,11 @@ class Node:
 
 
 class RrtConnect:
-    def __init__(self, s_start, s_goal, step_len, goal_sample_rate, iter_max):
+    def __init__(self, agent, step_len, goal_sample_rate, iter_max):
         self.path = None    # Added by SY
-        self.s_start = Node(s_start)
-        self.s_goal = Node(s_goal)
+        self.s_start = Node(agent.pos)
+        self.s_goal = Node(agent.goal)
+        agent.path_idx = 0
         self.step_len = step_len
         self.goal_sample_rate = goal_sample_rate
         self.iter_max = iter_max
@@ -38,7 +39,7 @@ class RrtConnect:
         self.V2 = [self.s_goal]
 
         self.env = env.Env()
-        self.plotting = plotting.Plotting(s_start, s_goal)
+        self.plotting = plotting.Plotting(self.s_start, self.s_goal)
         self.utils = utils.Utils()
 
         self.x_range = self.env.x_range
@@ -143,6 +144,8 @@ class RrtConnect:
         # Ensure the trajectory starts and ends at the exact positions
         sampled_points[0] = path[0]
         sampled_points[-1] = path[-1]
+
+        sampled_points = np.flip(sampled_points, axis = 0)
 
         # Return (np.array not list)
         self.path = sampled_points

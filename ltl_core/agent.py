@@ -9,6 +9,7 @@ class Agent:
         self.traj = [tuple(self.pos)]           # Continuous position trace
 
         self.goal = None                        # Target position (x,y) or None
+        self.return_base = None                 # Return base flag
         self.speed = speed                      # Units per timestep
 
         self.current_symbolic_task = None       # Currently executing symbolic task (str)
