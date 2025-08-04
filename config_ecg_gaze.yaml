@@ -7,12 +7,13 @@ path: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/poly
 path_lstm: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/LSTM_ecg_gaze/last.pt"
 path_lstm_raw: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/LSTM_raw_ecg_gaze/last.pt"
 path_tf_raw: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/TF_raw_ecg_gaze/last.pt"
+path_tf_raw_gauge: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/TF_raw_gauge_ecg_gaze/last.pt"
 
 ###############################################################################
 # Optimization
 ###############################################################################
 optim:
-  lr: 1e-4 #4
+  lr: 1e-5 #4
   # warmup_steps: 400
   # num_epochs: 100
   warmup_steps: 40
@@ -25,13 +26,13 @@ optim:
 ###############################################################################
 dataloader:
   train:
-    batch_size: 64
+    batch_size: 16
     num_workers: 8
     persistent_workers: true
     shuffle: true
 
   val:
-    batch_size: 64
+    batch_size: 16
     num_workers: 8
     persistent_workers: true
     shuffle: False
@@ -53,12 +54,12 @@ modelcheckpoint:
 ###############################################################################
 trainer:
   precision: bf16-mixed
-  max_epochs: 300 # Max number of training epochs
+  max_epochs: 250 # Max number of training epochs
   accelerator: "gpu"
   devices: 1
   accumulate_grad_batches: 1
   num_sanity_val_steps: 2
-  log_every_n_steps: 80 # Log metrics every 80 steps
+  log_every_n_steps: 10 #80 # Log metrics every 80 steps
   strategy: "auto"
   check_val_every_n_epoch: 5 # Validate every 5 epochs
 
@@ -74,7 +75,7 @@ eval:
 ###############################################################################
 # Model Metadata
 ###############################################################################
-model_type: TF_raw # polytune, LSTM, LSTM_raw, TF_raw
+model_type: TF_raw_gauge # polytune, LSTM, LSTM_raw, TF_raw
 dataset_type: ecg_gaze
 
 ###############################################################################
@@ -112,6 +113,19 @@ config_tf:
   max_len: 1            # Sequence length; default is 1 for raw input
 
 ###############################################################################
+# Model Architecture Config - TF_raw_gauge
+###############################################################################
+config_tf_gauge:
+  num_classes: 1        # Output classes ([0, 1] for gauge prediction)
+  # input_dim: 430 #140   # Raw input size: ECG (130) + Gaze (300)
+  dim_model: 32        # Embedding dimension (transformer input/output)
+  num_heads: 4          # Number of attention heads in multi-head attention
+  num_layers: 4         # Number of Transformer encoder layers
+  dim_feedforward: 64  # Dimension of feedforward network inside transformer
+  dropout: 0.1          # Dropout rate used in transformer & classifier
+  max_len: 1            # Sequence length; default is 1 for raw input
+
+###############################################################################
 # Dataset Paths & setting
 ###############################################################################
 data_noise: True # adding noise on data?
@@ -140,35 +154,3 @@ model:
 model_lstm:
   _target_: tasks.LSTM.LSTMClassifier
   config: ${config}
-
-
-## OLD
-
-###############################################################################
-# General Setup
-###############################################################################
-# num_epochs: 800
-# devices: 1
-# mode: "train"
-# seed: 365
-# path: ""
-# path_old: ""
-
-###############################################################################
-# Dataset Paths
-###############################################################################
-# train:
-#   root_dir: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/dataset/ecg_gaze/Data"
-#   split_json_path: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/dataset/ecg_gaze/split.json"
-#   split: "train"
-
-# val:
-#   root_dir: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/dataset/ecg_gaze/Data"
-#   split_json_path: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/dataset/ecg_gaze/split.json"
-#   split: "test"
-
-# test:
-#   root_dir: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/dataset/ecg_gaze/Data"
-#   split_json_path: "/home/joonwon/github/NSF_demo_2025/Workload_estimation/Polytune_copy/dataset/ecg_gaze/split.json"
-#   split: "test"
-
