@@ -105,7 +105,7 @@ class Simulation:
             is_idle = (
                 actions.get(agent) is None
                 and agent.goal is None
-                and tuple(agent.pos.astype(int)) not in self.workspace.base_area
+                and tuple(map(int, agent.pos)) not in self.workspace.base_area
             )
 
             if is_idle:

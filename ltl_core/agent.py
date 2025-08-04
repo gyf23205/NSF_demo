@@ -30,7 +30,7 @@ class Agent:
             self.path_idx = 0
             return
         # print(f"Agent: {self.label}, Path length: {len(self.path)}, Path idx: {self.path_idx}")
-        self.pos = self.path[self.path_idx]
+        self.pos = np.array(self.path[self.path_idx], dtype=float)
         self.path_idx += 1
     
     def move_toward_goal(self, dt=1.0):
