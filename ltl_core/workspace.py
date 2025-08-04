@@ -4,6 +4,7 @@ import matplotlib.patches as patches
 import random
 from .agent import Agent
 from .specification import get_ap_prefix, AP_TYPE_PREFIX_MAP
+from .env_ltl import Env
 
 
 class Workspace:
@@ -19,6 +20,8 @@ class Workspace:
         self.base_area = [(x, y) for x in range(3, 6) for y in range(2, 5)]
         self.hospital_area = [(x, y) for x in range(size[0] - 4, size[0] - 1)
                               for y in range(2, 5)]
+        
+        self.env = Env()    # RRT related environment
 
         self._place_targets()
         self.agent_positions = set()
@@ -79,9 +82,37 @@ class Workspace:
     def _valid_positions(self, margin=0, exclude=None):
         rows, cols = self.size
         exclude = set(exclude or [])
-        return [(x, y) for x in range(margin, rows - margin)
-                for y in range(margin, cols - margin)
-                if (x, y) not in exclude]
+
+        # all candidate positions
+        candidates = [
+            (x, y)
+            for x in range(margin, rows - margin)
+            for y in range(margin, cols - margin)
+            if (x, y) not in exclude
+        ]
+
+        valid = []
+        for x, y in candidates:
+            # 1) Reject if inside any rectangular or boundary obstacle
+            skip = False
+            for ox, oy, w, h in self.env.obs_rectangle + self.env.obs_boundary:
+                if ox <= x <= ox + w and oy <= y <= oy + h:
+                    skip = True
+                    break
+            if skip:
+                continue
+
+            # 2) Reject if inside any circular obstacle
+            for cx, cy, r in self.env.obs_circle:
+                if (x - cx) ** 2 + (y - cy) ** 2 <= r**2:
+                    skip = True
+                    break
+            if skip:
+                continue
+
+            valid.append((x, y))
+
+        return valid
 
     def _assign_dropoff_locations(self):
         """Assign each target a hospital cell for dropoff (reuse hospital cells if needed)."""

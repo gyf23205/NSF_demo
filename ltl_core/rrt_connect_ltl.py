@@ -33,6 +33,7 @@ from .utils_rrt_ltl import Utils, Node
 class RrtConnect:
     def __init__(self, agent, step_len, goal_sample_rate, iter_max):
         self.path = None    # Added by SY
+        self.agent = agent
         self.s_start = Node(agent.pos)
         self.s_goal = Node(agent.goal)
         agent.path_idx = 0
@@ -57,6 +58,12 @@ class RrtConnect:
         self.dist = 0.5     # 0.05
 
     def planning(self):
+        # Drone vs GVs
+        if self.agent.label.startswith("D"):
+            self.utils.update_obs(self.obs_circle, self.obs_boundary, [])
+        elif self.agent.label.startswith("G"):
+            self.utils.update_obs([], self.obs_boundary, self.obs_rectangle)
+
         for i in range(self.iter_max):
             node_rand = self.generate_random_node(self.s_goal, self.goal_sample_rate)
             node_near = self.nearest_neighbor(self.V1, node_rand)
