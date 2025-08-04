@@ -5,6 +5,7 @@ from constants import *
 from util_classes import Font, Button, Bar
 from pygame.font import SysFont
 from shapely.geometry import LineString, box
+from ltl_core import env_ltl as env
 
 
 class DroneHealth:
@@ -203,6 +204,10 @@ class GameMgr:
         self.workspace = ws
         ################ Workspace ends ###############
 
+        ################## Path planning ##################
+        self.paths = []
+        ################ Path planning end ################
+
     def set_voronoi(self):
         print(IMAGE_PATH + 'voronoi_regions.png')
         self.vor = Background(file_name=IMAGE_PATH + 'voronoi_regions_cropped.png',
@@ -220,6 +225,23 @@ class GameMgr:
         self.screen.fill(WHITE)
         self.screen.blit(self.background.surface, self.background.rect)
         # self.screen.blit(self.vor.surface, self.vor.rect)
+
+        # ---- draw all rectangular obstacles ----
+        for (x, y, w, h) in env.Env().obs_boundary + env.Env().obs_rectangle:
+            # top‐left
+            px1, py1 = self.workspace.meter_to_pixel((x,      y+h), screen_size=(900,720))
+            # bottom‐right
+            px2, py2 = self.workspace.meter_to_pixel((x + w,  y    ), screen_size=(900,720))
+            rect = pygame.Rect(px1, py1, px2 - px1, py2 - py1)
+            pygame.draw.rect(self.screen, (178, 34, 34), rect)  # dark grey fill
+
+        # ---- draw all circular obstacles ----
+        for (cx, cy, r) in env.Env().obs_circle:
+            cx_px, cy_px = self.workspace.meter_to_pixel((cx, cy), screen_size=(900,720))
+            # find one point r meters to the right, to measure pixel‐radius
+            xedge_px, _ = self.workspace.meter_to_pixel((cx + r, cy), screen_size=(900,720))
+            radius_px = abs(xedge_px - cx_px)
+            pygame.draw.circle(self.screen, (178, 34, 34), (int(cx_px), int(cy_px)), int(radius_px))
 
         # Draw Voronoi boundaries
         for ridge in vor.ridge_vertices:
@@ -296,6 +318,14 @@ class GameMgr:
         hx_px, hy_px = self.workspace.meter_to_pixel((hx + 0.5, hy + 0.5), screen_size=(900, 720))
         self.hospital.draw((hx_px, hy_px))
         ##################### Legends ends ####################
+
+        ##################### Path planning ####################
+        # Draw planned trajectories
+        if hasattr(self, 'paths'):
+            for color, pts in self.paths:
+                # aa‐lines gives smoother curves if desired
+                pygame.draw.lines(self.screen, color, False, pts, 2)
+        ################### Path planning end ##################
 
         ##################### Agents ##########################
         # Drones

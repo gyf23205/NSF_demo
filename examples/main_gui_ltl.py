@@ -477,10 +477,24 @@ if __name__ == "__main__":
             # === Draw GUI: simple ===
             # draw_workspace(screen, ws, screensize=screen_size)
 
+            # === Planned path ===
+            game_mgr.paths = []
+            for agent, visual in agent_to_visual.items():
+                if len(agent.path) > 1:
+                    # convert each (x, y) in grid coords to pixel coords
+                    gui_pts = [
+                        ws.grid_to_pixel(tuple(p), grid_size=grid_size, screen_size=(900, 720))
+                        for p in agent.path
+                    ]
+                    # choose a color per type
+                    col = (240, 128, 128) if agent.role == 'drones' else (255, 255, 150)
+                    game_mgr.paths.append((col, gui_pts))
+
             # === Draw GUI: Render the game manager ===
             game_mgr.render(vor, centroids)
 
         # === Drone landing ===
+        game_mgr.paths = [] # Clear path
         if landing:
             print(f"[t={running_time:02f}] Landing drones...")
             # Wait until all drones are landed

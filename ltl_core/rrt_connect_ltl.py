@@ -3,27 +3,31 @@ RRT_CONNECT_2D
 @author: huiming zhou
 """
 
-import os
-import sys
+# import os
+# import sys
 import math
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import splprep, splev
 from scipy.spatial.distance import euclidean
+from .env_ltl import Env
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
-                "/../../Sampling_based_Planning/")
+# sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
+#                 "/../../Sampling_based_Planning/")
 
-from rrt_2D import env, plotting
-from rrt_2D import utils_rrt as utils
+# from rrt_2D import plotting
+# from rrt_2D import utils_rrt as utils
+
+from .plotting_ltl import Plotting
+from .utils_rrt_ltl import Utils, Node
 
 
-class Node:
-    def __init__(self, n):
-        self.x = n[0]
-        self.y = n[1]
-        self.parent = None
+# class Node:
+#     def __init__(self, n):
+#         self.x = n[0]
+#         self.y = n[1]
+#         self.parent = None
 
 
 class RrtConnect:
@@ -38,9 +42,11 @@ class RrtConnect:
         self.V1 = [self.s_start]
         self.V2 = [self.s_goal]
 
-        self.env = env.Env()
-        self.plotting = plotting.Plotting(self.s_start, self.s_goal)
-        self.utils = utils.Utils()
+        self.env = Env()
+        start_pt = (self.s_start.x, self.s_start.y)
+        goal_pt  = (self.s_goal.x,  self.s_goal.y)
+        self.plotting = Plotting(start_pt, goal_pt)
+        self.utils = Utils()
 
         self.x_range = self.env.x_range
         self.y_range = self.env.y_range
