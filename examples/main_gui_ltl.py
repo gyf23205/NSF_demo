@@ -308,7 +308,6 @@ if __name__ == "__main__":
         # The main loop for the GUI
         print('Main GUI initialized')
 
-        # Message buffers  message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
         buffers = {
             'idx_image':[],
             'tasks':[],
@@ -323,7 +322,6 @@ if __name__ == "__main__":
 
             # === Message update ===
             data = None # Data received from the clients
-            # message = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
 
             # === Socket receive ===
             for conn, addr in clients:
@@ -583,35 +581,37 @@ if __name__ == "__main__":
             # === Soket send ===
             # Decide which client to send the message!!!
             if any(len(v) > 0 for v in buffers.values()):
-                message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
+                message_all = {'tasks': None, 'wind_speed': None}
+                message_one = {'idx_image': None, 'vic_msg': None, 'workload': None}
                 if buffers['idx_image']:
-                    message['idx_image'] = buffers['idx_image'].pop(0)
+                    message_one['idx_image'] = buffers['idx_image'].pop(0)
 
                 if buffers['tasks']:
-                    message['tasks'] = buffers['tasks'].pop(0)
+                    message_all['tasks'] = buffers['tasks'].pop(0)
 
                 if buffers['wind_speed']:
-                    message['wind_speed'] = buffers['wind_speed'].pop(0)
+                    message_all['wind_speed'] = buffers['wind_speed'].pop(0)
                 
-                if buffers['progress']:
-                    message['progress'] = buffers['progress'].pop(0)
+                # if buffers['progress']:
+                #     message['progress'] = buffers['progress'].pop(0)
                 
                 if buffers['workload']:
-                    message['workload'] = buffers['workload'].pop(0)
+                    message_one['workload'] = buffers['workload'].pop(0)
                 
                 if buffers['vic_msg']:
-                    message['vic_msg'] = buffers['vic_msg'].pop(0)
-                
+                    message_one['vic_msg'] = buffers['vic_msg'].pop(0)
+
                 # print(f"{survivor_index}. message sent!!!!!!!!!!!!!!!!!!!")
-                if message['tasks'] or message['wind_speed']:
-                    # Send the message to all clients
+                # Send messages to clients based on message_all and message_one
+                if any(v is not None for v in message_all.values()):
+                    # Send message_all to all clients
                     for conn, addr in clients:
-                        conn.sendall((json.dumps(message) + '\n').encode())
-                else:
-                    # Randomly select a client to send the message
+                        conn.sendall((json.dumps(message_all) + '\n').encode())
+                if any(v is not None for v in message_one.values()):
+                    # Send message_one to a random client
                     selected_client = np.random.choice(range(len(clients)))
                     conn, addr = clients[selected_client]
-                    conn.sendall((json.dumps(message) + '\n').encode())
+                    conn.sendall((json.dumps(message_one) + '\n').encode())
 
             # === Draw GUI: simple ===
             # draw_workspace(screen, ws, screensize=screen_size)
