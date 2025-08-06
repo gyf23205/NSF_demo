@@ -8,7 +8,8 @@ from constants import *
 
 # for estimator
 import csv
-from TF_raw import TransformerRawClassifier
+# from TF_raw import TransformerRawClassifier
+from TF_raw_regression import TransformerRawRegressor
 import torch
 # import hydra
 import json
@@ -16,8 +17,7 @@ import numpy as np
 import yaml
 
 
-# csv_path = 'D:\\Projects\\qualisys_drone_sdk\\dummy_log\\aggregated_output.csv'
-csv_path = 'C:\\Users\\sooyung\\Research\\NSF_demo\\dummy_log\\aggregated_output.csv'
+csv_path = 'D:\\Projects\\qualisys_drone_sdk\\dummy_log\\aggregated_output.csv'
 
 
 class Task:
@@ -213,29 +213,23 @@ class UserGUI:
             last_row = rows[-1]
             last_row = list(map(float, last_row))
 
-        # with open(csv_path, 'w', newline='') as f:
-        #     f.truncate()
-
         # 2. run estimator model
         with open('config_ecg_gaze.yaml', 'r') as yf:
             cfg = yaml.safe_load(yf)
 
-        model = TransformerRawClassifier(
-            config=cfg["config_tf"],
+        model = TransformerRawRegressor(
+            config=cfg["config_tf_gauge"],
             optim_cfg=cfg["optim"],
             pre_process=cfg.get("pre_process", None)
         )
-        state_dict = torch.load('last_new.pt', map_location='cpu')
+        state_dict = torch.load('last_gauge.pt', map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
         model.eval()
 
         ecg = last_row[:130]
-        # gaze = last_row[130:]
-        # gaze_au_matrix = rows[130:].reshape(10, 30)
         gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
 
         t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-        # t2 = torch.tensor(gaze, dtype=torch.float32).unsqueeze(0) # raw Gaze
         t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
 
         if torch.isnan(t2).any() or torch.isinf(t2).any():
@@ -245,15 +239,14 @@ class UserGUI:
             out = model(t1, t2)
             pred_label = torch.argmax(out).item()
             # print(out, pred_label)
-      
 
-        # 3. update workload
-        if pred_label == 1:
+        # 3. update workload  
+        if pred_label > 0.5:
             workload_text = 'high'
-        elif pred_label == 0:
-            workload_text = 'low'      
+        else:
+            workload_text = 'low'
 
-        workload_text = np.random.choice(['low', 'medium', 'high'], p=[0.3, 0.4, 0.3])
+        # workload_text = np.random.choice(['low', 'medium', 'high'], p=[0.3, 0.4, 0.3])
 
         self.workload_text.clear()
         self.workload_text.update('Workload: ' + workload_text)  
