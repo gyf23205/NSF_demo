@@ -99,10 +99,10 @@ class Specification:
                 level_three[f"p_navscan_{tid}"] = f"<> (p_nav_{tid} && <> p_scan_{tid})"
                 # then require that navscan is followed by verify (human only)
                 level_three[f"p_confirm_{tid}"] = f"<> p_verify_{tid}"
-                # your existing rescue and skip
+                # rescue and skip
                 level_three[f"p_rescue_{tid}"] = (
-                    f"<> (p_verify_{tid} && <> (p_foundgate_{tid} && <> (p_pickup_{tid} && <> p_dropoff_{tid})))")
-                level_three[f"p_skip_{tid}"] = f"<> (p_verify_{tid} && <> p_notfoundgate_{tid})"
+                    f"<> (p_foundgate_{tid} && <> (p_pickup_{tid} && <> p_dropoff_{tid}))")
+                level_three[f"p_skip_{tid}"] = f"<> p_notfoundgate_{tid}"
 
             # oversight unchanged
             level_three["p_fire_0"] = f"<> (p_firemsg_0 && <> p_priority_0)"
