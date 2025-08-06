@@ -15,8 +15,10 @@ import json
 import numpy as np
 import yaml
 
-
+# For workload estimation
 csv_path = 'dummy_log\\aggregated_output.csv'
+from realtime_heart_plot import RealtimeHeartPlot
+from workload_speedometer import WorkloadSpeedometer
 
 
 class Task:
@@ -161,7 +163,7 @@ class UserGUI:
         self.button_handover.draw(self.screen)
 
         # Workload block
-        self.workload_text = Font(FONT, FONT_SIZE, (70, 70))
+        self.workload_text = Font(FONT, FONT_SIZE, (250, 70))
         self.workload = 'low'
         self.workload_text.update('Workload: '+ self.workload)
         self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
@@ -245,7 +247,6 @@ class UserGUI:
             pred_label = torch.argmax(out).item()
             # print(out, pred_label)
       
-
         # 3. update workload
         if pred_label == 1:
             workload_text = 'high'
@@ -253,13 +254,24 @@ class UserGUI:
             workload_text = 'low'      
 
         workload_text = np.random.choice(['low', 'medium', 'high'], p=[0.3, 0.4, 0.3])
+        if workload_text == 'low':
+            pred_label = 0
+        elif workload_text == 'medium':
+            pred_label = 0.5
+        elif workload_text == 'high':
+            pred_label = 1
 
         self.workload_text.clear()
         self.workload_text.update('Workload: ' + workload_text)  
         area = self.workload_text.rect.copy()
         area.width += 100  # Adjust width to fit the screen
         pygame.draw.rect(self.screen, WHITE, area)
-        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])             
+        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])          
+
+        # Render meter graphics
+        heart_plot.update(ecg); heart_plot.render(self.screen)                                     # ONE LINE for HR
+        workload_meter.update(pred_label)
+        workload_meter.render(self.screen, (100, 100)) # ONE LINE for WL   
         ###################### Update workload text ends #####################
 
 
@@ -373,6 +385,10 @@ if __name__ == '__main__':
     # workload = 'low'  # Example workload
 
     gui = UserGUI()
+
+    # Meter Graphics initailization
+    heart_plot = RealtimeHeartPlot(position=(50, 800), hr_interval_seconds= 10)
+    workload_meter = WorkloadSpeedometer(850, 500)
 
     # response['victim']: 'reject' or 'accept'
     # response['weather_decision']: 'change' or 'maintain'
