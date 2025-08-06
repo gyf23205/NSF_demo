@@ -8,7 +8,7 @@ from scipy.spatial import Voronoi
 import numpy as np
 import socket
 import json
-from ltl_core.specification import Specification
+from ltl_core.specification import Specification, ENVIRONMENT_AP_PREFIXES
 from ltl_core.binding_manager import BindingManager
 from ltl_core.workspace import Workspace
 from ltl_core.dag_builder import build_dag
@@ -18,9 +18,70 @@ from ltl_core.allocator import RandomAllocator
 from ltl_core.simulation import Simulation
 from ltl_core.visualization import draw_workspace
 
-
+SLIDING_WINDOW = 60.0
 grid_size = (50, 40)
 # screen_size = (grid_size[0] * 30, grid_size[1] * 30)
+
+
+def compute_utilization(human, now, window=SLIDING_WINDOW):
+    # start from window‐ago
+    t0 = now - window
+    busy_time = 0.0
+    prev_t, prev_s = t0, 'idle'
+
+    # walk through the history in order
+    for t, s in sorted(human.util_history, key=lambda x: x[0]):
+        if prev_s == 'busy':
+            busy_time += t - prev_t
+        prev_t, prev_s = t, s
+
+    # account for final segment up to now
+    if prev_s == 'busy':
+        busy_time += now - prev_t
+
+    pct = int(100 * busy_time / window)
+    return max(0, min(100, pct))
+
+
+def to_human_label(ap):
+    # catch idle / no-assignment
+    if not ap or ap == 'idle':
+        return 'Idle'
+
+    parts = ap.split('_')
+    # prefix is e.g. "p_scan", "p_dropoff", etc.
+    prefix = f"p_{parts[1]}"
+    # try to parse the target index (and +1 for 1-based numbering)
+    try:
+        idx = int(parts[2]) + 1
+    except:
+        idx = None
+
+    if prefix == 'p_nav':
+        return f'Navigate {idx}'
+    if prefix == 'p_scan':
+        return f'Scan {idx}'
+    if prefix == 'p_verify':
+        return f'Verify {idx}'
+    if prefix == 'p_pickup':
+        return f'Pick up {idx}'
+    if prefix == 'p_dropoff':
+        return f'Drop off {idx}'
+    if prefix == 'p_priority':
+        return f'Set priority'
+    if prefix == 'p_message':
+        return f'Send Message'
+    if prefix == 'p_nofly':
+        return f'Set no fly'
+
+    # environment APs: just humanize the prefix
+    if prefix in ENVIRONMENT_AP_PREFIXES:
+        # e.g. "p_firemsg" → "Fire message"
+        label = prefix[2:].replace('msg', ' message').capitalize()
+        return label
+
+    # fallback
+    return ap
 
 
 def update_wind(game_mgr, wind_time, old_avg_speed, n_wind, message, threshold=1.0):
@@ -163,6 +224,7 @@ if __name__ == "__main__":
         # === Create visual agents from symbolic agents ===
         drones = []
         gvs = []
+        humans = ws.agents["humans"]
         agent_to_visual = {}
 
         for i, agent in enumerate(agents_by_type["drone"]):
@@ -177,9 +239,13 @@ if __name__ == "__main__":
             gv = VirtualGV(i, tuple(pos))
             gvs.append(gv)
             agent_to_visual[agent] = gv
+        for human in ws.agents["humans"]:
+            human.util_history = [(0.0, 'idle')]
+            human.last_state   = 'idle'
+            human.utilization  = 0
 
         # === GameMgr for rendering ===
-        game_mgr = GameMgr(drones, gvs, ws)
+        game_mgr = GameMgr(drones, gvs, humans, ws)
 
         # === Get drone start positions in GUI space ===
         takeoff_positions = [agent.pos[:2] for agent in agents_by_type["drone"]]
@@ -201,6 +267,11 @@ if __name__ == "__main__":
 
         # === Simulation ===
         sim = Simulation(spec, ws, allocator, labeler)
+
+        # === Human agents: new fields ===
+        for human in ws.agents["humans"]:
+            human.util_history = []         # List of (t, state) where state \in {busy, idle}
+            human.last_state = None         # Track for edge detection
 
         # === Busy airspace (wind) setup ===
         old_wind_average_speed = 0.0
@@ -227,7 +298,12 @@ if __name__ == "__main__":
         wind_time = 0
 
         # === Working area: temporary ===
-        # prev_completed = labeler.get_completed()
+        prev_assignments = []
+
+        # Monitor APs
+        emergency_pending = False
+        survivor_pending = False
+        atm_pending = False
 
         # The main loop for the GUI
         print('Main GUI initialized')
@@ -318,8 +394,71 @@ if __name__ == "__main__":
                 completed = sim_outputs["completed"]
 
                 # === Working area: temporary ===
-                # if completed != prev_completed:
-                    # print(sorted(labeler.get_completed()))
+                if assignments != prev_assignments:
+                    print(f"Assigned: {[f'{a.label}→{ap}' for a, ap in assignments.items()]}")
+                    prev_assignments = assignments
+
+                # === Agent: assigned function ===
+                # 1) update the symbolic Agents
+                for agent in ws.get_all_agents():
+                    agent.status = assignments.get(agent, 'Idle')
+                # 2) mirror it onto the visuals so GameMgr can see it
+                for sym, visual in agent_to_visual.items():
+                    raw_ap = assignments.get(sym)
+                    human_ap = to_human_label(raw_ap)
+                    sym.status = human_ap
+                    visual.status = human_ap
+
+                # === Human assignment history & utilization ===
+                now = running_time
+                for human in ws.agents["humans"]:
+                    # 1) Detect busy vs idle (busy if they _have_ an assignment)
+                    assigned = assignments.get(human)
+                    new_state = 'busy' if assigned is not None else 'idle'
+
+                    # 2) On state‐change, record the timestamp
+                    if new_state != human.last_state:
+                        human.util_history.append((now, new_state))
+                        human.last_state = new_state
+
+                    # 3) Prune old events outside the sliding window
+                    human.util_history = [
+                        (t,s) for t,s in human.util_history
+                        if now - t <= SLIDING_WINDOW
+                    ]
+
+                    # 4) Compute % utilization over the last window
+                    human.utilization = compute_utilization(human, now, SLIDING_WINDOW)
+
+                # === Monitor APs tiggers
+                # 1. possible new emergency events
+                if (not emergency_pending
+                    and running_time > 20.0):
+                    labeler.advance({f"p_firemsg_0_3_1_0"})
+                    # labeler.advance({f"p_priority_0_3_1_0"})
+                    emergency_pending = True
+
+                # 2. possible new survivor messages
+                if (not survivor_pending
+                    and running_time > 30.0):
+                    labeler.advance({f"p_survivormsg_0_3_1_0"})
+                    # labeler.advance({f"p_message_0_3_1_0"})
+                    survivor_pending = True
+
+                # 3. possible new ATM broadcast
+                if (not atm_pending
+                    and running_time > 40.0):
+                    labeler.advance({f"p_atmmsg_0_3_1_0"})
+                    # labeler.advance({f"p_nofly_0_3_1_0"})
+                    atm_pending = True
+
+                # 4. clear “pending” once the team responds
+                # if f"p_set_priority_0" in true_aps:
+                #     emergency_pending = False
+                # if f"p_respond_survivor_0" in true_aps:
+                #     survivor_pending = False
+                # if "p_confirm_no_fly_zones" in true_aps:
+                #     atm_pending = False
 
                 # === Victim detection after p_scan_i ===
                 for ap in completed:

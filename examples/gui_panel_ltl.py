@@ -101,8 +101,45 @@ class EnvironmentInfo:
         for text, pos in self.content.texts:
             self.screen.blit(text, pos)
 
+
+class HumanWorkload:
+    def __init__(self, screen, pos, virtual_human):
+        self.screen = screen
+        self.x0, self.y0 = pos
+        self.human = virtual_human
+        self.grid_width  = 100
+        self.grid_height = line_height * FONT_SIZE
+        self.spacing     = 20
+
+        # ID label
+        self.idx_txt    = SysFont(FONT, FONT_SIZE)
+        # utilization bar (0–100%)
+        self.util_bar   = Bar(screen,
+                              (self.x0 + self.grid_width + self.spacing,
+                               self.y0,
+                               self.grid_width,
+                               self.grid_height))
+        # text for percent
+        self.pct_txt    = SysFont(FONT, FONT_SIZE)
+
+    def draw(self):
+        # 1) draw human label (Agent.label is e.g. "H0", "H1")
+        label = getattr(self.human, 'label', '<unknown>')
+        idx_txt = self.idx_txt.render(label, True, BLACK)
+        self.screen.blit(idx_txt, (self.x0, self.y0))
+
+        # 2) draw utilization bar
+        pct = getattr(self.human, 'utilization', 0)
+        self.util_bar.draw(pct)
+
+        # 3) draw percent text to the right of the bar
+        pct_label = self.pct_txt.render(f'{pct}%', True, BLACK)
+        bx = self.x0 + self.grid_width + self.spacing
+        self.screen.blit(pct_label, (bx + self.grid_width + 5, self.y0))
+
+
 class GameMgr:
-    def __init__(self, drones, gvs, ws):
+    def __init__(self, drones, gvs, humans, ws):
         pygame.init()
         self.t0 = 0
         self.initial = True
@@ -207,6 +244,21 @@ class GameMgr:
         ################## Path planning ##################
         self.paths = []
         ################ Path planning end ################
+
+        ################ Human workload ###################
+        self.humans = humans
+         # Title for human workload
+        self.title_human = Font(FONT, FONT_SIZE, (1150, 580))
+        self.title_human.update('   Human Workload')
+        self.title_human.update('ID    Utilization')
+        # Create one HumanWorkload per human
+        self.human_panels = [
+            HumanWorkload(self.screen,
+                          (1150, 600 + i*(line_height*FONT_SIZE + 20)),
+                          human)
+            for i, human in enumerate(self.humans)
+        ]
+        ############# Human workload ends #################
 
     def set_voronoi(self):
         print(IMAGE_PATH + 'voronoi_regions.png')
@@ -354,6 +406,13 @@ class GameMgr:
         for h in self.gv_health:
             h.draw()
         ##################### GV health ends ####################
+
+        ################## Human Workload #########################
+        for text, pos in self.title_human.texts:
+            self.screen.blit(text, pos)
+        for panel in self.human_panels:
+            panel.draw()
+        ################## Human Workload ends #########################
 
         ####################### Wind ############################
         wind_gui = [self.meter_to_gui(w) for w in self.wind]

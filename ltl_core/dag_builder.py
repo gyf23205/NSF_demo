@@ -57,11 +57,6 @@ def build_dag(specification) -> nx.DiGraph:
             # print(f"    ▶ {parent}: {formula}")
             children = _all_children(formula)
 
-            # Manually add auxiliary children if formula is empty but pattern matches
-            # if not children and parent.startswith("p_101"):
-            #     children = [name for name in level if name.startswith(f"{parent}_aux_")]
-
-            # print(f"    → children of {parent}: {children}")
             for child in children:
                 if (child in composite_names or child in atomic_names) and not G.has_edge(parent, child):
                     G.add_edge(parent, child)

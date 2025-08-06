@@ -63,6 +63,7 @@ class Simulation:
         if completed != self.prev_completed:
             self.prev_actions = self.allocator.choose(unlocked, completed, current_aps)
             self.prev_completed = completed
+            # print(f"[GUI-STEP] Assigned: {[f'{a.label}→{ap}' for a, ap in self.prev_actions.items()]}")
         actions = self.prev_actions
 
         if verbose:

@@ -54,7 +54,7 @@ class VirtualDrone:
         self.position = [pos[0], pos[1], 0]
         self.rt = 0
         self.health = 100.0
-        self.status = 'idle'
+        self.status = 'Idle'
         self.inspecting_alt = (50.0 / 100.0) * 2
 
     def set_position(self, target_):
@@ -82,6 +82,7 @@ class VirtualGV:
         self.current_target = None
         self.carrying = False
         self.health = 100.0
+        self.status = 'Idle'
         # self.rt = 0
         # self.health = 100.0
 

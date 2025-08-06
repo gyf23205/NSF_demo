@@ -79,9 +79,9 @@ def _english_label(node: str) -> str:
       'skip':         'Skip',
       'pickup':       'Pick Up',
       'dropoff':      'Drop Off',
-      'monitor':      'Monitor',
-      'rank':         'Rank',
-      'submit':       'Report',
+      'fire':         'Set Priority',
+      'survivor':     'Message',
+      'atm':          'Air Traffic',
     }
     label = m.get(kind, node)
     return f"{label} {region}".strip()

@@ -3,16 +3,20 @@ from .symbolic_function import SymbolicFunction
 from ltl_core.dag_builder import build_dag
 from ltl_core.automaton_generator import compile_automata
 
-ENVIRONMENT_AP_PREFIXES = ["p_found", "p_notfound", "p_verified"]
+ENVIRONMENT_AP_PREFIXES = ["p_found",
+                           "p_notfound",
+                           "p_firemsg",
+                           "p_survivormsg",
+                           "p_atmmsg"]
 AP_TYPE_PREFIX_MAP = {
     "p_nav": "physical",
     "p_scan": "symbolic",
     "p_pickup": "physical",
     "p_dropoff": "physical",
     "p_verify": "symbolic",
-    "p_monitor": "symbolic",
-    "p_rank": "symbolic",
-    "p_submit": "symbolic",
+    "p_priority": "symbolic",
+    "p_message": "symbolic",
+    "p_nofly": "symbolic",
 }
 
 
@@ -63,9 +67,9 @@ class Specification:
             physical_target_ids.append(current_id)
             current_id += 1
 
-        for label in ["monitor", "rank", "submit"]:
-            target_id_map[label] = current_id
-            current_id += 1
+        # for label in ["monitor", "rank", "nofly"]:
+        #     target_id_map[label] = current_id
+        #     current_id += 1
 
         if case == "Case2":
             level_one = {
@@ -74,7 +78,7 @@ class Specification:
             hierarchy.append(level_one)
 
             level_two = {
-                "p_102": "<> p_oversight"
+                "p_102": "<> p_fire_0 && <> p_survivor_0 && <> p_atm_0"
             }
             # Insert auxiliary p_101_i nodes for each target
             for tid in physical_target_ids:
@@ -94,14 +98,16 @@ class Specification:
                 # enforce nav then scan (drone only)
                 level_three[f"p_navscan_{tid}"] = f"<> (p_nav_{tid} && <> p_scan_{tid})"
                 # then require that navscan is followed by verify (human only)
-                level_three[f"p_confirm_{tid}"] = f"<> p_verify_{tid})"
+                level_three[f"p_confirm_{tid}"] = f"<> p_verify_{tid}"
                 # your existing rescue and skip
                 level_three[f"p_rescue_{tid}"] = (
                     f"<> (p_verify_{tid} && <> (p_foundgate_{tid} && <> (p_pickup_{tid} && <> p_dropoff_{tid})))")
                 level_three[f"p_skip_{tid}"] = f"<> (p_verify_{tid} && <> p_notfoundgate_{tid})"
 
             # oversight unchanged
-            level_three["p_oversight"] = "<> (p_monitor_0 && <> p_submit_0) && <> p_rank_0"
+            level_three["p_fire_0"] = f"<> (p_firemsg_0 && <> p_priority_0)"
+            level_three["p_survivor_0"] = f"<> (p_survivormsg_0 && <> p_message_0)"
+            level_three["p_atm_0"] = f"<> (p_atmmsg_0 && <> p_nofly_0)"
             hierarchy.append(level_three)
 
             # Level 4: atomic definitions
@@ -118,19 +124,13 @@ class Specification:
                 level_four[f"p_pickup_{tid}"] = f"<> p_pickup_{tid}_2_1_0"
                 level_four[f"p_dropoff_{tid}"] = f"<> p_dropoff_{tid}_2_1_0"
 
-            # keep monitor/rank/submit as before
-            level_four["p_monitor_0"] = (
-                f"<> (p_monitor_{target_id_map['monitor']}_1_1_0 "
-                f"|| p_monitor_{target_id_map['monitor']}_3_1_0)"
-            )
-            level_four["p_rank_0"] = (
-                f"<> (p_rank_{target_id_map['rank']}_1_1_0 "
-                f"|| p_rank_{target_id_map['rank']}_3_1_0)"
-            )
-            level_four["p_submit_0"] = (
-                f"<> (p_submit_{target_id_map['submit']}_1_1_0 "
-                f"|| p_submit_{target_id_map['submit']}_3_1_0)"
-            )
+            # Cyclic monitor formulas
+            level_four[f"p_firemsg_0"] = f"<> p_firemsg_0_3_1_0"
+            level_four[f"p_survivormsg_0"] = f"<> p_survivormsg_0_3_1_0"
+            level_four[f"p_atmmsg_0"] = f"<> p_atmmsg_0_3_1_0"
+            level_four[f"p_priority_0"] = f"<> p_priority_0_3_1_0"
+            level_four[f"p_message_0"] = f"<> p_message_0_3_1_0"
+            level_four[f"p_nofly_0"] = f"<> p_nofly_0_3_1_0"
 
             hierarchy.append(level_four)
             self.hierarchy = hierarchy

@@ -16,7 +16,8 @@ import numpy as np
 import yaml
 
 
-csv_path = 'D:\\Projects\\qualisys_drone_sdk\\dummy_log\\aggregated_output.csv'
+# csv_path = 'D:\\Projects\\qualisys_drone_sdk\\dummy_log\\aggregated_output.csv'
+csv_path = 'C:\\Users\\sooyung\\Research\\NSF_demo\\dummy_log\\aggregated_output.csv'
 
 
 class Task:
@@ -135,10 +136,10 @@ class UserGUI:
 
         # Victim block
         self.image_width = 400
-        self.image_height = 280
+        self.image_height = 400
         self.image_rect = pygame.Rect(
-            130,
-            200,
+            70,
+            100,
             self.image_width,
             self.image_height
         )
@@ -148,7 +149,7 @@ class UserGUI:
         spacing = 50
         buttons_y = self.image_rect.bottom + 10
         # total_buttons_width = button_width * 2 + spacing
-        buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing) - 120
+        buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing) - 90
         accept_rect = pygame.Rect(buttons_x, buttons_y, button_width, button_height)
         reject_rect = pygame.Rect(buttons_x + button_width + spacing, buttons_y, button_width, button_height)
         handover_rect = pygame.Rect(buttons_x + 2 * (button_width + spacing), buttons_y, button_width, button_height)
@@ -279,7 +280,7 @@ class UserGUI:
             victim_buffer.append(data['idx_image'])
             data['idx_image'] = None
         if victim_buffer:
-            image_path = f"examples/images/victim{victim_buffer[0]}.jpeg"
+            image_path = f"examples/images/victim{victim_buffer[0]}.jpg"
             pil_image = Image.open(image_path)
             pil_image = pil_image.resize((self.image_width, self.image_height))
             image = pygame.image.fromstring(pil_image.tobytes(), pil_image.size, pil_image.mode)
