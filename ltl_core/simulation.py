@@ -57,7 +57,7 @@ class Simulation:
         for agent in self.workspace.get_all_agents():
             task = agent.current_symbolic_task
             if task and task in completed:
-                agent.current_symbolic_task = None
+                agent.reset_symbolic()
 
         # New function allocation only when completed APs changed
         if completed != self.prev_completed:
@@ -96,7 +96,10 @@ class Simulation:
                         continue  # Skip this AP until human responds
                 if agent.current_symbolic_task is None:
                     agent.start_symbolic_task(ap)
-                    agent.set_symbolic_task_speed(ap, speed=0.1)
+                    if prefix == "p_verify":
+                        agent.set_symbolic_task_speed(ap, speed=0.0)    # No automatic progress
+                    else:
+                        agent.set_symbolic_task_speed(ap, speed=0.1)
 
         # Idle return-to-base for unassigned drones/GVs
         for agent in self.workspace.get_all_agents():

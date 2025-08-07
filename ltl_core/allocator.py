@@ -22,6 +22,14 @@ class RandomAllocator:
         #             print(gv_agent.label)
         #             busy_gvs.add(gv_agent.label)
 
+        # Human - assigned symbolic function check
+        for agent in self.agents_by_type.get("human", []):
+            task = agent.current_symbolic_task
+            print(f"Human: {agent.label}, Task: {task}")
+            if task and task in unlocked and task not in completed and task not in aps:
+                actions[agent] = task
+                assigned.add(agent)
+
         for group in self.binding_manager.group_to_tasks:
             tasks = self.labeler.get_group_ordered_tasks(group)
             if not tasks:
