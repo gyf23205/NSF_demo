@@ -180,6 +180,7 @@ class UserGUI:
         self.button_wind_change.draw(self.screen)
         self.button_wind_maintain.draw(self.screen)
         self.button_wind_handover.draw(self.screen)
+        self.wind_speed_received = None
 
         # Task block
         self.task_x = 550
@@ -194,6 +195,7 @@ class UserGUI:
         self.task_list_y = self.task_y + len(self.task_text.texts) * line_height * FONT_SIZE
         self.task_list = []
         self.n_previous_tasks = len(self.task_list)
+        self.tasks_received = None
 
         # Response block
         response_x = 40
@@ -275,21 +277,11 @@ class UserGUI:
         ###################### Update workload text ends #####################
 
 
-        # ###################### Update workload text ######################
-        # if data and data['workload'] is not None:
-        #     self.workload_text.clear()
-        #     self.workload_text.update('Workload: ' + data['workload'])
-        #     # clean the previous workload text
-        #     pygame.draw.rect(self.screen, WHITE, self.workload_text.rect)
-        #     self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
-        # ###################### Update workload text ends #####################
-
-
         ###################### Victim block ######################
-        if data and data['idx_image'] is not None:
-            # print(data['idx_image'])
-            victim_buffer.append(data['idx_image'])
-            data['idx_image'] = None
+        # if data and data['idx_image'] is not None:
+        #     # print(data['idx_image'])
+        #     victim_buffer.append(data['idx_image'])
+        #     data['idx_image'] = None
         if victim_buffer:
             image_path = f"examples/images/victim{victim_buffer[0]}.jpg"
             pil_image = Image.open(image_path)
@@ -306,10 +298,10 @@ class UserGUI:
 
         ###################### Task block ######################
         # print('data before receiving tasks: ', data)
-        if data is not None and data['tasks'] is not None:
+        if self.tasks_received is not None:
             # print('Received tasks from server: ', data['tasks'])
             self.task_list = []
-            for i, task in enumerate(data['tasks']):
+            for i, task in enumerate(self.tasks_received):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
                 task_id, target_loc, priority, assigned_drone = task
                 new_task = Task(self.screen, task_id, target_loc, task_pos, priority)
@@ -317,6 +309,7 @@ class UserGUI:
                 # print(assigned_drone)
                 self.task_list.append(new_task)
                 # print(new_task.priority_input.text)
+            self.tasks_received = None
 
         # Clear the task area before drawing
         task_table_width = 6 * (grid_width + spacing)
@@ -344,12 +337,13 @@ class UserGUI:
         ########################## Task block ends ######################
 
         ###################### Weather block ######################
-        if data and data['wind_speed'] is not None:
-            self.weather = data['wind_speed']
+        if self.wind_speed_received is not None:
+            self.weather = self.wind_speed_received
             pygame.draw.rect(self.screen, WHITE, self.weather_text.rect)  # Clear the previous weather text
             self.weather_text.clear()
             self.weather_text.update('Wind speed changes significantly, current speed: ' + "{:.2f}".format(self.weather))
             self.screen.blit(self.weather_text.texts[0][0], self.weather_text.texts[0][1])
+            self.wind_speed_received = None
         ###################### Weather block ends ######################
 
         ####################### Response block ##########################
@@ -360,9 +354,9 @@ class UserGUI:
         for text in self.response_title.texts:
             self.screen.blit(text[0], text[1])
 
-        if data and data['vic_msg'] is not None:
-            vic_msg_buffer.append(data['vic_msg'])
-            data['vic_msg'] = None
+        # if data and data['vic_msg'] is not None:
+        #     vic_msg_buffer.append(data['vic_msg'])
+        #     data['vic_msg'] = None
         
         self.response_text.clear()
         if vic_msg_buffer:
@@ -397,7 +391,7 @@ if __name__ == '__main__':
     running = True
     victim_buffer = []  # Buffer to store victims
     vic_msg_buffer = []  # Buffer to store messages from victims
-    data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None, 'vic_msg': None}  # Initialize data
+    # data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'vic_msg': None}  # Initialize data
     try:
         recv_buffer = ''
         while running:
@@ -405,6 +399,7 @@ if __name__ == '__main__':
             # Receive weather, task, victim from server
             try:
                 data_received = s.recv(4096).decode()
+                # print('Data received !!!!!!!!!!!!!!!!!!!!!!!!!!')
                 if data_received:
                     recv_buffer += data_received
                     while '\n' in recv_buffer:
@@ -414,16 +409,17 @@ if __name__ == '__main__':
                             # print('Received data from server:', repr(data_temp))
                             for key, value in data_temp.items():
                                 if value is not None:
-                                    # print(value)
-                                    data[key] = value
+                                    if key == 'idx_image':
+                                        victim_buffer.append(value)
+                                    if key == 'tasks':
+                                        gui.tasks_received = value
+                                    if key == 'wind_speed':
+                                        gui.wind_speed_received = value
+                                    if key == 'vic_msg':
+                                        vic_msg_buffer.append(value)
                     data_received = None
             except BlockingIOError:
                 pass
-            
-
-            # if data and data['tasks'] is not None:
-            #     tasks = data['tasks']
-                # print('Received tasks from server:', tasks)
 
             # Event handling
             for event in pygame.event.get():
@@ -433,21 +429,18 @@ if __name__ == '__main__':
                 # Victim handling
                 if gui.button_accept.handle_event(event):
                     gui.image = None
-                    # data['idx_image'] = None
                     if victim_buffer:
                         victim_buffer.pop(0)
                     response_changed = True
                     response['victim'] = 'accept'
                 elif gui.button_reject.handle_event(event):
                     gui.image = None
-                    # data['idx_image'] = None
                     if victim_buffer:
                         victim_buffer.pop(0)
                     response_changed = True
                     response['victim'] = 'reject'
                 elif gui.button_handover.handle_event(event):
                     gui.image = None
-                    # data['idx_image'] = None
                     if victim_buffer:
                         victim_buffer.pop(0)
                     response_changed = True
