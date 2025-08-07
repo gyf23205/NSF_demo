@@ -25,7 +25,7 @@ class RandomAllocator:
         # Human - assigned symbolic function check
         for agent in self.agents_by_type.get("human", []):
             task = agent.current_symbolic_task
-            print(f"Human: {agent.label}, Task: {task}")
+            # print(f"Human: {agent.label}, Task: {task}")
             if task and task in unlocked and task not in completed and task not in aps:
                 actions[agent] = task
                 assigned.add(agent)
