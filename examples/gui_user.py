@@ -283,7 +283,8 @@ class UserGUI:
         #     victim_buffer.append(data['idx_image'])
         #     data['idx_image'] = None
         if victim_buffer:
-            image_path = f"examples/images/victim{victim_buffer[0]}.jpg"
+            image_id = victim_buffer[0]["image_id"] if isinstance(victim_buffer[0], dict) else victim_buffer[0]
+            image_path = f"examples/images/victim{image_id}.jpg"
             pil_image = Image.open(image_path)
             pil_image = pil_image.resize((self.image_width, self.image_height))
             image = pygame.image.fromstring(pil_image.tobytes(), pil_image.size, pil_image.mode)
@@ -410,6 +411,7 @@ if __name__ == '__main__':
                             for key, value in data_temp.items():
                                 if value is not None:
                                     if key == 'idx_image':
+                                        # value is {"image_id": int, "tid": "2"} from server
                                         victim_buffer.append(value)
                                     if key == 'tasks':
                                         gui.tasks_received = value
@@ -429,22 +431,31 @@ if __name__ == '__main__':
                 # Victim handling
                 if gui.button_accept.handle_event(event):
                     gui.image = None
-                    if victim_buffer:
-                        victim_buffer.pop(0)
+                    clicked_item = victim_buffer.pop(0) if victim_buffer else None
                     response_changed = True
                     response['victim'] = 'accept'
+                    response['verify_tid'] = (
+                        str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
+                    )
+
                 elif gui.button_reject.handle_event(event):
                     gui.image = None
-                    if victim_buffer:
-                        victim_buffer.pop(0)
+                    clicked_item = victim_buffer.pop(0) if victim_buffer else None
                     response_changed = True
                     response['victim'] = 'reject'
+                    response['verify_tid'] = (
+                        str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
+                    )
+
                 elif gui.button_handover.handle_event(event):
                     gui.image = None
-                    if victim_buffer:
-                        victim_buffer.pop(0)
+                    clicked_item = victim_buffer.pop(0) if victim_buffer else None
                     response_changed = True
                     response['victim'] = 'handover'
+                    response['verify_tid'] = (
+                        str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
+                    )
+
                 else:
                     pass
 

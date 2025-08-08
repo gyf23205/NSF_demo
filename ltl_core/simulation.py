@@ -90,14 +90,10 @@ class Simulation:
                     agent.path = rrt_conn.path.copy()
             
             elif ap_type == "symbolic":
-                # Block symbolic APs if they're pending verification
-                if hasattr(self, "verify_response_pending"):
-                    if ap in self.verify_response_pending:
-                        continue  # Skip this AP until human responds
                 if agent.current_symbolic_task is None:
                     agent.start_symbolic_task(ap)
                     if prefix == "p_verify":
-                        agent.set_symbolic_task_speed(ap, speed=0.0)    # No automatic progress
+                        agent.set_symbolic_task_speed(ap, speed=0.0)  # hold until user response
                     else:
                         agent.set_symbolic_task_speed(ap, speed=0.1)
 

@@ -24,8 +24,8 @@ grid_size = (50, 40)
 
 # Event setup
 FIREMSG_TIMES = [15.0, 20.0]
-SURVIVORMSG_TIMES = [25.0, 35.0]
-ATMMSG_TIMES = [40.0, 45.0]
+SURVIVORMSG_TIMES = [15.0, 35.0]
+ATMMSG_TIMES = [15.0, 45.0]
 
 # Event variables
 firemsg_idx = 0
@@ -293,7 +293,11 @@ if __name__ == "__main__":
         survivor_images = list(np.random.choice(range(1, 596), size=n_targets, replace=False))
         survivor_index = 0
         verify_response_pending = set()  # APs like p_verify_0_3_1_0 waiting for user
-        victim_target_map = {}
+        
+        # === Verify gating (single‑user routing) ===
+        pending_images = {}         # target_id (str) -> image_id (int), waiting to be sent
+        sent_for_target = set()     # target_ids already sent to user (avoid dup)
+        active_target_for_user = None
 
         # === Message for GUI ===
         message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
@@ -454,14 +458,6 @@ if __name__ == "__main__":
                     labeler.advance({"p_atmmsg_0_3_1_0"})
                     atmmsg_idx += 1
 
-                # 4. clear “pending” once the team responds
-                # if f"p_set_priority_0" in true_aps:
-                #     emergency_pending = False
-                # if f"p_respond_survivor_0" in true_aps:
-                #     survivor_pending = False
-                # if "p_confirm_no_fly_zones" in true_aps:
-                #     atm_pending = False
-
                 # === Victim detection after p_scan_i ===
                 for ap in completed:
                     if ap.startswith("p_scan_") and ap not in victim_detected:
@@ -474,74 +470,73 @@ if __name__ == "__main__":
                                 survivor_index += 1
                                 print(f"time: {running_time}, survivor_index: {survivor_index}, AP: {ap}, Image: {image_id}")
 
-                                # Store image_id -> target_id map
-                                target_id = ap.split("_")[2]
-                                victim_target_map[image_id] = target_id
-
-                                # message['idx_image'] = str(image_id)
-                                buffers['idx_image'].append(str(image_id))
-                                pos_rounded = [round(coord, 2) for coord in agent.pos[:2]]
-                                # message['vic_msg'] = f'Drone {drone_idx + 1} finished scan at {pos_rounded}, please respond!'
-                                buffers['vic_msg'].append(f'Drone {drone_idx + 1} finished scan at {pos_rounded}, please respond!')
-                                # print(f"Drone {drone_idx + 1} finished scan at {pos_rounded} (image={str(image_id)}), please respond!")
-                                # message_changed = True
-
-                                # Block corresponding p_verify AP until human responds
-                                verify_ap = f"p_verify_{target_id}_3_1_0"
-                                verify_response_pending.add(verify_ap)
-                                sim.verify_response_pending = verify_response_pending
+                                # Keep for later; only send when p_verify_* is actually assigned
+                                target_id = ap.split("_")[2]             # str
+                                pending_images[target_id] = image_id
 
                                 # Only one AP considered for each drone
                                 break
 
+                # === If a human is assigned p_verify_*, send the pending image now ===
+                for agent, ap in assignments.items():
+                    if isinstance(ap, str) and ap.startswith("p_verify_") and str(getattr(agent, "role", "")).startswith("human"):
+                        tid = ap.split("_")[2]  # target id as string
+                        # only send once per target, and only if we actually have an image
+                        if tid in pending_images and tid not in sent_for_target:
+                            img_id = pending_images[tid]
+                            # send both the image and the tid
+                            buffers['idx_image'].append({"image_id": int(img_id), "tid": tid})
+                            buffers['vic_msg'].append(f'Verify target {int(tid)+1}: please respond')
+                            sent_for_target.add(tid)
+                            # (optional) keep active_target_for_user as a fallback, but no longer relied on
+                            active_target_for_user = tid
+
             # === GUI response handling ===
             if data and data['victim'] is not None:
-                # print("[DEBUG] Received GUI victim input:", data.get('victim'))
-
-                if victim_target_map.values():
-                    target_id = next(iter(victim_target_map.values()))
-                    image_id = next(iter(victim_target_map))
+                # respond to the specific target we sent to the user
+                if active_target_for_user is not None:
+                    target_id = active_target_for_user
+                    image_id = pending_images.get(target_id)
                     verify_ap = f"p_verify_{target_id}_3_1_0"
                     idx = int(target_id)
-                    
-                    victim_target_map.pop(image_id, None)
-                    # print("[DEBUG] victim_target_map values:", list(victim_target_map.values()))
+            
+            if data and data['victim'] is not None:
+                # prefer the tid the GUI tells us it acted on
+                target_id = data.get('verify_tid', None)
+                if target_id is None:
+                    # fallback to the last-active if old client, but new client will set verify_tid
+                    target_id = active_target_for_user
+                if target_id is not None:
+                    image_id = pending_images.get(target_id)
+                    verify_ap = f"p_verify_{target_id}_3_1_0"
+                    idx = int(target_id)
 
+                    # choose gate
                     if data['victim'] == 'accept':
-                        # victim_clicked[idx] = 1
                         labeler.chosen_gate_per_group[target_id] = f"p_foundgate_{target_id}"
-
-                    elif data['victim'] == 'reject':
-                        # victim_clicked[idx] = 2
+                    elif data['victim'] in ('reject', 'handover'):
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
 
-                    elif data['victim'] == 'handover':
-                        # victim_clicked[idx] = 3
-                        labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
-
-                    # Atomic proposition update
                     chosen_gate = labeler.chosen_gate_per_group.get(target_id)
                     if chosen_gate:
                         labeler.advance({verify_ap, chosen_gate})
                     else:
                         labeler.advance({verify_ap})
 
-                    # Survivor information
-                    victim_id[idx] = image_id
+                    # bookkeep
+                    if image_id is not None:
+                        victim_id[idx] = image_id
                     victim_timing[idx] = running_time
-                    
-                    # Pop task
-                    # print(f'[t={int(running_time)}] Verification {verify_ap} accomplished')
+
+                    # remove from task list
                     tasks = [item for item in tasks if item[0] != idx + 1]
                     buffers['tasks'].append(tasks)
-                    # message['tasks'] = tasks
-                    # message_changed = True
-                    # Update GUI
                     game_mgr.task = [item for item in game_mgr.task if item[0] != idx + 1]
 
-                    # print("[DEBUG] Survivor ID:", victim_id)
-                    # print("[DEBUG] Survivor Clicked:", victim_clicked)
-                    # print("[DEBUG] Survivor Timing:", victim_timing)
+                    # clear this target’s pending state
+                    pending_images.pop(target_id, None)
+                    sent_for_target.discard(target_id)
+                    active_target_for_user = None
 
                 data['victim'] = None
             
