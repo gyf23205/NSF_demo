@@ -413,14 +413,14 @@ if __name__ == "__main__":
             # === Event handling ===
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    print(f"[t={running_time:02f}] Quit by window close.")
+                    print(f"[t={running_time:.2f}] Quit by window close.")
                     running = False
                     landing = False
 
             # === Key handling ===
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
-                print(f"[t={running_time:02f}] Escape by keyboard.")
+                print(f"[t={running_time:.2f}] Escape by keyboard.")
                 running = False
                 landing = True
             elif keys[pygame.K_s]:
@@ -428,7 +428,7 @@ if __name__ == "__main__":
 
             # === Check if simulation is done ===
             if labeler.all_completed() and ws.all_mobile_agents_at_base():
-                print(f"[t={running_time:02f}] Mission completed!")
+                print(f"[t={running_time:.2f}] Mission completed!")
                 running = False
                 landing = True
 

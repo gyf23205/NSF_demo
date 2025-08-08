@@ -87,9 +87,9 @@ def _english_label(node: str) -> str:
     return f"{label} {region}".strip()
 
 
-def draw_composite_hierarchy(G: nx.DiGraph, spec, figsize=(10, 6)):
+def draw_composite_hierarchy(spec, figsize=(10, 6)):
     """
-    - Lock Level-3 (generalised functions) on one horizontal rank
+    - Lock Level-3 (generalized functions) on one horizontal rank
       and lay them left→right in the order [search, rescue, skip, …]
       with *uniform* spacing.
     - Level-4 nodes keep Graphviz's vertical placement but take the
@@ -97,6 +97,7 @@ def draw_composite_hierarchy(G: nx.DiGraph, spec, figsize=(10, 6)):
     - Everything else (styling, centring of Level-1 / Level-2) unchanged.
     """
     # 1) Composite-only sub-graph
+    G = spec.dag
     H = G.subgraph(G.graph['composite_names']).copy()
 
     # 2) Build an AGraph; force Level-3 into one rank
@@ -224,7 +225,7 @@ def draw_composite_hierarchy(G: nx.DiGraph, spec, figsize=(10, 6)):
     level_names = [
         "Functional Purpose",
         "Abstract Function",
-        "Generalised Function",
+        "Generalized Function",
         "Physical Function"
     ]
     xmin = min(x for x, _ in pos.values()) - 50
