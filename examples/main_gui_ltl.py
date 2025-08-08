@@ -22,6 +22,15 @@ SLIDING_WINDOW = 60.0
 grid_size = (50, 40)
 # screen_size = (grid_size[0] * 30, grid_size[1] * 30)
 
+# Event setup
+FIREMSG_TIMES = [15.0, 20.0]
+SURVIVORMSG_TIMES = [25.0, 35.0]
+ATMMSG_TIMES = [40.0, 45.0]
+
+# Event variables
+firemsg_idx = 0
+survivormsg_idx = 0
+atmmsg_idx = 0
 
 def compute_utilization(human, now, window=SLIDING_WINDOW):
     # start from window‐ago
@@ -300,11 +309,6 @@ if __name__ == "__main__":
         # === Working area: temporary ===
         prev_assignments = []
 
-        # Monitor APs
-        emergency_pending = False
-        survivor_pending = False
-        atm_pending = False
-
         # The main loop for the GUI
         print('Main GUI initialized')
 
@@ -430,25 +434,25 @@ if __name__ == "__main__":
 
                 # === Monitor APs tiggers
                 # 1. possible new emergency events
-                if (not emergency_pending
-                    and running_time > 20.0):
-                    labeler.advance({f"p_firemsg_0_3_1_0"})
-                    # labeler.advance({f"p_priority_0_3_1_0"})
-                    emergency_pending = True
+                if (firemsg_idx < len(FIREMSG_TIMES)
+                        and running_time >= FIREMSG_TIMES[firemsg_idx]):
+                    print(f"[t={running_time:.1f}] Triggering new fire message")
+                    labeler.advance({"p_firemsg_0_3_1_0"})
+                    firemsg_idx += 1
 
                 # 2. possible new survivor messages
-                if (not survivor_pending
-                    and running_time > 30.0):
-                    labeler.advance({f"p_survivormsg_0_3_1_0"})
-                    # labeler.advance({f"p_message_0_3_1_0"})
-                    survivor_pending = True
+                if (survivormsg_idx < len(SURVIVORMSG_TIMES)
+                        and running_time >= SURVIVORMSG_TIMES[survivormsg_idx]):
+                    print(f"[t={running_time:.1f}] Triggering new survivor message")
+                    labeler.advance({"p_survivormsg_0_3_1_0"})
+                    survivormsg_idx += 1
 
                 # 3. possible new ATM broadcast
-                if (not atm_pending
-                    and running_time > 40.0):
-                    labeler.advance({f"p_atmmsg_0_3_1_0"})
-                    # labeler.advance({f"p_nofly_0_3_1_0"})
-                    atm_pending = True
+                if (atmmsg_idx < len(ATMMSG_TIMES)
+                        and running_time >= ATMMSG_TIMES[atmmsg_idx]):
+                    print(f"[t={running_time:.1f}] Triggering new ATM message")
+                    labeler.advance({"p_atmmsg_0_3_1_0"})
+                    atmmsg_idx += 1
 
                 # 4. clear “pending” once the team responds
                 # if f"p_set_priority_0" in true_aps:

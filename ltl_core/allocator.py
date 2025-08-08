@@ -13,22 +13,18 @@ class RandomAllocator:
         actions = {}
         assigned = set()
 
-        # Track GV agents currently bound to active dropoff groups
-        # busy_gvs = set()
-        # for group, tasks in self.binding_manager.group_to_tasks.items():
-        #     if any(t.startswith("p_dropoff_") for t in tasks):
-        #         gv_agent = self.binding_manager.get_bound_agent_for_group(group, agent_type="gv")
-        #         if gv_agent:
-        #             print(gv_agent.label)
-        #             busy_gvs.add(gv_agent.label)
-
-        # Human - assigned symbolic function check
+        # Human - assigned symbolic function check (RESPECT BINDING)
         for agent in self.agents_by_type.get("human", []):
             task = agent.current_symbolic_task
-            # print(f"Human: {agent.label}, Task: {task}")
             if task and task in unlocked and task not in completed and task not in aps:
-                actions[agent] = task
-                assigned.add(agent)
+                agent_type = self.spec.get_required_role_by_ap(task)
+                # only keep it if binding rules allow it
+                if self.binding_manager.record_assignment(task, agent, agent_type):
+                    actions[agent] = task
+                    assigned.add(agent)
+                else:
+                    # binding for that group is owned by someone else; drop the stale task
+                    agent.reset_symbolic()
 
         for group in self.binding_manager.group_to_tasks:
             tasks = self.labeler.get_group_ordered_tasks(group)

@@ -69,6 +69,16 @@ class Labeler:
 
         self.binding_manager = spec.binding_manager
 
+        # Map: trigger_prefix -> (subtree_root, followup_atomic_AP)
+        self._reset_triggers = {
+            "p_firemsg_0":      ("p_fire_0",     "p_priority_0_3_1_0"),
+            "p_survivormsg_0":  ("p_survivor_0", "p_message_0_3_1_0"),
+            "p_atmmsg_0":       ("p_atm_0",      "p_nofly_0_3_1_0"),
+        }
+
+        # Track previously true environment message APs for rising-edge detection
+        self._prev_env_msgs: Set[str] = set()
+
         self.chosen_gate_per_group = {}  # key = group, value = chosen gate
 
     # ------------------------------------------------------------------ #
@@ -88,6 +98,59 @@ class Labeler:
 
         self.current_aps = set()
         self._completed = set()
+        self._update_unlocked()
+        self._update_locked()
+
+    def _reset_nodes(self, nodes: Set[str]) -> None:
+        """
+        Internal: remove nodes from completion, and reset DFA state if they have one.
+        Then recompute unlocked/locked sets.
+        """
+        for n in nodes:
+            # Drop completion flag
+            self._completed.discard(n)
+            # Reset DFA state, if any
+            if n in self.automata:
+                dfa = self.automata[n]
+                if hasattr(dfa, "initial_state"):
+                    self.states[n] = dfa.initial_state
+                elif "initial_state" in getattr(dfa, "graph", {}):
+                    self.states[n] = dfa.graph["initial_state"]
+
+        # If we had made a disjunctive choice within this subtree previously, clear it
+        # (safe no-op for oversight branch)
+        for k in list(self.chosen_gate_per_group.keys()):
+            if k in nodes:
+                self.chosen_gate_per_group.pop(k, None)
+
+        # Recompute availability
+        self._update_unlocked()
+        self._update_locked()
+
+    def reset_subtree(self, root: str) -> None:
+        """
+        Public: reset 'root' and all its descendants (structural children)
+        so they must be re-satisfied. Does not touch siblings.
+        """
+        to_reset = set(nx.descendants(self.dag, root)) | {root}
+        print(f"[DEBUG] Resetting subtree under {root}: {to_reset}")
+        self._reset_nodes(to_reset)
+
+    def uncomplete_node_only(self, node: str) -> None:
+        """
+        Public: remove completion for a composite node (like p_102) without
+        touching its children DFAs/states. Then recompute unlocked/locked.
+        """
+        print(f"[DEBUG] Uncompleting node {node}")
+        self._completed.discard(node)
+        # Optionally reset the DFA state of the composite itself (keeps children intact)
+        if node in self.automata:
+            dfa = self.automata[node]
+            if hasattr(dfa, "initial_state"):
+                self.states[node] = dfa.initial_state
+            elif "initial_state" in getattr(dfa, "graph", {}):
+                self.states[node] = dfa.graph["initial_state"]
+
         self._update_unlocked()
         self._update_locked()
 
@@ -158,41 +221,37 @@ class Labeler:
         """Advance the labeler one step, given the set of true AP tokens."""
         updated: Set[str] = set()
 
-        # Step 0 — advance all DFAs (groups, atomic, and high-level nodes like p_0)
-        # for name, dfa in self.automata.items():
-        #     if name not in self.states:
-        #         self.states[name] = dfa.initial_state
+        # === Step 0: detect new environment messages for cyclic oversight tasks ===
+        # Find all APs that are environment message triggers we care about
+        env_msgs_now = {ap for ap in true_APs
+                        if any(ap.startswith(prefix) for prefix in self._reset_triggers)}
 
-        #     state = self.states[name]
-        #     next_state = dfa.delta(state, true_APs)
-        #     self.states[name] = next_state
+        for trigger_prefix, (subtree_root, followup_ap) in self._reset_triggers.items():
+            # Any new APs that match this trigger?
+            new_trigger = any(ap.startswith(trigger_prefix) and ap not in self._prev_env_msgs
+                              for ap in env_msgs_now)
+            if not new_trigger:
+                continue
 
-        #     if self._is_accepting(dfa, next_state):
-        #         if name not in self._completed:
-        #             # print(f"[DFA:Group] {name} reached accepting state {next_state} — marking complete")
-        #             self._completed.add(name)
-        #             updated.add(name)
+            # 1) Reset only the relevant subtree
+            self.reset_subtree(subtree_root)
 
-        # Step 0 — DFA transition for groups and high-level nodes (non-atomic)
-        # for name, dfa in self.automata.items():
-        #     if name in self.dag.nodes and not self._is_atomic_node(name):
-        #         if name not in self.states:
-        #             self.states[name] = dfa.initial_state
+            # 2) Uncomplete p_102 without touching other children
+            self.uncomplete_node_only("p_102")
 
-        #         state = self.states[name]
-        #         next_state = dfa.delta(state, true_APs)
-        #         self.states[name] = next_state
+            # 3) Clear symbolic progress for the follow-up AP
+            for agent in self.binding_manager.agents_by_type.get("human", []):
+                if agent.current_symbolic_task == followup_ap:
+                    agent.reset_symbolic()
+                agent.symbolic_progress.pop(followup_ap, None)
 
-        #         if self._is_accepting(dfa, next_state):
-        #             if name not in self._completed:
-        #                 print(f"[DFA:Group] {name} reached accepting state {next_state} — marking complete")
-        #                 self._completed.add(name)
-        #                 updated.add(name)
+            # 4) Release bindings for the group associated with this subtree
+            if self.binding_manager:
+                self.binding_manager.bindings.pop(subtree_root, None)
+                self.binding_manager.completed_tasks.discard(followup_ap)
 
-        #                 # Mark group complete in binding manager
-        #                 if self.binding_manager:
-        #                     self.binding_manager.mark_completed(name, labeler=self)
-
+        # Update stored env-msgs for next tick
+        self._prev_env_msgs = env_msgs_now
 
         # Step 1 — advance DFA transitions for atomic nodes (redundant now but kept for clarity)
         for node in self.dag.nodes:

@@ -96,7 +96,6 @@ class Agent:
 
     def reset_symbolic(self):
         self.current_symbolic_task = None
-        self.symbolic_progress.clear()
 
     def __repr__(self):
         return f"Agent(label={self.label}, role={self.role}, pos={self.pos}, progress={self.symbolic_progress:.2f})"
