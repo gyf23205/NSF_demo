@@ -174,14 +174,29 @@ class UserGUI:
         self.weather_text = Font(FONT, FONT_SIZE, (weather_x, weather_y))
         self.weather = 'sunny'
         self.weather_text.update('Weather: '+ self.weather)
-        self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), BLUE, "Change routes")
-        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Maintain routes")
-        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Hand over")
+        self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), BLUE, "Emergency")
+        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Major")
+        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Minor")
         self.button_wind_change.draw(self.screen)
         self.button_wind_maintain.draw(self.screen)
         self.button_wind_handover.draw(self.screen)
-        self.wind_speed_received = None
+        # self.wind_speed_received = None
 
+        # Survivor Triage block (top-right)
+        self.surv_header_pos = (self.weather_text.pos[0], self.weather_text.pos[1])
+        self.surv_msg_pos = (self.surv_header_pos[0], self.surv_header_pos[1] + FONT_SIZE * line_height)
+
+        # Keep dedicated fonts and rects to avoid overlapping draws
+        self.surv_header_font = Font(FONT, FONT_SIZE, self.surv_header_pos)
+        self.surv_msg_font = Font(FONT, FONT_SIZE, self.surv_msg_pos)
+
+        # Compute a safe clear area for the survivor header + one line of text
+        self.surv_clear_rect = pygame.Rect(
+            self.surv_header_pos[0],
+            self.surv_header_pos[1],
+            3 * (grid_width + spacing) + 400,   # wide enough to cover header + one line msg
+            2 * FONT_SIZE * line_height + 10
+)
         # Task block
         self.task_x = 550
         self.task_y = 400
@@ -337,15 +352,28 @@ class UserGUI:
                 task.draw()
         ########################## Task block ends ######################
 
-        ###################### Weather block ######################
-        if self.wind_speed_received is not None:
-            self.weather = self.wind_speed_received
-            pygame.draw.rect(self.screen, WHITE, self.weather_text.rect)  # Clear the previous weather text
-            self.weather_text.clear()
-            self.weather_text.update('Wind speed changes significantly, current speed: ' + "{:.2f}".format(self.weather))
-            self.screen.blit(self.weather_text.texts[0][0], self.weather_text.texts[0][1])
-            self.wind_speed_received = None
-        ###################### Weather block ends ######################
+        ###################### Survivor Triage (top-right) ######################
+        # Clear previously drawn header + message area to prevent overlap
+        pygame.draw.rect(self.screen, WHITE, self.surv_clear_rect)
+
+        # Header
+        self.surv_header_font.clear()
+        self.surv_header_font.update('Survivor Triage')
+        self.screen.blit(self.surv_header_font.texts[0][0], self.surv_header_font.texts[0][1])
+
+        # Message line below header
+        self.surv_msg_font.clear()
+        self.surv_msg_font.update(surv_text if surv_active and surv_text else "No active survivor message.")
+        self.screen.blit(self.surv_msg_font.texts[0][0], self.surv_msg_font.texts[0][1])
+
+        # Buttons: keep using existing buttons; just redraw them each frame
+        self.button_wind_change.text   = surv_choices[0]  # Emergency
+        self.button_wind_maintain.text = surv_choices[1]  # Serious
+        self.button_wind_handover.text = surv_choices[2]  # Minor
+        self.button_wind_change.draw(self.screen)
+        self.button_wind_maintain.draw(self.screen)
+        self.button_wind_handover.draw(self.screen)
+        ###################### Survivor Triage ends ######################
 
         ####################### Response block ##########################
         response_region_width = 520
@@ -401,6 +429,11 @@ if __name__ == '__main__':
     atm_prompt_id = None
     atm_token = None
     atm_text = ""   # what we show in the left-bottom message line
+    # Survivor triage (top-right)
+    surv_active = False
+    surv_prompt_id = None
+    surv_text = ""
+    surv_choices = ["Emergency", "Serious", "Minor"]
     # data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'vic_msg': None}  # Initialize data
     try:
         recv_buffer = ''
@@ -424,8 +457,8 @@ if __name__ == '__main__':
                                         victim_buffer.append(value)
                                     if key == 'tasks':
                                         gui.tasks_received = value
-                                    if key == 'wind_speed':
-                                        gui.wind_speed_received = value
+                                    # if key == 'wind_speed':
+                                        # gui.wind_speed_received = value
                                     # if key == 'vic_msg':
                                     #     vic_msg_buffer.append(value)
                                     if key == 'atm_prompt':
@@ -434,12 +467,24 @@ if __name__ == '__main__':
                                         atm_prompt_id = value.get("id")
                                         atm_token = value.get("token")
                                         atm_text = value.get("text") or ""
-                                    elif key == 'atm_clear':
+                                    if key == 'atm_clear':
                                         # value: {"id": ...}
                                         atm_active = False
                                         atm_prompt_id = None
                                         atm_token = None
                                         atm_text = ""  # will fall back to existing buffer or placeholder
+                                    if key == 'surv_prompt':
+                                        # {"id","text","choices":[...]}
+                                        surv_active = True
+                                        surv_prompt_id = value.get("id")
+                                        surv_text = value.get("text") or ""
+                                        surv_choices = value.get("choices") or ["Emergency","Serious","Minor"]
+                                    if key == 'surv_clear':
+                                        # {"id":..., "ok": True|False}
+                                        if value.get("ok") is True and value.get("id") == surv_prompt_id:
+                                            surv_active = False
+                                            surv_prompt_id = None
+                                            surv_text = ""
                     data_received = None
             except BlockingIOError:
                 pass
@@ -495,20 +540,20 @@ if __name__ == '__main__':
                 if response_changed:
                     response['tasks'] = [task.to_dict() for task in gui.task_list]
 
-                # Weather handling
+                # Top-right triage buttons
                 if gui.button_wind_change.handle_event(event):
-                    response_changed = True
-                    response['weather_decision'] = 'change'
+                    if surv_active and surv_prompt_id is not None:
+                        s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[0]}}) + '\n').encode('utf-8'))
+
                 elif gui.button_wind_maintain.handle_event(event):
-                    response_changed = True
-                    response['weather_decision'] = 'maintain'
+                    if surv_active and surv_prompt_id is not None:
+                        s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[1]}}) + '\n').encode('utf-8'))
+
                 elif gui.button_wind_handover.handle_event(event):
-                    response_changed = True
-                    response['weather_decision'] = 'handover'
-                else:
-                    pass
+                    if surv_active and surv_prompt_id is not None:
+                        s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[2]}}) + '\n').encode('utf-8'))
                     
-                # Response handling
+                # ATM response handling
                 gui.response_input.handle_event(event)
                 if gui.response_input.finish:
                     user_text = getattr(gui.response_input, 'text_send', gui.response_input.text)

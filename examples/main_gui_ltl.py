@@ -32,11 +32,17 @@ firemsg_idx = 0
 survivormsg_idx = 0
 atmmsg_idx = 0
 
-# ATM
+# --- ATM message runtime ---
 atm_prompt_id = 0
 current_atm_prompt = None          # {"id", "coord": (x,y), "token", "text", "time"}
 atm_sent_for_prompt = set()        # {prompt_id} already enqueued via buffers
-atm_results = []                   # [True/False] per prompt in time order
+atm_results = []                   # [True/False] per prompt in time 
+
+# --- Survivor message runtime ---
+surv_prompt_id = 0
+current_surv_prompt = None      # {"id","text","correct"}; correct in {"Emergency","Serious","Minor"}
+surv_sent_for_prompt = set()
+surv_results = []               # True/False history
 
 
 def _pick_coord_avoiding_targets(ws, grid_size=(50, 40)):
@@ -351,6 +357,8 @@ if __name__ == "__main__":
             'vic_msg':[],
             'atm_prompt':[],   # server → one client: {"id","text","token","coord":[x,y]}
             'atm_clear':[],    # server → one client: {"id": ...}
+            'surv_prompt': [],   # server→one: {"id","text","choices":["Emergency","Serious","Minor"]}
+            'surv_clear':  [],   # server→one: {"id":...,"ok":True/False}
             }
         while running:
             # === Avoid high CPU usage ===
@@ -476,6 +484,24 @@ if __name__ == "__main__":
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
                         and running_time >= SURVIVORMSG_TIMES[survivormsg_idx]):
                     print(f"[t={running_time:.1f}] Triggering new survivor message")
+
+                    import random
+                    scenario = random.choice([1, 2, 3])
+                    if scenario == 1:
+                        surv_text = "Survivor message: the survivor is unconscious and vitals are poor."
+                        surv_correct = "Emergency"
+                    elif scenario == 2:
+                        surv_text = 'Survivor message: "I am seriously hurt and need urgent care at the hospital."'
+                        surv_correct = "Serious"
+                    else:
+                        surv_text = 'Survivor message: "My pain is minor."'
+                        surv_correct = "Minor"
+
+                    surv_prompt_id += 1
+                    current_surv_prompt = {"id": surv_prompt_id, "text": surv_text, "correct": surv_correct}
+                    surv_sent_for_prompt.clear()
+
+                    # ENV-driven AP holds now
                     labeler.advance({"p_survivormsg_0_0_0_0"})
                     survivormsg_idx += 1
 
@@ -554,6 +580,17 @@ if __name__ == "__main__":
                             })
                             atm_sent_for_prompt.add(current_atm_prompt["id"])
 
+                # === If a human is assigned p_message_*, send the survivor prompt now ===
+                for agent, ap in assignments.items():
+                    if isinstance(ap, str) and ap.startswith("p_message_") and str(getattr(agent, "role", "")).startswith("human"):
+                        if current_surv_prompt and (current_surv_prompt["id"] not in surv_sent_for_prompt):
+                            buffers['surv_prompt'].append({
+                                "id": current_surv_prompt["id"],
+                                "text": current_surv_prompt["text"],
+                                "choices": ["Emergency", "Serious", "Minor"]
+                            })
+                            surv_sent_for_prompt.add(current_surv_prompt["id"])
+
             # === GUI response handling ===
             if isinstance(data, dict) and data.get('victim') is not None:
                 # respond to the specific target we sent to the user
@@ -604,7 +641,7 @@ if __name__ == "__main__":
                 data['victim'] = None
             
             # === ATM reply handling ===
-            if data and data.get('atm_reply') is not None:
+            if isinstance(data, dict) and data.get('atm_reply') is not None:
                 payload = data['atm_reply']
                 if current_atm_prompt and payload.get("id") == current_atm_prompt["id"]:
                     typed = payload.get("typed", "")
@@ -617,6 +654,23 @@ if __name__ == "__main__":
                         buffers['atm_clear'].append({"id": current_atm_prompt["id"]})
                         current_atm_prompt = None
                         atm_sent_for_prompt.clear()
+
+            # === Survivor reply handling (top-right buttons) ===
+            if isinstance(data, dict) and data.get('surv_reply') is not None:
+                payload = data['surv_reply']   # {"id":..., "choice":"Emergency|Serious|Minor"}
+                if current_surv_prompt and payload.get("id") == current_surv_prompt["id"]:
+                    choice = payload.get("choice")
+                    ok = (choice == current_surv_prompt["correct"])
+                    surv_results.append(ok)
+                    if ok:
+                        # Human action AP after correct triage
+                        labeler.advance({"p_message_0_3_1_0"})
+                        buffers['surv_clear'].append({"id": current_surv_prompt["id"], "ok": True})
+                        current_surv_prompt = None
+                        surv_sent_for_prompt.clear()
+                    else:
+                        # keep prompt active, nudge client if you want
+                        buffers['surv_clear'].append({"id": current_surv_prompt["id"], "ok": False})
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
@@ -660,8 +714,8 @@ if __name__ == "__main__":
             if any(len(v) > 0 for v in buffers.values()):
                 message_all = {'tasks': None, 'wind_speed': None}
                 message_one = {'idx_image': None, 'vic_msg': None, 'workload': None,
-                            # NEW fields
-                            'atm_prompt': None, 'atm_clear': None}
+                               'atm_prompt': None, 'atm_clear': None,
+                               'surv_prompt': None, 'surv_clear': None}
 
                 if buffers['idx_image']:
                     message_one['idx_image'] = buffers['idx_image'].pop(0)
@@ -681,11 +735,16 @@ if __name__ == "__main__":
                 if buffers['vic_msg']:
                     message_one['vic_msg'] = buffers['vic_msg'].pop(0)
 
-                # NEW: ATM prompt/clear
+                # ATM prompt/clear
                 if buffers['atm_prompt']:
                     message_one['atm_prompt'] = buffers['atm_prompt'].pop(0)
                 if buffers['atm_clear']:
                     message_one['atm_clear'] = buffers['atm_clear'].pop(0)
+
+                if buffers['surv_prompt']:
+                    message_one['surv_prompt'] = buffers['surv_prompt'].pop(0)
+                if buffers['surv_clear']:
+                    message_one['surv_clear'] = buffers['surv_clear'].pop(0)
 
                 # Send messages to clients
                 if any(v is not None for v in message_all.values()):
