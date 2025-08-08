@@ -23,9 +23,9 @@ grid_size = (50, 40)
 # screen_size = (grid_size[0] * 30, grid_size[1] * 30)
 
 # Event setup
-FIREMSG_TIMES = [15.0, 20.0]
-SURVIVORMSG_TIMES = [15.0, 35.0]
-ATMMSG_TIMES = [15.0, 45.0]
+FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0, 130.0, 160.0, 200.0]
+SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0, 120.0, 170.0, 210.0]
+ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0, 150.0, 180.0, 220.0]
 
 # Event variables
 firemsg_idx = 0
@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
         # === Constants ===
         hover_duration = 10
-        n_targets = 10
+        n_targets = 15
         n_drones = 4
         n_gvs = 2
         n_humans = 2
