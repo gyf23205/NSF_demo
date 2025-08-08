@@ -44,6 +44,12 @@ current_surv_prompt = None      # {"id","text","correct"}; correct in {"Emergenc
 surv_sent_for_prompt = set()
 surv_results = []               # True/False history
 
+# --- Fire→Priority runtime ---
+fire_prompt_id = 0
+current_fire_prompt = None     # {"id","task_id","required","text","time"}
+fire_sent_for_prompt = set()
+fire_results = []              # True/False history
+
 
 def _pick_coord_avoiding_targets(ws, grid_size=(50, 40)):
     """Pick a grid (x,y) not overlapping any target."""
@@ -359,6 +365,8 @@ if __name__ == "__main__":
             'atm_clear':[],    # server → one client: {"id": ...}
             'surv_prompt': [],   # server→one: {"id","text","choices":["Emergency","Serious","Minor"]}
             'surv_clear':  [],   # server→one: {"id":...,"ok":True/False}
+            'fire_prompt': [],   # server→one: {"id","task_id","text","required"}
+            'fire_clear':  [],   # server→one: {"id","ok":True|False,"reason":...}
             }
         while running:
             # === Avoid high CPU usage ===
@@ -473,12 +481,28 @@ if __name__ == "__main__":
                     human.utilization = compute_utilization(human, now, SLIDING_WINDOW)
 
                 # === Monitor APs tiggers
-                # 1. possible new emergency events
+                # 1. possible new emergency events (FIRE → ask human to set priority)
                 if (firemsg_idx < len(FIREMSG_TIMES)
                         and running_time >= FIREMSG_TIMES[firemsg_idx]):
                     print(f"[t={running_time:.1f}] Triggering new fire message")
                     labeler.advance({"p_firemsg_0_0_0_0"})
                     firemsg_idx += 1
+
+                    # Create a priority prompt tied to an AVAILABLE task id
+                    available_task_ids = [t[0] for t in tasks]  # 1-based task ids
+                    if available_task_ids:
+                        chosen_task_id = int(np.random.choice(available_task_ids))
+                        fire_prompt_id += 1
+                        required = 2  # "HIGH" in your 0/1/2 scale
+                        text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
+                        current_fire_prompt = {
+                            "id": fire_prompt_id,
+                            "task_id": chosen_task_id,
+                            "required": required,
+                            "text": text,
+                            "time": running_time,
+                        }
+                        fire_sent_for_prompt.clear()
 
                 # 2. possible new survivor messages
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
@@ -591,6 +615,18 @@ if __name__ == "__main__":
                             })
                             surv_sent_for_prompt.add(current_surv_prompt["id"])
 
+                # === If a human is assigned p_priority_*, send the fire/priority prompt now ===
+                for agent, ap in assignments.items():
+                    if isinstance(ap, str) and ap.startswith("p_priority_") and str(getattr(agent, "role", "")).startswith("human"):
+                        if current_fire_prompt and (current_fire_prompt["id"] not in fire_sent_for_prompt):
+                            buffers['fire_prompt'].append({
+                                "id": current_fire_prompt["id"],
+                                "task_id": current_fire_prompt["task_id"],
+                                "text": current_fire_prompt["text"],
+                                "required": current_fire_prompt["required"],
+                            })
+                            fire_sent_for_prompt.add(current_fire_prompt["id"])
+
             # === GUI response handling ===
             if isinstance(data, dict) and data.get('victim') is not None:
                 # respond to the specific target we sent to the user
@@ -640,6 +676,20 @@ if __name__ == "__main__":
 
                 data['victim'] = None
             
+            # === Auto-fail if the chosen task disappears while prompt is active ===
+            if current_fire_prompt:
+                current_ids = [t[0] for t in tasks]
+                if current_fire_prompt["task_id"] not in current_ids:
+                    fire_results.append(False)
+                    labeler.advance({"p_priority_0_3_1_0"})
+                    buffers['fire_clear'].append({
+                        "id": current_fire_prompt["id"],
+                        "ok": False,
+                        "reason": "task_gone"
+                    })
+                    current_fire_prompt = None
+                    fire_sent_for_prompt.clear()
+
             # === ATM reply handling ===
             if isinstance(data, dict) and data.get('atm_reply') is not None:
                 payload = data['atm_reply']
@@ -671,6 +721,41 @@ if __name__ == "__main__":
                     else:
                         # keep prompt active, nudge client if you want
                         buffers['surv_clear'].append({"id": current_surv_prompt["id"], "ok": False})
+            
+            # === Fire→Priority reply handling (right-bottom numeric input) ===
+            if isinstance(data, dict) and data.get('priority_reply') is not None:
+                payload = data['priority_reply']  # {"id":..., "task_id": int, "priority": int}
+                if current_fire_prompt and payload.get("id") == current_fire_prompt["id"]:
+                    tid = int(payload.get("task_id"))
+                    pr  = payload.get("priority")
+
+                    # Check availability of the task *now*
+                    available_ids = [t[0] for t in tasks]
+                    if tid not in available_ids:
+                        # Task disappeared before reply → FAIL & advance
+                        fire_results.append(False)
+                        labeler.advance({"p_priority_0_3_1_0"})
+                        buffers['fire_clear'].append({"id": current_fire_prompt["id"], "ok": False, "reason": "task_gone"})
+                        current_fire_prompt = None
+                        fire_sent_for_prompt.clear()
+                    else:
+                        # Validate priority
+                        if isinstance(pr, int) and pr == current_fire_prompt["required"]:
+                            # Update the task table priority
+                            for ta in tasks:
+                                if ta[0] == tid:
+                                    ta[2] = pr
+                                    break
+                            buffers['tasks'].append(tasks)
+
+                            fire_results.append(True)
+                            labeler.advance({"p_priority_0_3_1_0"})
+                            buffers['fire_clear'].append({"id": current_fire_prompt["id"], "ok": True})
+                            current_fire_prompt = None
+                            fire_sent_for_prompt.clear()
+                        else:
+                            # Keep prompt active; optional nudge
+                            buffers['fire_clear'].append({"id": current_fire_prompt["id"], "ok": False, "reason": "wrong_value"})
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
@@ -715,7 +800,8 @@ if __name__ == "__main__":
                 message_all = {'tasks': None, 'wind_speed': None}
                 message_one = {'idx_image': None, 'vic_msg': None, 'workload': None,
                                'atm_prompt': None, 'atm_clear': None,
-                               'surv_prompt': None, 'surv_clear': None}
+                               'surv_prompt': None, 'surv_clear': None,
+                               'fire_prompt': None, 'fire_clear': None}
 
                 if buffers['idx_image']:
                     message_one['idx_image'] = buffers['idx_image'].pop(0)
@@ -745,6 +831,11 @@ if __name__ == "__main__":
                     message_one['surv_prompt'] = buffers['surv_prompt'].pop(0)
                 if buffers['surv_clear']:
                     message_one['surv_clear'] = buffers['surv_clear'].pop(0)
+
+                if buffers['fire_prompt']:
+                    message_one['fire_prompt'] = buffers['fire_prompt'].pop(0)
+                if buffers['fire_clear']:
+                    message_one['fire_clear'] = buffers['fire_clear'].pop(0)
 
                 # Send messages to clients
                 if any(v is not None for v in message_all.values()):

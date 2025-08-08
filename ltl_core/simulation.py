@@ -92,7 +92,7 @@ class Simulation:
             elif ap_type == "symbolic":
                 if agent.current_symbolic_task is None:
                     agent.start_symbolic_task(ap)
-                    if prefix == "p_verify":
+                    if prefix in ["p_verify", "p_message", "p_nofly"]:  # p_priority
                         agent.set_symbolic_task_speed(ap, speed=0.0)  # hold until user response
                     else:
                         agent.set_symbolic_task_speed(ap, speed=0.1)

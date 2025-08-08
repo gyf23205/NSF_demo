@@ -212,6 +212,21 @@ class UserGUI:
         self.n_previous_tasks = len(self.task_list)
         self.tasks_received = None
 
+        # --- Fire→Priority block (text + input) just above Task Monitor ---
+        # Position it a bit above the task header area
+        self.fire_x = self.task_x
+        self.fire_y = self.task_y - 3.5 * FONT_SIZE * line_height
+
+        self.fire_title = Font(FONT, FONT_SIZE, (self.fire_x, self.fire_y))
+        self.fire_body  = Font(FONT, FONT_SIZE, (self.fire_x, self.fire_y + FONT_SIZE * line_height))
+        # Input for numeric priority
+        self.fire_input = TextInputResponse((self.fire_x, self.fire_y + 2 * FONT_SIZE * line_height,
+                                            220, FONT_SIZE * line_height), color=WHITE, maximum=3)
+
+        # Region to clear each frame
+        self.fire_rect = pygame.Rect(self.fire_x, self.fire_y,
+                             6 * (grid_width + spacing), 3 * FONT_SIZE * line_height + 10)
+
         # Response block
         response_x = 40
         response_y = 650
@@ -310,7 +325,26 @@ class UserGUI:
         else:
             pygame.draw.rect(self.screen, WHITE, self.image_rect)
         ###################### Victim block ends ######################
+        
+        ###################### Fire→Priority block (above Task Monitor) ######################
+        pygame.draw.rect(self.screen, WHITE, self.fire_rect)
 
+        # Title
+        self.fire_title.clear()
+        self.fire_title.update('Priority Request')
+        self.screen.blit(self.fire_title.texts[0][0], self.fire_title.texts[0][1])
+
+        # Body & input
+        self.fire_body.clear()
+        if fire_active and fire_text:
+            self.fire_body.update(fire_text)  # e.g., "Region 3 is in danger. Set its priority to HIGH (2)."
+        else:
+            self.fire_body.update('No active fire-related priority request.')
+        self.screen.blit(self.fire_body.texts[0][0], self.fire_body.texts[0][1])
+
+        # Input box (always drawn, but only meaningful if active)
+        self.fire_input.draw(self.screen)
+        ###################### Fire→Priority block ends ######################
 
         ###################### Task block ######################
         # print('data before receiving tasks: ', data)
@@ -421,19 +455,30 @@ if __name__ == '__main__':
     # response['tasks']: list of Task objects
     response = {'victim': None, 'weather_decision': None, 'tasks': None} # Response to be sent back to the server
     running = True
+
     # Survivor image
     victim_buffer = []  # Buffer to store victims
     vic_msg_buffer = []  # Buffer to store messages from victims
+
     # ATM message
     atm_active = False
     atm_prompt_id = None
     atm_token = None
     atm_text = ""   # what we show in the left-bottom message line
+
     # Survivor triage (top-right)
     surv_active = False
     surv_prompt_id = None
     surv_text = ""
     surv_choices = ["Emergency", "Serious", "Minor"]
+
+    # Fire→Priority (right-bottom, above Task Monitor)
+    fire_active = False
+    fire_prompt_id = None
+    fire_task_id = None
+    fire_required = None
+    fire_text = ""
+
     # data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'vic_msg': None}  # Initialize data
     try:
         recv_buffer = ''
@@ -485,6 +530,22 @@ if __name__ == '__main__':
                                             surv_active = False
                                             surv_prompt_id = None
                                             surv_text = ""
+                                    if key == 'fire_prompt':
+                                        # {"id","task_id","text","required"}
+                                        fire_active = True
+                                        fire_prompt_id = value.get("id")
+                                        fire_task_id = value.get("task_id")
+                                        fire_required = value.get("required")
+                                        fire_text = value.get("text") or ""
+                                    if key == 'fire_clear':
+                                        # {"id":..., "ok": True|False, "reason": "..."}
+                                        if value.get("id") == fire_prompt_id:
+                                            # clear regardless of ok to match server contract
+                                            fire_active = False
+                                            fire_prompt_id = None
+                                            fire_task_id = None
+                                            fire_required = None
+                                            fire_text = ""
                     data_received = None
             except BlockingIOError:
                 pass
@@ -562,6 +623,25 @@ if __name__ == '__main__':
 
                     if atm_active and atm_prompt_id is not None:
                         s.sendall((json.dumps({"atm_reply": {"id": atm_prompt_id, "typed": user_text}}) + '\n').encode('utf-8'))
+                
+                # Fire→Priority input handling
+                gui.fire_input.handle_event(event)
+                if gui.fire_input.finish:
+                    user_text = getattr(gui.fire_input, 'text_send', gui.fire_input.text).strip()
+                    gui.fire_input.finish = False
+                    gui.fire_input.text = ""
+                    if fire_active and fire_prompt_id is not None and fire_task_id is not None:
+                        try:
+                            priority_val = int(user_text)
+                        except ValueError:
+                            priority_val = user_text
+                        s.sendall((json.dumps({
+                            "priority_reply": {
+                                "id": fire_prompt_id,
+                                "task_id": int(fire_task_id),
+                                "priority": priority_val
+                            }
+                        }) + '\n').encode('utf-8'))
 
             # Render the GUI and get the response
             gui.render()
