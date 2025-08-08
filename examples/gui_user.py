@@ -201,7 +201,7 @@ class UserGUI:
         response_x = 40
         response_y = 650
         self.response_title = Font(FONT, FONT_SIZE, (response_x, response_y))
-        self.response_title.update('Messages from victims')
+        self.response_title.update('Air Traffic Management')
         self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
         self.response_text = Font(FONT, FONT_SIZE, (response_x, response_y + FONT_SIZE * line_height))
         self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 400, FONT_SIZE * line_height), color=WHITE, maximum=1000)
@@ -348,21 +348,24 @@ class UserGUI:
         ###################### Weather block ends ######################
 
         ####################### Response block ##########################
-        response_region_width = 520  # Adjust as needed
+        response_region_width = 520
         response_region_height = 3 * FONT_SIZE * line_height + 20
         pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
-        # Draw the response title every frame
-        for text in self.response_title.texts:
-            self.screen.blit(text[0], text[1])
 
-        # if data and data['vic_msg'] is not None:
-        #     vic_msg_buffer.append(data['vic_msg'])
-        #     data['vic_msg'] = None
-        
+        # Title (always ATM)
+        self.response_title.clear()
+        self.response_title.update('Air Traffic Management')
+        self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
+
+        # Body (ATM prompt or default)
         self.response_text.clear()
-        if vic_msg_buffer:
-            self.response_text.update(vic_msg_buffer[0])
-            self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
+        if atm_active and atm_text:
+            self.response_text.update(atm_text)  # client can colorize if desired
+        else:
+            self.response_text.update('No active ATM message.')
+        self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
+
+        # Input (same widget)
         self.response_input.draw(self.screen)
         ###################### Response block ends ######################
         pygame.display.flip()
@@ -390,8 +393,14 @@ if __name__ == '__main__':
     # response['tasks']: list of Task objects
     response = {'victim': None, 'weather_decision': None, 'tasks': None} # Response to be sent back to the server
     running = True
+    # Survivor image
     victim_buffer = []  # Buffer to store victims
     vic_msg_buffer = []  # Buffer to store messages from victims
+    # ATM message
+    atm_active = False
+    atm_prompt_id = None
+    atm_token = None
+    atm_text = ""   # what we show in the left-bottom message line
     # data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'vic_msg': None}  # Initialize data
     try:
         recv_buffer = ''
@@ -417,8 +426,20 @@ if __name__ == '__main__':
                                         gui.tasks_received = value
                                     if key == 'wind_speed':
                                         gui.wind_speed_received = value
-                                    if key == 'vic_msg':
-                                        vic_msg_buffer.append(value)
+                                    # if key == 'vic_msg':
+                                    #     vic_msg_buffer.append(value)
+                                    if key == 'atm_prompt':
+                                        # value: {"id": ..., "text": "...", "token": "...", "coord": [x, y]}
+                                        atm_active = True
+                                        atm_prompt_id = value.get("id")
+                                        atm_token = value.get("token")
+                                        atm_text = value.get("text") or ""
+                                    elif key == 'atm_clear':
+                                        # value: {"id": ...}
+                                        atm_active = False
+                                        atm_prompt_id = None
+                                        atm_token = None
+                                        atm_text = ""  # will fall back to existing buffer or placeholder
                     data_received = None
             except BlockingIOError:
                 pass
@@ -490,14 +511,12 @@ if __name__ == '__main__':
                 # Response handling
                 gui.response_input.handle_event(event)
                 if gui.response_input.finish:
-                    # response_changed = True
-                    # response['vic_response'] = gui.response_input.text_send
-                    gui.response_input.finish = False  # Reset finish flag
+                    user_text = getattr(gui.response_input, 'text_send', gui.response_input.text)
+                    gui.response_input.finish = False
                     gui.response_input.text = ""
-                    # print(vic_msg_buffer)
-                    if vic_msg_buffer:
-                        vic_msg_buffer.pop(0)
-                        # print(vic_msg_buffer)
+
+                    if atm_active and atm_prompt_id is not None:
+                        s.sendall((json.dumps({"atm_reply": {"id": atm_prompt_id, "typed": user_text}}) + '\n').encode('utf-8'))
 
             # Render the GUI and get the response
             gui.render()

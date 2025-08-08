@@ -32,6 +32,32 @@ firemsg_idx = 0
 survivormsg_idx = 0
 atmmsg_idx = 0
 
+# ATM
+atm_prompt_id = 0
+current_atm_prompt = None          # {"id", "coord": (x,y), "token", "text", "time"}
+atm_sent_for_prompt = set()        # {prompt_id} already enqueued via buffers
+atm_results = []                   # [True/False] per prompt in time order
+
+
+def _pick_coord_avoiding_targets(ws, grid_size=(50, 40)):
+    """Pick a grid (x,y) not overlapping any target."""
+    import random
+    rows, cols = grid_size
+    forbidden = set(tuple(t) for t in ws.target_locations)
+    # optionally avoid base/hospital if you like:
+    forbidden |= set(ws.base_area) | set(ws.hospital_area)
+    rng = random.Random(314159)  # or use ws.rng for determinism
+    candidates = [(x, y) for x in range(rows) for y in range(cols) if (x, y) not in forbidden]
+    return rng.choice(candidates) if candidates else (rows // 2, cols // 2)
+
+
+def _make_atm_prompt(x, y):
+    token = f"NO_FLY_{x}_{y}"
+    # keep text short, assertive; client will render red+bold
+    text = f"Grid ({x}, {y}) is reserved for helicopter traffic. Keep out. Confirm by typing '{token}'."
+    return token, text
+
+
 def compute_utilization(human, now, window=SLIDING_WINDOW):
     # start from window‐ago
     t0 = now - window
@@ -322,7 +348,9 @@ if __name__ == "__main__":
             'wind_speed':[],
             'progress':[],
             'workload':[],
-            'vic_msg':[]
+            'vic_msg':[],
+            'atm_prompt':[],   # server → one client: {"id","text","token","coord":[x,y]}
+            'atm_clear':[],    # server → one client: {"id": ...}
             }
         while running:
             # === Avoid high CPU usage ===
@@ -346,7 +374,7 @@ if __name__ == "__main__":
                     pass
 
             # == Task priority update ===
-            if data and data['tasks'] is not None:
+            if isinstance(data, dict) and data.get('tasks') is not None:
                 exist_task_idx = []
                 for task in data['tasks']:
                     exist_task_idx.append(task['task_id'])
@@ -441,21 +469,44 @@ if __name__ == "__main__":
                 if (firemsg_idx < len(FIREMSG_TIMES)
                         and running_time >= FIREMSG_TIMES[firemsg_idx]):
                     print(f"[t={running_time:.1f}] Triggering new fire message")
-                    labeler.advance({"p_firemsg_0_3_1_0"})
+                    labeler.advance({"p_firemsg_0_0_0_0"})
                     firemsg_idx += 1
 
                 # 2. possible new survivor messages
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
                         and running_time >= SURVIVORMSG_TIMES[survivormsg_idx]):
                     print(f"[t={running_time:.1f}] Triggering new survivor message")
-                    labeler.advance({"p_survivormsg_0_3_1_0"})
+                    labeler.advance({"p_survivormsg_0_0_0_0"})
                     survivormsg_idx += 1
 
-                # 3. possible new ATM broadcast
-                if (atmmsg_idx < len(ATMMSG_TIMES)
-                        and running_time >= ATMMSG_TIMES[atmmsg_idx]):
-                    print(f"[t={running_time:.1f}] Triggering new ATM message")
-                    labeler.advance({"p_atmmsg_0_3_1_0"})
+                # 3. ATM scheduler (prompt + env broadcast)
+                if (atmmsg_idx < len(ATMMSG_TIMES)) and (running_time >= ATMMSG_TIMES[atmmsg_idx]):
+                    from math import isfinite
+                    # global atm_prompt_id, current_atm_prompt, atm_sent_for_prompt
+
+                    # If previous prompt is still pending, record failure and replace it
+                    if current_atm_prompt is not None:
+                        print(f"[t={running_time:.1f}] ATM overrun: previous prompt {current_atm_prompt['id']} failed")
+                        atm_results.append(False)
+
+                    # Create a new prompt
+                    x, y = _pick_coord_avoiding_targets(ws, grid_size=grid_size)
+                    token, text = _make_atm_prompt(x, y)
+                    atm_prompt_id += 1
+                    current_atm_prompt = {"id": atm_prompt_id, "coord": (x, y), "token": token, "text": text, "time": running_time}
+                    atm_sent_for_prompt.clear()
+
+                    # Add a small no-fly dot to the environment so path planners can avoid it
+                    # (we'll handle planner-side propagation in rrt_connect_ltl / utils later)
+                    try:
+                        ws.env.obs_circle.append([x, y, 0.8])
+                    except Exception as e:
+                        print(f"[ATM] Warning: failed to add no-fly dot: {e}")
+
+                    # Environment AP broadcast occurs at the scheduled tick
+                    print(f"[t={running_time:.1f}] ATM broadcast: {token} @ ({x},{y})")
+                    labeler.advance({"p_atmmsg_0_0_0_0"})
+
                     atmmsg_idx += 1
 
                 # === Victim detection after p_scan_i ===
@@ -491,8 +542,20 @@ if __name__ == "__main__":
                             # (optional) keep active_target_for_user as a fallback, but no longer relied on
                             active_target_for_user = tid
 
+                # === If a human is assigned p_nofly_*, send the ATM prompt now ===
+                for agent, ap in assignments.items():
+                    if isinstance(ap, str) and ap.startswith("p_nofly_") and str(getattr(agent, "role", "")).startswith("human"):
+                        if current_atm_prompt and (current_atm_prompt["id"] not in atm_sent_for_prompt):
+                            buffers['atm_prompt'].append({
+                                "id": current_atm_prompt["id"],
+                                "text": current_atm_prompt["text"],     # client renders red+bold
+                                "token": current_atm_prompt["token"],
+                                "coord": list(current_atm_prompt["coord"]),
+                            })
+                            atm_sent_for_prompt.add(current_atm_prompt["id"])
+
             # === GUI response handling ===
-            if data and data['victim'] is not None:
+            if isinstance(data, dict) and data.get('victim') is not None:
                 # respond to the specific target we sent to the user
                 if active_target_for_user is not None:
                     target_id = active_target_for_user
@@ -500,7 +563,7 @@ if __name__ == "__main__":
                     verify_ap = f"p_verify_{target_id}_3_1_0"
                     idx = int(target_id)
             
-            if data and data['victim'] is not None:
+            if isinstance(data, dict) and data.get('victim') is not None:
                 # prefer the tid the GUI tells us it acted on
                 target_id = data.get('verify_tid', None)
                 if target_id is None:
@@ -539,6 +602,21 @@ if __name__ == "__main__":
                     active_target_for_user = None
 
                 data['victim'] = None
+            
+            # === ATM reply handling ===
+            if data and data.get('atm_reply') is not None:
+                payload = data['atm_reply']
+                if current_atm_prompt and payload.get("id") == current_atm_prompt["id"]:
+                    typed = payload.get("typed", "")
+                    token = current_atm_prompt["token"]
+                    if isinstance(typed, str) and typed.startswith(token):
+                        atm_results.append(True)
+                        print(f"[t={running_time:.1f}] ATM confirmation accepted: {token}")
+                        # mark the human action complete
+                        labeler.advance({"p_nofly_0_3_1_0"})
+                        buffers['atm_clear'].append({"id": current_atm_prompt["id"]})
+                        current_atm_prompt = None
+                        atm_sent_for_prompt.clear()
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
@@ -581,7 +659,10 @@ if __name__ == "__main__":
             # Decide which client to send the message!!!
             if any(len(v) > 0 for v in buffers.values()):
                 message_all = {'tasks': None, 'wind_speed': None}
-                message_one = {'idx_image': None, 'vic_msg': None, 'workload': None}
+                message_one = {'idx_image': None, 'vic_msg': None, 'workload': None,
+                            # NEW fields
+                            'atm_prompt': None, 'atm_clear': None}
+
                 if buffers['idx_image']:
                     message_one['idx_image'] = buffers['idx_image'].pop(0)
 
@@ -590,24 +671,27 @@ if __name__ == "__main__":
 
                 if buffers['wind_speed']:
                     message_all['wind_speed'] = buffers['wind_speed'].pop(0)
-                
+
                 # if buffers['progress']:
                 #     message['progress'] = buffers['progress'].pop(0)
-                
+
                 if buffers['workload']:
                     message_one['workload'] = buffers['workload'].pop(0)
-                
+
                 if buffers['vic_msg']:
                     message_one['vic_msg'] = buffers['vic_msg'].pop(0)
 
-                # print(f"{survivor_index}. message sent!!!!!!!!!!!!!!!!!!!")
-                # Send messages to clients based on message_all and message_one
+                # NEW: ATM prompt/clear
+                if buffers['atm_prompt']:
+                    message_one['atm_prompt'] = buffers['atm_prompt'].pop(0)
+                if buffers['atm_clear']:
+                    message_one['atm_clear'] = buffers['atm_clear'].pop(0)
+
+                # Send messages to clients
                 if any(v is not None for v in message_all.values()):
-                    # Send message_all to all clients
                     for conn, addr in clients:
                         conn.sendall((json.dumps(message_all) + '\n').encode())
                 if any(v is not None for v in message_one.values()):
-                    # Send message_one to a random client
                     selected_client = np.random.choice(range(len(clients)))
                     conn, addr = clients[selected_client]
                     conn.sendall((json.dumps(message_one) + '\n').encode())

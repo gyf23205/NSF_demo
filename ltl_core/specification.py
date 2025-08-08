@@ -125,9 +125,9 @@ class Specification:
                 level_four[f"p_dropoff_{tid}"] = f"<> p_dropoff_{tid}_2_1_0"
 
             # Cyclic monitor formulas
-            level_four[f"p_firemsg_0"] = f"<> p_firemsg_0_3_1_0"
-            level_four[f"p_survivormsg_0"] = f"<> p_survivormsg_0_3_1_0"
-            level_four[f"p_atmmsg_0"] = f"<> p_atmmsg_0_3_1_0"
+            level_four[f"p_firemsg_0"] = f"<> p_firemsg_0_0_0_0"
+            level_four[f"p_survivormsg_0"] = f"<> p_survivormsg_0_0_0_0"
+            level_four[f"p_atmmsg_0"] = f"<> p_atmmsg_0_0_0_0"
             level_four[f"p_priority_0"] = f"<> p_priority_0_3_1_0"
             level_four[f"p_message_0"] = f"<> p_message_0_3_1_0"
             level_four[f"p_nofly_0"] = f"<> p_nofly_0_3_1_0"
