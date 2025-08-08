@@ -8,18 +8,17 @@ from constants import *
 
 # for estimator
 import csv
-from TF_raw import TransformerRawClassifier
+# from TF_raw import TransformerRawClassifier
+from TF_raw_regression import TransformerRawRegressor
 import torch
 # import hydra
 import json
 import numpy as np
 import yaml
 
-# For workload estimation
-csv_path = 'dummy_log\\aggregated_output.csv'
-from realtime_heart_plot import RealtimeHeartPlot
-from workload_speedometer import WorkloadSpeedometer
 
+# csv_path = 'D:\\Projects\\qualisys_drone_sdk\\dummy_log\\aggregated_output.csv'
+csv_path = 'dummy_log\\aggregated_output.csv'
 
 class Task:
     def __init__(self, surface, task_id, target_loc, task_pos, priority=0):
@@ -163,7 +162,7 @@ class UserGUI:
         self.button_handover.draw(self.screen)
 
         # Workload block
-        self.workload_text = Font(FONT, FONT_SIZE, (250, 70))
+        self.workload_text = Font(FONT, FONT_SIZE, (70, 70))
         self.workload = 'low'
         self.workload_text.update('Workload: '+ self.workload)
         self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
@@ -174,29 +173,13 @@ class UserGUI:
         self.weather_text = Font(FONT, FONT_SIZE, (weather_x, weather_y))
         self.weather = 'sunny'
         self.weather_text.update('Weather: '+ self.weather)
-        self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), BLUE, "Emergency")
-        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Major")
-        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Minor")
+        self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), BLUE, "Change routes")
+        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Maintain routes")
+        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Hand over")
         self.button_wind_change.draw(self.screen)
         self.button_wind_maintain.draw(self.screen)
         self.button_wind_handover.draw(self.screen)
-        # self.wind_speed_received = None
 
-        # Survivor Triage block (top-right)
-        self.surv_header_pos = (self.weather_text.pos[0], self.weather_text.pos[1])
-        self.surv_msg_pos = (self.surv_header_pos[0], self.surv_header_pos[1] + FONT_SIZE * line_height)
-
-        # Keep dedicated fonts and rects to avoid overlapping draws
-        self.surv_header_font = Font(FONT, FONT_SIZE, self.surv_header_pos)
-        self.surv_msg_font = Font(FONT, FONT_SIZE, self.surv_msg_pos)
-
-        # Compute a safe clear area for the survivor header + one line of text
-        self.surv_clear_rect = pygame.Rect(
-            self.surv_header_pos[0],
-            self.surv_header_pos[1],
-            3 * (grid_width + spacing) + 400,   # wide enough to cover header + one line msg
-            2 * FONT_SIZE * line_height + 10
-)
         # Task block
         self.task_x = 550
         self.task_y = 400
@@ -210,28 +193,12 @@ class UserGUI:
         self.task_list_y = self.task_y + len(self.task_text.texts) * line_height * FONT_SIZE
         self.task_list = []
         self.n_previous_tasks = len(self.task_list)
-        self.tasks_received = None
-
-        # --- Fire→Priority block (text + input) just above Task Monitor ---
-        # Position it a bit above the task header area
-        self.fire_x = self.task_x
-        self.fire_y = self.task_y - 3.5 * FONT_SIZE * line_height
-
-        self.fire_title = Font(FONT, FONT_SIZE, (self.fire_x, self.fire_y))
-        self.fire_body  = Font(FONT, FONT_SIZE, (self.fire_x, self.fire_y + FONT_SIZE * line_height))
-        # Input for numeric priority
-        self.fire_input = TextInputResponse((self.fire_x, self.fire_y + 2 * FONT_SIZE * line_height,
-                                            220, FONT_SIZE * line_height), color=WHITE, maximum=3)
-
-        # Region to clear each frame
-        self.fire_rect = pygame.Rect(self.fire_x, self.fire_y,
-                             6 * (grid_width + spacing), 3 * FONT_SIZE * line_height + 10)
 
         # Response block
         response_x = 40
         response_y = 650
         self.response_title = Font(FONT, FONT_SIZE, (response_x, response_y))
-        self.response_title.update('Air Traffic Management')
+        self.response_title.update('Messages from victims')
         self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
         self.response_text = Font(FONT, FONT_SIZE, (response_x, response_y + FONT_SIZE * line_height))
         self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 400, FONT_SIZE * line_height), color=WHITE, maximum=1000)
@@ -246,15 +213,12 @@ class UserGUI:
             last_row = rows[-1]
             last_row = list(map(float, last_row))
 
-        # with open(csv_path, 'w', newline='') as f:
-        #     f.truncate()
-
         # 2. run estimator model
         with open('config_ecg_gaze.yaml', 'r') as yf:
             cfg = yaml.safe_load(yf)
 
-        model = TransformerRawClassifier(
-            config=cfg["config_tf"],
+        model = TransformerRawRegressor(
+            config=cfg["config_tf_gauge"],
             optim_cfg=cfg["optim"],
             pre_process=cfg.get("pre_process", None)
         )
@@ -282,28 +246,34 @@ class UserGUI:
         else:
             workload_text = 'low'
 
+        # workload_text = np.random.choice(['low', 'medium', 'high'], p=[0.3, 0.4, 0.3])
+
         self.workload_text.clear()
         self.workload_text.update('Workload: ' + workload_text)  
         area = self.workload_text.rect.copy()
         area.width += 100  # Adjust width to fit the screen
         pygame.draw.rect(self.screen, WHITE, area)
-        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])          
-
-        # Render meter graphics
-        heart_plot.update(ecg); heart_plot.render(self.screen)                                     # ONE LINE for HR
-        workload_meter.update(pred_label)
-        workload_meter.render(self.screen, (100, 100)) # ONE LINE for WL   
+        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])             
         ###################### Update workload text ends #####################
 
 
+        # ###################### Update workload text ######################
+        # if data and data['workload'] is not None:
+        #     self.workload_text.clear()
+        #     self.workload_text.update('Workload: ' + data['workload'])
+        #     # clean the previous workload text
+        #     pygame.draw.rect(self.screen, WHITE, self.workload_text.rect)
+        #     self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
+        # ###################### Update workload text ends #####################
+
+
         ###################### Victim block ######################
-        # if data and data['idx_image'] is not None:
-        #     # print(data['idx_image'])
-        #     victim_buffer.append(data['idx_image'])
-        #     data['idx_image'] = None
+        if data and data['idx_image'] is not None:
+            # print(data['idx_image'])
+            victim_buffer.append(data['idx_image'])
+            data['idx_image'] = None
         if victim_buffer:
-            image_id = victim_buffer[0]["image_id"] if isinstance(victim_buffer[0], dict) else victim_buffer[0]
-            image_path = f"examples/images/victim{image_id}.jpg"
+            image_path = f"examples/images/victim{victim_buffer[0]}.jpeg"
             pil_image = Image.open(image_path)
             pil_image = pil_image.resize((self.image_width, self.image_height))
             image = pygame.image.fromstring(pil_image.tobytes(), pil_image.size, pil_image.mode)
@@ -314,33 +284,14 @@ class UserGUI:
         else:
             pygame.draw.rect(self.screen, WHITE, self.image_rect)
         ###################### Victim block ends ######################
-        
-        ###################### Fire→Priority block (above Task Monitor) ######################
-        pygame.draw.rect(self.screen, WHITE, self.fire_rect)
 
-        # Title
-        self.fire_title.clear()
-        self.fire_title.update('Priority Request')
-        self.screen.blit(self.fire_title.texts[0][0], self.fire_title.texts[0][1])
-
-        # Body & input
-        self.fire_body.clear()
-        if fire_active and fire_text:
-            self.fire_body.update(fire_text)  # e.g., "Region 3 is in danger. Set its priority to HIGH (2)."
-        else:
-            self.fire_body.update('No active fire-related priority request.')
-        self.screen.blit(self.fire_body.texts[0][0], self.fire_body.texts[0][1])
-
-        # Input box (always drawn, but only meaningful if active)
-        self.fire_input.draw(self.screen)
-        ###################### Fire→Priority block ends ######################
 
         ###################### Task block ######################
         # print('data before receiving tasks: ', data)
-        if self.tasks_received is not None:
+        if data is not None and data['tasks'] is not None:
             # print('Received tasks from server: ', data['tasks'])
             self.task_list = []
-            for i, task in enumerate(self.tasks_received):
+            for i, task in enumerate(data['tasks']):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
                 task_id, target_loc, priority, assigned_drone = task
                 new_task = Task(self.screen, task_id, target_loc, task_pos, priority)
@@ -348,7 +299,6 @@ class UserGUI:
                 # print(assigned_drone)
                 self.task_list.append(new_task)
                 # print(new_task.priority_input.text)
-            self.tasks_received = None
 
         # Clear the task area before drawing
         task_table_width = 6 * (grid_width + spacing)
@@ -375,48 +325,31 @@ class UserGUI:
                 task.draw()
         ########################## Task block ends ######################
 
-        ###################### Survivor Triage (top-right) ######################
-        # Clear previously drawn header + message area to prevent overlap
-        pygame.draw.rect(self.screen, WHITE, self.surv_clear_rect)
-
-        # Header
-        self.surv_header_font.clear()
-        self.surv_header_font.update('Survivor Triage')
-        self.screen.blit(self.surv_header_font.texts[0][0], self.surv_header_font.texts[0][1])
-
-        # Message line below header
-        self.surv_msg_font.clear()
-        self.surv_msg_font.update(surv_text if surv_active and surv_text else "No active survivor message.")
-        self.screen.blit(self.surv_msg_font.texts[0][0], self.surv_msg_font.texts[0][1])
-
-        # Buttons: keep using existing buttons; just redraw them each frame
-        self.button_wind_change.text   = surv_choices[0]  # Emergency
-        self.button_wind_maintain.text = surv_choices[1]  # Serious
-        self.button_wind_handover.text = surv_choices[2]  # Minor
-        self.button_wind_change.draw(self.screen)
-        self.button_wind_maintain.draw(self.screen)
-        self.button_wind_handover.draw(self.screen)
-        ###################### Survivor Triage ends ######################
+        ###################### Weather block ######################
+        if data and data['wind_speed'] is not None:
+            self.weather = data['wind_speed']
+            pygame.draw.rect(self.screen, WHITE, self.weather_text.rect)  # Clear the previous weather text
+            self.weather_text.clear()
+            self.weather_text.update('Wind speed changes significantly, current speed: ' + "{:.2f}".format(self.weather))
+            self.screen.blit(self.weather_text.texts[0][0], self.weather_text.texts[0][1])
+        ###################### Weather block ends ######################
 
         ####################### Response block ##########################
-        response_region_width = 520
+        response_region_width = 520  # Adjust as needed
         response_region_height = 3 * FONT_SIZE * line_height + 20
         pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
+        # Draw the response title every frame
+        for text in self.response_title.texts:
+            self.screen.blit(text[0], text[1])
 
-        # Title (always ATM)
-        self.response_title.clear()
-        self.response_title.update('Air Traffic Management')
-        self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
-
-        # Body (ATM prompt or default)
+        if data and data['vic_msg'] is not None:
+            vic_msg_buffer.append(data['vic_msg'])
+            data['vic_msg'] = None
+        
         self.response_text.clear()
-        if atm_active and atm_text:
-            self.response_text.update(atm_text)  # client can colorize if desired
-        else:
-            self.response_text.update('No active ATM message.')
-        self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
-
-        # Input (same widget)
+        if vic_msg_buffer:
+            self.response_text.update(vic_msg_buffer[0])
+            self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
         self.response_input.draw(self.screen)
         ###################### Response block ends ######################
         pygame.display.flip()
@@ -435,40 +368,14 @@ if __name__ == '__main__':
 
     gui = UserGUI()
 
-    # Meter Graphics initailization
-    heart_plot = RealtimeHeartPlot(position=(50, 800), hr_interval_seconds= 10)
-    workload_meter = WorkloadSpeedometer(850, 500)
-
     # response['victim']: 'reject' or 'accept'
     # response['weather_decision']: 'change' or 'maintain'
     # response['tasks']: list of Task objects
     response = {'victim': None, 'weather_decision': None, 'tasks': None} # Response to be sent back to the server
     running = True
-
-    # Survivor image
     victim_buffer = []  # Buffer to store victims
     vic_msg_buffer = []  # Buffer to store messages from victims
-
-    # ATM message
-    atm_active = False
-    atm_prompt_id = None
-    atm_token = None
-    atm_text = ""   # what we show in the left-bottom message line
-
-    # Survivor triage (top-right)
-    surv_active = False
-    surv_prompt_id = None
-    surv_text = ""
-    surv_choices = ["Emergency", "Serious", "Minor"]
-
-    # Fire→Priority (right-bottom, above Task Monitor)
-    fire_active = False
-    fire_prompt_id = None
-    fire_task_id = None
-    fire_required = None
-    fire_text = ""
-
-    # data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'vic_msg': None}  # Initialize data
+    data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'workload': None, 'vic_msg': None}  # Initialize data
     try:
         recv_buffer = ''
         while running:
@@ -476,7 +383,6 @@ if __name__ == '__main__':
             # Receive weather, task, victim from server
             try:
                 data_received = s.recv(4096).decode()
-                # print('Data received !!!!!!!!!!!!!!!!!!!!!!!!!!')
                 if data_received:
                     recv_buffer += data_received
                     while '\n' in recv_buffer:
@@ -486,58 +392,16 @@ if __name__ == '__main__':
                             # print('Received data from server:', repr(data_temp))
                             for key, value in data_temp.items():
                                 if value is not None:
-                                    if key == 'idx_image':
-                                        # value is {"image_id": int, "tid": "2"} from server
-                                        victim_buffer.append(value)
-                                    if key == 'tasks':
-                                        gui.tasks_received = value
-                                    # if key == 'wind_speed':
-                                        # gui.wind_speed_received = value
-                                    # if key == 'vic_msg':
-                                    #     vic_msg_buffer.append(value)
-                                    if key == 'atm_prompt':
-                                        # value: {"id": ..., "text": "...", "token": "...", "coord": [x, y]}
-                                        atm_active = True
-                                        atm_prompt_id = value.get("id")
-                                        atm_token = value.get("token")
-                                        atm_text = value.get("text") or ""
-                                    if key == 'atm_clear':
-                                        # value: {"id": ...}
-                                        atm_active = False
-                                        atm_prompt_id = None
-                                        atm_token = None
-                                        atm_text = ""  # will fall back to existing buffer or placeholder
-                                    if key == 'surv_prompt':
-                                        # {"id","text","choices":[...]}
-                                        surv_active = True
-                                        surv_prompt_id = value.get("id")
-                                        surv_text = value.get("text") or ""
-                                        surv_choices = value.get("choices") or ["Emergency","Serious","Minor"]
-                                    if key == 'surv_clear':
-                                        # {"id":..., "ok": True|False}
-                                        if value.get("ok") is True and value.get("id") == surv_prompt_id:
-                                            surv_active = False
-                                            surv_prompt_id = None
-                                            surv_text = ""
-                                    if key == 'fire_prompt':
-                                        # {"id","task_id","text","required"}
-                                        fire_active = True
-                                        fire_prompt_id = value.get("id")
-                                        fire_task_id = value.get("task_id")
-                                        fire_required = value.get("required")
-                                        fire_text = value.get("text") or ""
-                                    if key == 'fire_clear':
-                                        # {"id":..., "ok": True|False, "reason": "..."}
-                                        if value.get("id") == fire_prompt_id:
-                                            # clear regardless of ok to match server contract
-                                            fire_active = False
-                                            fire_prompt_id = None
-                                            fire_task_id = None
-                                            fire_required = None
-                                            fire_text = ""
+                                    # print(value)
+                                    data[key] = value
                     data_received = None
             except BlockingIOError:
                 pass
+            
+
+            # if data and data['tasks'] is not None:
+            #     tasks = data['tasks']
+                # print('Received tasks from server:', tasks)
 
             # Event handling
             for event in pygame.event.get():
@@ -547,31 +411,25 @@ if __name__ == '__main__':
                 # Victim handling
                 if gui.button_accept.handle_event(event):
                     gui.image = None
-                    clicked_item = victim_buffer.pop(0) if victim_buffer else None
+                    # data['idx_image'] = None
+                    if victim_buffer:
+                        victim_buffer.pop(0)
                     response_changed = True
                     response['victim'] = 'accept'
-                    response['verify_tid'] = (
-                        str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
-                    )
-
                 elif gui.button_reject.handle_event(event):
                     gui.image = None
-                    clicked_item = victim_buffer.pop(0) if victim_buffer else None
+                    # data['idx_image'] = None
+                    if victim_buffer:
+                        victim_buffer.pop(0)
                     response_changed = True
                     response['victim'] = 'reject'
-                    response['verify_tid'] = (
-                        str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
-                    )
-
                 elif gui.button_handover.handle_event(event):
                     gui.image = None
-                    clicked_item = victim_buffer.pop(0) if victim_buffer else None
+                    # data['idx_image'] = None
+                    if victim_buffer:
+                        victim_buffer.pop(0)
                     response_changed = True
                     response['victim'] = 'handover'
-                    response['verify_tid'] = (
-                        str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
-                    )
-
                 else:
                     pass
 
@@ -590,47 +448,30 @@ if __name__ == '__main__':
                 if response_changed:
                     response['tasks'] = [task.to_dict() for task in gui.task_list]
 
-                # Top-right triage buttons
+                # Weather handling
                 if gui.button_wind_change.handle_event(event):
-                    if surv_active and surv_prompt_id is not None:
-                        s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[0]}}) + '\n').encode('utf-8'))
-
+                    response_changed = True
+                    response['weather_decision'] = 'change'
                 elif gui.button_wind_maintain.handle_event(event):
-                    if surv_active and surv_prompt_id is not None:
-                        s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[1]}}) + '\n').encode('utf-8'))
-
+                    response_changed = True
+                    response['weather_decision'] = 'maintain'
                 elif gui.button_wind_handover.handle_event(event):
-                    if surv_active and surv_prompt_id is not None:
-                        s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[2]}}) + '\n').encode('utf-8'))
+                    response_changed = True
+                    response['weather_decision'] = 'handover'
+                else:
+                    pass
                     
-                # ATM response handling
+                # Response handling
                 gui.response_input.handle_event(event)
                 if gui.response_input.finish:
-                    user_text = getattr(gui.response_input, 'text_send', gui.response_input.text)
-                    gui.response_input.finish = False
+                    # response_changed = True
+                    # response['vic_response'] = gui.response_input.text_send
+                    gui.response_input.finish = False  # Reset finish flag
                     gui.response_input.text = ""
-
-                    if atm_active and atm_prompt_id is not None:
-                        s.sendall((json.dumps({"atm_reply": {"id": atm_prompt_id, "typed": user_text}}) + '\n').encode('utf-8'))
-                
-                # Fire→Priority input handling
-                gui.fire_input.handle_event(event)
-                if gui.fire_input.finish:
-                    user_text = getattr(gui.fire_input, 'text_send', gui.fire_input.text).strip()
-                    gui.fire_input.finish = False
-                    gui.fire_input.text = ""
-                    if fire_active and fire_prompt_id is not None and fire_task_id is not None:
-                        try:
-                            priority_val = int(user_text)
-                        except ValueError:
-                            priority_val = user_text
-                        s.sendall((json.dumps({
-                            "priority_reply": {
-                                "id": fire_prompt_id,
-                                "task_id": int(fire_task_id),
-                                "priority": priority_val
-                            }
-                        }) + '\n').encode('utf-8'))
+                    # print(vic_msg_buffer)
+                    if vic_msg_buffer:
+                        vic_msg_buffer.pop(0)
+                        # print(vic_msg_buffer)
 
             # Render the GUI and get the response
             gui.render()
