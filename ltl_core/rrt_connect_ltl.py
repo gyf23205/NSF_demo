@@ -31,7 +31,7 @@ from .utils_rrt_ltl import Utils, Node
 
 
 class RrtConnect:
-    def __init__(self, agent, step_len, goal_sample_rate, iter_max):
+    def __init__(self, agent, dt, step_len, goal_sample_rate, iter_max):
         self.path = None    # Added by SY
         self.agent = agent
         self.s_start = Node(agent.pos)
@@ -55,7 +55,7 @@ class RrtConnect:
         self.obs_rectangle = self.env.obs_rectangle
         self.obs_boundary = self.env.obs_boundary
 
-        self.dist = 0.02     # 0.02
+        self.dist = 0.28 * dt     # 0.02
 
     def planning(self):
         # Drone vs GVs

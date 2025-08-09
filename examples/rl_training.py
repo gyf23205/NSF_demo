@@ -11,7 +11,7 @@ from ltl_core.simulation import *
 
 
 SLIDING_WINDOW = 60.0
-TIME_OUT = 500.0
+TIME_OUT = 3000.0
 grid_size = (50, 40)
 
 # Event setup
@@ -193,7 +193,7 @@ if __name__ == '__main__':
                     labeler.advance({chosen_gate})
 
         # Print
-        if verbose and running_time - last_print_time >= 5.0:
+        if verbose and running_time - last_print_time >= 20.0:
             last_print_time = running_time
             print(f"\n[DEBUG:{running_time:.2f}] -------------------------")
             print(f"[DEBUG:{running_time:.2f}] Unlocked APs: {sorted(unlocked)}")
@@ -201,7 +201,7 @@ if __name__ == '__main__':
             print(f"[DEBUG:{running_time:.2f}] Completed: {sorted(completed)}")
 
         # Check if simulation is done
-        if labeler.all_completed():
+        if labeler.all_completed() and ws.all_mobile_agents_at_base():
             print(f"[t={running_time:.2f}] Mission completed!")
             running = False
 

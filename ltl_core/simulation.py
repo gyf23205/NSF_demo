@@ -84,7 +84,7 @@ class Simulation:
                         agent.goal = np.array(self.workspace.dropoff_locations[idx], dtype=float)
                     else:
                         agent.goal = np.array(self.workspace.target_locations[idx], dtype=float)
-                    rrt_conn = RrtConnect(agent, 0.8, 0.2, 5000)
+                    rrt_conn = RrtConnect(agent, dt, 0.8, 0.2, 5000)
                     rrt_conn.planning()
                     rrt_conn.smoothing()
                     agent.path = rrt_conn.path.copy()
@@ -122,7 +122,7 @@ class Simulation:
                 if available_bases:
                     agent.goal = np.array(available_bases[0], dtype=float)
                     agent.return_base = True
-                    rrt_conn = RrtConnect(agent, 0.8, 0.2, 5000)
+                    rrt_conn = RrtConnect(agent, dt, 0.8, 0.2, 5000)
                     rrt_conn.planning()
                     rrt_conn.smoothing()
                     agent.path = rrt_conn.path.copy()
