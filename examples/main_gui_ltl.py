@@ -214,7 +214,7 @@ if __name__ == "__main__":
     try:
         # === Setup socket for GUI communication ===
         # Create a server for socket communication
-        host = '0.0.0.0'  # Use '127.0.0.1' to accept connections only from localhost
+        host = '127.0.0.1'  # Use '127.0.0.1' to accept connections only from localhost
         port = 8888
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))

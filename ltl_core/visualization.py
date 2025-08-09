@@ -82,6 +82,7 @@ def _english_label(node: str) -> str:
       'fire':         'Set Priority',
       'survivor':     'Message',
       'atm':          'Air Traffic',
+      'aux':          'Region'
     }
     label = m.get(kind, node)
     return f"{label} {region}".strip()
@@ -134,9 +135,9 @@ def draw_composite_hierarchy(spec, figsize=(10, 6)):
         x_aux_max = max(pos[n][0] for n in aux_nodes)
         step_aux = 0 if len(aux_nodes) == 1 else (x_aux_max - x_aux_min) / (len(aux_nodes) - 1)
 
-        for k, node in enumerate(aux_nodes):
-            _, y = pos[node]
-            pos[node] = (x_aux_min + k * step_aux, y)
+    for k, node in enumerate(aux_nodes):
+        _, y = pos[node]
+        pos[node] = (x_aux_min + k * step_aux, y)
     # ----------------------------------------------------------------------------
 
     # 5) --- Improved Level-4 layout with vertical chains and x-distribution -----
@@ -263,44 +264,83 @@ def draw_atomic_pairwise(G: nx.DiGraph, figsize=(8,6)):
     plt.show()
 
 
-def animate_workspace(ws, steps=20, interval=500):
+def animate_workspace(
+    ws,
+    steps=200,
+    interval=100,
+    sim=None,
+    dt=0.1,
+    record=False,
+    output_path="workspace.gif",
+):
+    """
+    Animate the workspace, reflected across the line y = x (visual swap of coordinates).
+
+    Modes:
+      • Live mode: provide `sim`; calls sim.step(dt=..., mode="sim", verbose=False) each frame.
+      • Playback mode: if `sim` is None, replays recorded agent.traj / progress_traj.
+
+    Args:
+        ws: Workspace
+        steps: number of frames to animate (cap for live mode; full length for playback)
+        interval: delay between frames in ms
+        sim: Simulation or None
+        dt: timestep used in live mode when calling sim.step()
+        record: if True, saves a GIF to output_path (Pillow writer)
+        output_path: path to .gif
+    """
     fig, ax = plt.subplots(figsize=(8, 8))
-    ax.set_xlim(0, ws.size[1])
-    ax.set_ylim(0, ws.size[0])
+
+    # Because we flip across y=x, swap the axis extents too:
+    ax.set_xlim(0, ws.size[0])   # was ws.size[1]
+    ax.set_ylim(0, ws.size[1])   # was ws.size[0]
     ax.set_aspect('equal')
     ax.grid(True)
 
+    # --- Static areas (swap x,y for visual flip) ---
     for (x, y) in ws.base_area:
-        ax.add_patch(patches.Rectangle((y, x), 1, 1, linewidth=1,
-                                       edgecolor='blue', facecolor='lightblue', alpha=0.3))
+        ax.add_patch(
+            patches.Rectangle((x, y), 1, 1, linewidth=1,
+                              edgecolor='blue', facecolor='lightblue', alpha=0.3)
+        )
     for (x, y) in ws.hospital_area:
-        ax.add_patch(patches.Rectangle((y, x), 1, 1, linewidth=1,
-                                       edgecolor='red', facecolor='mistyrose', alpha=0.3))
+        ax.add_patch(
+            patches.Rectangle((x, y), 1, 1, linewidth=1,
+                              edgecolor='red', facecolor='mistyrose', alpha=0.3)
+        )
 
+    # --- Targets (swap x,y for visual flip) ---
     target_dots = []
     target_texts = []
     for i, (x, y) in enumerate(ws.target_locations):
-        dot, = ax.plot(y + 0.5, x + 0.5, 'ro', markersize=10)
-        txt = ax.text(y + 0.5, x + 0.5, f"T{i}", color='black',
+        dot, = ax.plot(x + 0.5, y + 0.5, 'ro', markersize=10)
+        txt = ax.text(x + 0.5, y + 0.5, f"T{i}", color='black',
                       fontsize=12, ha='center', va='center')
         target_dots.append(dot)
         target_texts.append(txt)
 
+    # --- Mobile agents (drones, GVs) ---
     agent_dots = {}
     for role in ["drones", "gvs"]:
+        color = {'drones': 'b', 'gvs': 'g'}[role]
         for agent in ws.agents[role]:
-            dot, = ax.plot([], [], 'o', label=agent.label,
-                           color={'drones': 'b', 'gvs': 'g'}[role], markersize=10)
+            dot, = ax.plot([], [], 'o', label=agent.label, color=color, markersize=10)
             agent_dots[agent.label] = dot
 
+    # --- Humans (static positions) ---
     for agent in ws.agents["humans"]:
-        x, y = agent.pos
-        ax.plot(y + 0.5, x + 0.5, 'o', color='orange', markersize=10)
-        ax.text(y + 0.5, x + 0.5, agent.label, fontsize=12, ha='center', va='center')
+        x, y = agent.pos  # (row, col) stored in Agent.pos
+        # For the flip, draw at (x+0.5, y+0.5) instead of (y+0.5, x+0.5)
+        ax.plot(x + 0.5, y + 0.5, 'o', color='orange', markersize=10)
+        ax.text(x + 0.5, y + 0.5, agent.label, fontsize=12, ha='center', va='center')
 
+    # --- Per-frame overlays ---
     progress_halos = []
     progress_texts = []
-    step_text = ax.text(0.5, ws.size[0] - 0.5, "", fontsize=12, color='gray', ha='left')
+    # Put step text near the (flipped) top-left corner
+    step_text = ax.text(0.5, ws.size[1] - 0.5, "", fontsize=12, color='gray', ha='left')
+
+    live_mode = sim is not None
 
     def init():
         for dot in agent_dots.values():
@@ -309,6 +349,7 @@ def animate_workspace(ws, steps=20, interval=500):
         return list(agent_dots.values()) + target_dots + target_texts + [step_text]
 
     def update(frame):
+        # Clear previous overlays
         for halo in progress_halos:
             halo.remove()
         for txt in progress_texts:
@@ -316,36 +357,70 @@ def animate_workspace(ws, steps=20, interval=500):
         progress_halos.clear()
         progress_texts.clear()
 
-        step_text.set_text(f"Step: {frame}")
+        # Advance simulation in live mode
+        if live_mode:
+            sim.step(dt=dt, mode="sim", verbose=False)
+            step_text.set_text(f"t = {frame * dt:.1f}s")
+        else:
+            step_text.set_text(f"Step: {frame}")
 
+        # --- Drones & GVs ---
         for role in ["drones", "gvs"]:
             for agent in ws.agents[role]:
-                if frame < len(agent.traj):
+                # Source position: live = current pos; playback = traj[frame]
+                if live_mode:
+                    row, col = agent.pos
+                else:
+                    if frame >= len(agent.traj):
+                        continue
                     row, col = agent.traj[frame]
-                    x_plot, y_plot = col + 0.5, row + 0.5
-                    agent_dots[agent.label].set_data(x_plot, y_plot)
 
+                # Flip across y=x by swapping x/y for plotting
+                x_plot, y_plot = row + 0.5, col + 0.5
+
+                # set_data needs sequences (fix for Line2D)
+                agent_dots[agent.label].set_data([x_plot], [y_plot])
+
+                # Progress halo & text
+                if live_mode:
+                    task = getattr(agent, "current_symbolic_task", None)
+                    p_val = agent.get_progress(task) if task else 0.0
+                else:
                     p_val = agent.progress_traj[frame] if frame < len(agent.progress_traj) else 0.0
-                    if p_val > 0:
-                        halo, = ax.plot(x_plot, y_plot, 'o', color='lime', markersize=15, alpha=p_val * 0.6)
-                        text = ax.text(x_plot, y_plot + 0.3, f"{p_val:.1f}", fontsize=8, color='green', ha='center')
-                        progress_halos.append(halo)
-                        progress_texts.append(text)
 
+                if p_val > 0:
+                    halo, = ax.plot([x_plot], [y_plot], 'o', color='lime', markersize=15, alpha=p_val * 0.6)
+                    text = ax.text(x_plot, y_plot + 0.3, f"{p_val:.1f}", fontsize=8, color='green', ha='center')
+                    progress_halos.append(halo)
+                    progress_texts.append(text)
+
+        # --- Humans: progress halo (position static but show progress if any) ---
         for agent in ws.agents["humans"]:
             row, col = agent.pos
-            x_plot, y_plot = col + 0.5, row + 0.5
-            p_val = agent.progress_traj[frame] if frame < len(agent.progress_traj) else 0.0
+            x_plot, y_plot = row + 0.5, col + 0.5  # flipped
+            if live_mode:
+                task = getattr(agent, "current_symbolic_task", None)
+                p_val = agent.get_progress(task) if task else 0.0
+            else:
+                p_val = agent.progress_traj[frame] if frame < len(agent.progress_traj) else 0.0
+
             if p_val > 0:
-                halo, = ax.plot(x_plot, y_plot, 'o', color='lime', markersize=15, alpha=p_val * 0.6)
+                halo, = ax.plot([x_plot], [y_plot], 'o', color='lime', markersize=15, alpha=p_val * 0.6)
                 text = ax.text(x_plot, y_plot + 0.3, f"{p_val:.1f}", fontsize=8, color='green', ha='center')
                 progress_halos.append(halo)
                 progress_texts.append(text)
 
         return list(agent_dots.values()) + progress_halos + progress_texts + target_dots + target_texts + [step_text]
 
-    ani = animation.FuncAnimation(fig, update, init_func=init,
-                                  frames=steps, interval=interval, blit=False)
+    ani = animation.FuncAnimation(
+        fig, update, init_func=init,
+        frames=steps, interval=interval, blit=False
+    )
+
     plt.legend()
     plt.tight_layout()
+
+    if record:
+        ani.save(output_path, writer="pillow")
+
     return ani
