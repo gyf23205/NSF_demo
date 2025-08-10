@@ -1,0 +1,361 @@
+symptom,label,level
+crush injury ankle moderate,2,Serious
+severe bleeding foot,3,Emergency
+small laceration pelvis,1,Minor
+amputation hand partial,3,Emergency
+mild burn knee,1,Minor
+compartment syndrome face,3,Emergency
+penetrating wound leg,2,Serious
+small laceration back,1,Minor
+severe bleeding shin,3,Emergency
+penetrating wound face,2,Serious
+penetrating wound ankle,2,Serious
+3rd-degree burn shoulder,3,Emergency
+2nd-degree burn leg,2,Serious
+crush injury head moderate,2,Serious
+3rd-degree burn leg,3,Emergency
+amputation ankle partial,3,Emergency
+blister scalp,1,Minor
+strain knee,1,Minor
+compartment syndrome eye,3,Emergency
+fracture tibia,2,Serious
+minor cut ankle,1,Minor
+blister shin,1,Minor
+blister shoulder,1,Minor
+penetrating wound wrist,2,Serious
+deep laceration arm,2,Serious
+dislocation elbow,2,Serious
+compartment syndrome finger,3,Emergency
+compartment syndrome toe,3,Emergency
+moderate bleeding hip,2,Serious
+2nd-degree burn pelvis,2,Serious
+crush injury leg moderate,2,Serious
+open fracture skull,3,Emergency
+penetrating wound neck,2,Serious
+minor cut toe,1,Minor
+minor cut hip,1,Minor
+mild burn neck,1,Minor
+2nd-degree burn shoulder,2,Serious
+crush injury arm severe,3,Emergency
+penetrating wound eye,2,Serious
+3rd-degree burn hand,3,Emergency
+minor cut leg,1,Minor
+minor cut chest,1,Minor
+blister knee,1,Minor
+amputation scalp partial,3,Emergency
+moderate bleeding leg,2,Serious
+mild hypothermia,1,Minor
+moderate bleeding hand,2,Serious
+crush injury neck severe,3,Emergency
+deep laceration wrist,2,Serious
+crush injury eye moderate,2,Serious
+3rd-degree burn abdomen,3,Emergency
+strain finger,1,Minor
+minor cut scalp,1,Minor
+2nd-degree burn knee,2,Serious
+crush injury shoulder moderate,2,Serious
+sprain wrist,1,Minor
+3rd-degree burn thigh,3,Emergency
+moderate bleeding back,2,Serious
+crush injury hand severe,3,Emergency
+small laceration face,1,Minor
+airway obstruction,3,Emergency
+strain hand,1,Minor
+moderate bleeding knee,2,Serious
+deep laceration foot,2,Serious
+crush injury hip severe,3,Emergency
+small laceration head,1,Minor
+deep laceration chest,2,Serious
+severe bleeding hand,3,Emergency
+moderate bleeding finger,2,Serious
+amputation chest partial,3,Emergency
+seizure ongoing,3,Emergency
+open fracture spine,3,Emergency
+compartment syndrome wrist,3,Emergency
+blister foot,1,Minor
+2nd-degree burn foot,2,Serious
+amputation shoulder partial,3,Emergency
+mild burn foot,1,Minor
+amputation knee partial,3,Emergency
+penetrating wound finger,2,Serious
+severe bleeding neck,3,Emergency
+small laceration thigh,1,Minor
+mild burn ankle,1,Minor
+anaphylaxis,3,Emergency
+2nd-degree burn hip,2,Serious
+bruise eye,1,Minor
+blister face,1,Minor
+crush injury scalp severe,3,Emergency
+penetrating wound shoulder,2,Serious
+compartment syndrome arm,3,Emergency
+deep laceration forearm,2,Serious
+blister leg,1,Minor
+small laceration chest,1,Minor
+compartment syndrome scalp,3,Emergency
+2nd-degree burn toe,2,Serious
+penetrating wound scalp,2,Serious
+amputation finger partial,3,Emergency
+bruise leg,1,Minor
+minor cut wrist,1,Minor
+compartment syndrome knee,3,Emergency
+compartment syndrome ankle,3,Emergency
+2nd-degree burn head,2,Serious
+crush injury neck moderate,2,Serious
+severe bleeding ear,3,Emergency
+minor cut foot,1,Minor
+2nd-degree burn forearm,2,Serious
+bruise abdomen,1,Minor
+open fracture pelvis,3,Emergency
+hypothermia severe,3,Emergency
+crush injury scalp moderate,2,Serious
+amputation back partial,3,Emergency
+blister hip,1,Minor
+deep laceration back,2,Serious
+3rd-degree burn scalp,3,Emergency
+crush injury abdomen moderate,2,Serious
+blister back,1,Minor
+dislocation knee,2,Serious
+crush injury foot severe,3,Emergency
+2nd-degree burn thigh,2,Serious
+deep laceration face,2,Serious
+moderate bleeding eye,2,Serious
+mild burn arm,1,Minor
+mild burn thigh,1,Minor
+deep laceration ankle,2,Serious
+compartment syndrome thigh,3,Emergency
+open fracture fibula,3,Emergency
+crush injury shoulder severe,3,Emergency
+penetrating wound foot,2,Serious
+amputation leg partial,3,Emergency
+sprain knee,1,Minor
+moderate bleeding foot,2,Serious
+strain shin,1,Minor
+3rd-degree burn shin,3,Emergency
+fracture pelvis,2,Serious
+crush injury finger moderate,2,Serious
+dislocation shoulder,2,Serious
+fracture femur,2,Serious
+severe bleeding thigh,3,Emergency
+strain toe,1,Minor
+strain ankle,1,Minor
+crush injury abdomen severe,3,Emergency
+mild burn face,1,Minor
+strain back,1,Minor
+3rd-degree burn pelvis,3,Emergency
+mild burn shin,1,Minor
+deep laceration toe,2,Serious
+penetrating wound toe,2,Serious
+amputation wrist partial,3,Emergency
+amputation eye partial,3,Emergency
+strain scalp,1,Minor
+mild burn head,1,Minor
+severe bleeding toe,3,Emergency
+3rd-degree burn hip,3,Emergency
+3rd-degree burn ear,3,Emergency
+amputation forearm partial,3,Emergency
+crush injury thigh moderate,2,Serious
+compartment syndrome hand,3,Emergency
+bruise hip,1,Minor
+3rd-degree burn knee,3,Emergency
+strain face,1,Minor
+small laceration shin,1,Minor
+minor cut hand,1,Minor
+compartment syndrome chest,3,Emergency
+open fracture rib,3,Emergency
+fracture skull,2,Serious
+open fracture humerus,3,Emergency
+moderate bleeding head,2,Serious
+minor cut neck,1,Minor
+deep laceration neck,2,Serious
+fracture ulna,2,Serious
+bruise shin,1,Minor
+penetrating wound shin,2,Serious
+crush injury pelvis moderate,2,Serious
+compartment syndrome hip,3,Emergency
+blister abdomen,1,Minor
+penetrating wound abdomen,2,Serious
+blister wrist,1,Minor
+crush injury knee moderate,2,Serious
+moderate bleeding wrist,2,Serious
+crush injury eye severe,3,Emergency
+amputation toe partial,3,Emergency
+2nd-degree burn back,2,Serious
+deep laceration head,2,Serious
+compartment syndrome shin,3,Emergency
+bruise scalp,1,Minor
+crush injury hand moderate,2,Serious
+penetrating wound forearm,2,Serious
+blister thigh,1,Minor
+minor cut face,1,Minor
+moderate hypothermia,2,Serious
+moderate bleeding neck,2,Serious
+penetrating wound back,2,Serious
+mild burn pelvis,1,Minor
+crush injury shin moderate,2,Serious
+open fracture tibia,3,Emergency
+crush injury face moderate,2,Serious
+penetrating wound chest,2,Serious
+small laceration eye,1,Minor
+penetrating wound head,2,Serious
+blister neck,1,Minor
+3rd-degree burn face,3,Emergency
+compartment syndrome shoulder,3,Emergency
+blister arm,1,Minor
+bruise shoulder,1,Minor
+moderate bleeding forearm,2,Serious
+blister head,1,Minor
+3rd-degree burn back,3,Emergency
+3rd-degree burn forearm,3,Emergency
+dislocation hip,2,Serious
+blister eye,1,Minor
+mild burn abdomen,1,Minor
+deep laceration hip,2,Serious
+cardiac arrest,3,Emergency
+minor cut shin,1,Minor
+minor cut knee,1,Minor
+crush injury face severe,3,Emergency
+3rd-degree burn chest,3,Emergency
+severe bleeding knee,3,Emergency
+crush injury foot moderate,2,Serious
+unconscious unresponsive,3,Emergency
+compartment syndrome leg,3,Emergency
+bruise hand,1,Minor
+severe bleeding shoulder,3,Emergency
+strain eye,1,Minor
+compartment syndrome neck,3,Emergency
+mild heat exhaustion,1,Minor
+mild burn shoulder,1,Minor
+crush injury ear severe,3,Emergency
+amputation neck partial,3,Emergency
+crush injury shin severe,3,Emergency
+compartment syndrome pelvis,3,Emergency
+2nd-degree burn chest,2,Serious
+strain forearm,1,Minor
+open fracture femur,3,Emergency
+bruise neck,1,Minor
+sprain hip,1,Minor
+blister pelvis,1,Minor
+blister chest,1,Minor
+mild burn wrist,1,Minor
+small laceration ear,1,Minor
+amputation foot partial,3,Emergency
+mild burn scalp,1,Minor
+strain thigh,1,Minor
+3rd-degree burn finger,3,Emergency
+amputation abdomen partial,3,Emergency
+deep laceration finger,2,Serious
+bruise ankle,1,Minor
+moderate bleeding ankle,2,Serious
+deep laceration hand,2,Serious
+moderate bleeding chest,2,Serious
+severe bleeding scalp,3,Emergency
+crush injury ear moderate,2,Serious
+moderate bleeding thigh,2,Serious
+small laceration arm,1,Minor
+minor cut eye,1,Minor
+strain leg,1,Minor
+fracture fibula,2,Serious
+moderate bleeding ear,2,Serious
+strain pelvis,1,Minor
+amputation pelvis partial,3,Emergency
+pelvic fracture unstable,3,Emergency
+sprain elbow,1,Minor
+crush injury ankle severe,3,Emergency
+amputation thigh partial,3,Emergency
+blister forearm,1,Minor
+bruise arm,1,Minor
+moderate bleeding shin,2,Serious
+severe bleeding ankle,3,Emergency
+strain hip,1,Minor
+deep laceration abdomen,2,Serious
+spinal injury suspected,3,Emergency
+deep laceration scalp,2,Serious
+3rd-degree burn head,3,Emergency
+crush injury toe moderate,2,Serious
+strain foot,1,Minor
+amputation ear partial,3,Emergency
+fracture spine,2,Serious
+open fracture radius,3,Emergency
+3rd-degree burn toe,3,Emergency
+strain chest,1,Minor
+tension pneumothorax suspected,3,Emergency
+crush injury thigh severe,3,Emergency
+minor cut forearm,1,Minor
+blister toe,1,Minor
+deep laceration leg,2,Serious
+open fracture clavicle,3,Emergency
+deep laceration thigh,2,Serious
+crush injury back severe,3,Emergency
+small laceration hand,1,Minor
+compartment syndrome foot,3,Emergency
+fracture humerus,2,Serious
+penetrating wound pelvis,2,Serious
+small laceration foot,1,Minor
+crush injury forearm severe,3,Emergency
+dislocation ankle,2,Serious
+2nd-degree burn finger,2,Serious
+bruise forearm,1,Minor
+crush injury toe severe,3,Emergency
+strain ear,1,Minor
+2nd-degree burn ear,2,Serious
+small laceration leg,1,Minor
+sprain shoulder,1,Minor
+fracture rib,2,Serious
+3rd-degree burn wrist,3,Emergency
+bruise face,1,Minor
+amputation shin partial,3,Emergency
+crush injury pelvis severe,3,Emergency
+2nd-degree burn eye,2,Serious
+amputation hip partial,3,Emergency
+compartment syndrome back,3,Emergency
+bruise head,1,Minor
+2nd-degree burn face,2,Serious
+blister finger,1,Minor
+open fracture ulna,3,Emergency
+mild burn ear,1,Minor
+mild burn hand,1,Minor
+severe bleeding arm,3,Emergency
+minor cut ear,1,Minor
+2nd-degree burn scalp,2,Serious
+3rd-degree burn foot,3,Emergency
+minor cut finger,1,Minor
+concussion signs,2,Serious
+strain abdomen,1,Minor
+2nd-degree burn arm,2,Serious
+small laceration finger,1,Minor
+small laceration knee,1,Minor
+moderate bleeding arm,2,Serious
+minor cut thigh,1,Minor
+moderate bleeding toe,2,Serious
+crush injury finger severe,3,Emergency
+crush injury head severe,3,Emergency
+severe bleeding chest,3,Emergency
+amputation head partial,3,Emergency
+mild burn hip,1,Minor
+2nd-degree burn ankle,2,Serious
+deep laceration knee,2,Serious
+penetrating wound hip,2,Serious
+blister ear,1,Minor
+2nd-degree burn abdomen,2,Serious
+mild burn back,1,Minor
+mild burn leg,1,Minor
+penetrating wound knee,2,Serious
+moderate bleeding abdomen,2,Serious
+small laceration hip,1,Minor
+minor cut shoulder,1,Minor
+minor cut pelvis,1,Minor
+bruise ear,1,Minor
+small laceration scalp,1,Minor
+amputation face partial,3,Emergency
+deep laceration shoulder,2,Serious
+crush injury leg severe,3,Emergency
+stroke signs,3,Emergency
+penetrating wound arm,2,Serious
+asthma attack,2,Serious
+compartment syndrome abdomen,3,Emergency
+moderate bleeding face,2,Serious
+deep laceration eye,2,Serious
+shock,3,Emergency
+deep laceration ear,2,Serious
+strain head,1,Minor
+crush injury hip moderate,2,Serious
