@@ -200,11 +200,11 @@ class UserGUI:
             2 * FONT_SIZE * line_height + 10
 )
         # Task block
-        self.task_x = 720
-        self.task_y = 270
+        self.task_x = 700
+        self.task_y = 300
         # self.received_new_tasks = False
         self.task_text = Font(FONT, FONT_SIZE, (self.task_x, self.task_y))
-        self.task_text.update('                                                Task Monitor')
+        # self.task_text.update('                                              Task Monitor')
         self.task_text.update('Task ID                 Target pos              Priority                Assigned Drone')
         for text in self.task_text.texts:
             self.screen.blit(text[0], text[1])
@@ -230,13 +230,21 @@ class UserGUI:
                              6 * (grid_width + spacing), 3 * FONT_SIZE * line_height + 10)
 
         # Response block
-        response_x = 720
+        response_x = 700
         response_y = 30
         self.response_title = Font(FONT, FONT_SIZE, (response_x, response_y))
         self.response_title.update('Air Traffic Management')
         # self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
         self.response_text = Font(FONT, FONT_SIZE, (response_x, response_y + FONT_SIZE * line_height))
         self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 400, FONT_SIZE * line_height), color=WHITE, maximum=1000)
+
+        # ====== Panel rectangles (black outlines) ======
+        self.panel_workload = pygame.Rect(10, 10, 640, 160)
+        self.panel_survivor = pygame.Rect(10, 180, 640, 510)
+        self.panel_triage   = pygame.Rect(10, 700, 640, 140)
+        self.panel_atm      = pygame.Rect(680, 10, 610, 160)
+        self.panel_tasks    = pygame.Rect(680, 180, 610, 660)
+
 
     def render(self):
         # self.screen.fill(WHITE)
@@ -294,7 +302,7 @@ class UserGUI:
         # Render meter graphics
         heart_plot.update(ecg); heart_plot.render(self.screen)                                     # ONE LINE for HR
         workload_meter.update(pred_label)
-        workload_meter.render(self.screen, (100, 80)) # ONE LINE for WL   
+        workload_meter.render(self.screen, (110, 80)) # ONE LINE for WL   
         ###################### Update workload text ends #####################
 
 
@@ -410,7 +418,7 @@ class UserGUI:
 
         # Clear a fixed wide area (from response_x to screen right)
         response_region_width  = self.screen_width - response_x - 10
-        response_region_height = 3 * line_h + 30   # title + one line + padding + input
+        response_region_height = 5 * line_h + 30   # title + one line + padding + input
         pygame.draw.rect(self.screen, WHITE, (response_x, response_y, response_region_width, response_region_height))
 
         # Title
@@ -428,6 +436,15 @@ class UserGUI:
         self.response_input.rect.topleft = (response_x, response_y + 2 * line_h + 10)
         self.response_input.draw(self.screen)
         ###################### Response block ends ######################
+
+        # ====== Draw panel outlines (after content, so borders stay visible) ======
+        for r in (self.panel_workload,
+                  self.panel_survivor,
+                  self.panel_triage,
+                  self.panel_atm,
+                  self.panel_tasks):
+            pygame.draw.rect(self.screen, BLACK, r, width=2)
+
         pygame.display.flip()
 
 
