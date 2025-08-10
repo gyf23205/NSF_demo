@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 class WorkloadSpeedometer:
-    def __init__(self, x, y, radius=60, smoothing_speed=2.5):
+    def __init__(self, x, y, radius=60, smoothing_speed=1):
         self.center = (x, y)
         self.radius = radius
         self._target = 0.0
