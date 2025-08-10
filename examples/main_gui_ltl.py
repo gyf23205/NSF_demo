@@ -1,6 +1,7 @@
 import sys
 sys.path.append('C:/Users/sooyung/Research/NSF_demo')
 import pygame
+import csv, random
 from time import time, sleep, strftime
 from gui_panel_ltl import GameMgr
 from vehicles import VirtualDrone, VirtualGV
@@ -43,6 +44,8 @@ surv_prompt_id = 0
 current_surv_prompt = None      # {"id","text","correct"}; correct in {"Emergency","Serious","Minor"}
 surv_sent_for_prompt = set()
 surv_results = []               # True/False history
+surv_credit = 0                # how many “p_verify … completed” since last triage
+credited_verifies = set()      # which verify APs we've already counted
 
 # --- Fire→Priority runtime ---
 fire_prompt_id = 0
@@ -266,6 +269,17 @@ if __name__ == "__main__":
         ws = Workspace(size=grid_size, target_mask=s_mask, num_drones=n_drones, num_gvs=n_gvs, num_humans=n_humans, seed=120, margin=4)
         centroids = ws.target_locations
         vor = Voronoi(np.array(centroids))
+
+        # === Load symptoms ===
+        triage_symptoms = {1:[], 2:[], 3:[]}
+        with open('examples/data/triage_symptoms.csv', 'r', newline='') as f:  # put the file next to your script or adjust path
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    lab = int(row['label'])
+                    triage_symptoms[lab].append(row['symptom'])
+                except Exception:
+                    pass
 
         # === Agents and Binding Manager ===
         agents_by_type = {
@@ -547,30 +561,27 @@ if __name__ == "__main__":
                         }
                         fire_sent_for_prompt.clear()
 
-                # 2. possible new survivor messages
+                # 2. possible new survivor messages (symptom-based triage)
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
                         and running_time >= SURVIVORMSG_TIMES[survivormsg_idx]):
-                    print(f"[t={running_time:.1f}] Triggering new survivor message")
 
-                    import random
-                    scenario = random.choice([1, 2, 3])
-                    if scenario == 1:
-                        surv_text = "Survivor message: the survivor is unconscious and vitals are poor."
-                        surv_correct = "Emergency"
-                    elif scenario == 2:
-                        surv_text = 'Survivor message: "I am seriously hurt and need urgent care at the hospital."'
-                        surv_correct = "Serious"
-                    else:
-                        surv_text = 'Survivor message: "My pain is minor."'
-                        surv_correct = "Minor"
+                    # Pick a random severity bucket, then 3 symptoms from it
+                    sev = random.choice([1, 2, 3])  # 1=Minor,2=Serious,3=Emergency
+                    picks = random.sample(triage_symptoms[sev], k=3)
+                    correct = {1:"Minor", 2:"Serious", 3:"Emergency"}[sev]
 
                     surv_prompt_id += 1
-                    current_surv_prompt = {"id": surv_prompt_id, "text": surv_text, "correct": surv_correct}
+                    current_surv_prompt = {
+                        "id": surv_prompt_id,
+                        "text": "Assess the patient based on these symptoms:",
+                        "symptoms": picks,    # <<< send the 3 symptoms
+                        "correct": correct
+                    }
                     surv_sent_for_prompt.clear()
 
-                    # ENV-driven AP holds now
                     labeler.advance({"p_survivormsg_0_0_0_0"})
                     survivormsg_idx += 1
+                    surv_credit -= 1 
 
                 # 3. ATM scheduler (prompt + env broadcast)
                 if (atmmsg_idx < len(ATMMSG_TIMES)) and (running_time >= ATMMSG_TIMES[atmmsg_idx]):
@@ -612,6 +623,7 @@ if __name__ == "__main__":
 
                                 image_id = survivor_images[survivor_index]
                                 survivor_index += 1
+                                surv_credit += 1
                                 print(f"time: {running_time}, survivor_index: {survivor_index}, AP: {ap}, Image: {image_id}")
 
                                 # Keep for later; only send when p_verify_* is actually assigned
@@ -654,6 +666,7 @@ if __name__ == "__main__":
                             buffers['surv_prompt'].append({
                                 "id": current_surv_prompt["id"],
                                 "text": current_surv_prompt["text"],
+                                "symptoms": current_surv_prompt.get("symptoms", []),   # <<< include symptoms
                                 "choices": ["Emergency", "Serious", "Minor"]
                             })
                             surv_sent_for_prompt.add(current_surv_prompt["id"])
@@ -910,7 +923,7 @@ if __name__ == "__main__":
         # === Drone landing ===
         game_mgr.paths = [] # Clear path
         if landing:
-            print(f"[t={running_time:02f}] Landing drones...")
+            print(f"[t={running_time:.2f}] Landing drones...")
             # Wait until all drones are landed
             while max([drones[idx].position[2] for idx in range(n_drones)]) > 0.01:
                 for idx in range(n_drones):

@@ -218,7 +218,7 @@ class UserGUI:
         # self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
         
         # weather block (-> temporarily used as Survivor Triage)
-        weather_x = 50
+        weather_x = 30
         weather_y = 710
         self.weather_text = Font(FONT, FONT_SIZE, (weather_x, weather_y))
         self.weather = 'sunny'
@@ -245,7 +245,10 @@ class UserGUI:
             self.surv_header_pos[1],
             3 * (grid_width + spacing) + 400,   # wide enough to cover header + one line msg
             2 * FONT_SIZE * line_height + 10
-)
+        )
+
+        self.surv_symptoms = []
+
         # Task block
         self.task_x = 700
         self.task_y = 300
@@ -481,13 +484,23 @@ class UserGUI:
         self.surv_header_font.update('Survivor Triage')
         self.screen.blit(self.surv_header_font.texts[0][0], self.surv_header_font.texts[0][1])
 
-        # Message line below header
-        self.surv_msg_font.clear()
-        if surv_active and surv_text:
-            self.surv_msg_font.update(surv_text, text_color=RED)
+        # Survivor Triage message row (single line)
+        msg_x, msg_y = self.surv_msg_pos
+        line_h = int(FONT_SIZE * line_height)
+
+        # Clear just the row where the symptoms go (inside the triage panel)
+        row_w = self.panel_triage.right - 10 - msg_x
+        pygame.draw.rect(self.screen, WHITE, (msg_x, msg_y, row_w, line_h))
+
+        # Compose one-line text
+        if surv_active and self.surv_symptoms:
+            msg_line = " | ".join(self.surv_symptoms[:3])
         else:
-            self.surv_msg_font.update("No active survivor message.", text_color=BLACK)
-        self.screen.blit(self.surv_msg_font.texts[0][0], self.surv_msg_font.texts[0][1])
+            msg_line = surv_text or "No active survivor message."
+
+        # Draw the single row
+        surf = pygame.font.SysFont(FONT, FONT_SIZE).render(msg_line, True, BLACK)
+        self.screen.blit(surf, (msg_x, msg_y))
 
         # Buttons: keep using existing buttons; just redraw them each frame
         self.button_wind_change.text   = surv_choices[0]  # Emergency
@@ -646,6 +659,7 @@ if __name__ == '__main__':
                                         surv_active = True
                                         surv_prompt_id = value.get("id")
                                         surv_text = value.get("text") or ""
+                                        gui.surv_symptoms = value.get("symptoms", [])  # <<< three strings
                                         surv_choices = value.get("choices") or ["Emergency","Serious","Minor"]
                                         gui.surv_timer_start = pygame.time.get_ticks()
                                         if gui.sfx_triage: gui.sfx_triage.play()
@@ -656,6 +670,7 @@ if __name__ == '__main__':
                                             surv_prompt_id = None
                                             surv_text = ""
                                             gui.surv_timer_start = None
+                                            gui.surv_symptoms = []
                                     if key == 'fire_prompt':
                                         # {"id","task_id","text","required"}
                                         fire_active = True
