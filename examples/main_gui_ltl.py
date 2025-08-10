@@ -52,6 +52,7 @@ fire_prompt_id = 0
 current_fire_prompt = None     # {"id","task_id","required","text","time"}
 fire_sent_for_prompt = set()
 fire_results = []              # True/False history
+fire_time_credit = 0
 
 # --- Task removal after pickup gating ---
 pickup_cleared = set()
@@ -562,19 +563,18 @@ if __name__ == "__main__":
                     human.utilization = compute_utilization(human, now, SLIDING_WINDOW)
 
                 # === Monitor APs tiggers
-                # 1. possible new emergency events (FIRE → ask human to set priority)
-                if (firemsg_idx < len(FIREMSG_TIMES)
-                        and running_time >= FIREMSG_TIMES[firemsg_idx]):
-                    print(f"[t={running_time:.1f}] Triggering new fire message")
-                    labeler.advance({"p_firemsg_0_0_0_0"})
+                # 1-1. possible new emergency events (FIRE → ask human to set priority)
+                if (firemsg_idx < len(FIREMSG_TIMES)) and (running_time >= FIREMSG_TIMES[firemsg_idx]):
+                    fire_time_credit += 1
                     firemsg_idx += 1
 
-                    # Create a priority prompt tied to an AVAILABLE task id
-                    available_task_ids = [t[0] for t in tasks]  # 1-based task ids
+                # 1-2. If we have a credit and at least one remaining task, create a prompt now
+                if (fire_time_credit > 0) and (current_fire_prompt is None) and (len(tasks) > 0):
+                    available_task_ids = [t[0] for t in tasks]  # 1-based ids still on table
                     if available_task_ids:
                         chosen_task_id = int(np.random.choice(available_task_ids))
                         fire_prompt_id += 1
-                        required = 2  # "HIGH" in your 0/1/2 scale
+                        required = 2  # HIGH on your 0/1/2 scale
                         text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
                         current_fire_prompt = {
                             "id": fire_prompt_id,
@@ -584,6 +584,9 @@ if __name__ == "__main__":
                             "time": running_time,
                         }
                         fire_sent_for_prompt.clear()
+                        fire_time_credit -= 1
+                        # environment AP broadcast at the moment we actually create the prompt
+                        labeler.advance({"p_firemsg_0_0_0_0"})
 
                 # 2. possible new survivor messages (symptom-based triage)
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
