@@ -343,8 +343,9 @@ class GameMgr:
         shadow_surface.set_alpha(128)  # semi-transparent
         self.screen.blit(shadow_surface, (0, 0))
         # Targets
-        for i, (idx, pos, priority, assigned_drone) in enumerate(self.task):
-            self.draw_target(pos, idx, priority)
+        for row in (self.task or []):
+            tid, pos, priority = row[0], row[1], row[2]
+            self.draw_target(pos, tid, priority)
         ##################### Map ends ##########################
 
         ###################### Legends #####################

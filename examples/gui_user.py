@@ -30,7 +30,7 @@ class Task:
         self.target_pos = target_loc
         self.priority = priority
         self.assigned_drone = None
-        self.assigned_gv = None
+        # self.assigned_gv = None
         self.assigned_time = pygame.time.get_ticks()
         # self.reject_time_limit = 100000
         # self.reject = False
@@ -43,7 +43,7 @@ class Task:
         self.target_pos_text = Font(FONT, FONT_SIZE, (self.x0 + (self.grid_width + self.spacing), self.y0))
         self.priority_input = TextInput((self.x0 + 2 * (self.grid_width + self.spacing), self.y0,self.grid_width, self.grid_height), color=WHITE, maximum=max(self.priority_set))
         self.assigned_drone_text = Font(FONT, FONT_SIZE, (self.x0 + 3 * (self.grid_width + self.spacing), self.y0))
-        self.assigned_gv_text = Font(FONT, FONT_SIZE, (self.x0 + 4 * (self.grid_width + self.spacing), self.y0))
+        # self.assigned_gv_text = Font(FONT, FONT_SIZE, (self.x0 + 4 * (self.grid_width + self.spacing), self.y0))
         # self.rejection_button = Button((self.x0 + 5 * (self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height), RED, "Reject", text_color=WHITE)
         # self.assigned_gv_input = TextInput((self.x0 + 3 * self.grid_width, self.y0, self.grid_width, self.grid_height), color=WHITE, maximum=n_gvs)
         
@@ -51,7 +51,7 @@ class Task:
         self.target_pos_text.update(f'{self.target_pos}')
         self.priority_input.text = str(self.priority)
         self.assigned_drone_text.update(str(self.assigned_drone))
-        self.assigned_gv_text.update(str(self.assigned_gv))
+        # self.assigned_gv_text.update(str(self.assigned_gv))
 
         # self.assigned_gv_input.text = str(self.assigned_gv)
 
@@ -68,7 +68,7 @@ class Task:
         self.target_pos_text.pos = (self.x0 + (self.grid_width + self.spacing), self.y0)
         self.priority_input.rect.topleft = (self.x0 + 2 * (self.grid_width + self.spacing), self.y0)
         self.assigned_drone_text.pos = (self.x0 + 3 * (self.grid_width + self.spacing), self.y0)
-        self.assigned_gv_text.pos = (self.x0 + 4 * (self.grid_width + self.spacing), self.y0)
+        # self.assigned_gv_text.pos = (self.x0 + 4 * (self.grid_width + self.spacing), self.y0)
         # self.rejection_button.rect.topleft = (self.x0 + 5 * (self.grid_width + self.spacing), self.y0)
 
     def draw(self):
@@ -85,10 +85,10 @@ class Task:
         for text in self.assigned_drone_text.texts:
             self.surface.blit(text[0], text[1])
 
-        self.assigned_gv_text.clear()
-        self.assigned_gv_text.update(str(self.assigned_gv))
-        for text in self.assigned_gv_text.texts:
-            self.surface.blit(text[0], text[1])
+        # self.assigned_gv_text.clear()
+        # self.assigned_gv_text.update(str(self.assigned_gv))
+        # for text in self.assigned_gv_text.texts:
+            # self.surface.blit(text[0], text[1])
 
         current_time = pygame.time.get_ticks()
         # if (current_time - self.assigned_time < self.reject_time_limit) and not self.reject:
@@ -132,15 +132,15 @@ class UserGUI:
     def __init__(self):
         pygame.init()
         self.screen_width = 1300
-        self.screen_height = 930
+        self.screen_height = 850
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.screen.fill(WHITE)
 
         # Victim block
-        self.image_width = 400
-        self.image_height = 280
+        self.image_width = 420
+        self.image_height = 420
         self.image_rect = pygame.Rect(
-            130,
+            110,
             200,
             self.image_width,
             self.image_height
@@ -148,36 +148,37 @@ class UserGUI:
         # Center the buttons below the image
         button_width = 120
         button_height = 50
-        spacing = 50
+        spacing = 100
         buttons_y = self.image_rect.bottom + 10
         # total_buttons_width = button_width * 2 + spacing
-        buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing) - 120
+        # buttons_x = self.image_rect.x + (0.5*self.image_width - button_width - 0.5*spacing) - 120
+        buttons_x = 150
         accept_rect = pygame.Rect(buttons_x, buttons_y, button_width, button_height)
         reject_rect = pygame.Rect(buttons_x + button_width + spacing, buttons_y, button_width, button_height)
-        handover_rect = pygame.Rect(buttons_x + 2 * (button_width + spacing), buttons_y, button_width, button_height)
-        self.button_accept =  Button(accept_rect, BLUE, 'Accept', text_color=WHITE)
-        self.button_reject = Button(reject_rect, RED, 'Reject', text_color=WHITE)
-        self.button_handover = Button(handover_rect, GREEN, 'Hand over', text_color=WHITE)
+        # handover_rect = pygame.Rect(buttons_x + 2 * (button_width + spacing), buttons_y, button_width, button_height)
+        self.button_accept =  Button(accept_rect, BLUE, 'Survivor', text_color=WHITE)
+        self.button_reject = Button(reject_rect, RED, 'Negative', text_color=WHITE)
+        # self.button_handover = Button(handover_rect, GREEN, 'Hand over', text_color=WHITE)
         self.image = None
         self.button_accept.draw(self.screen)
         self.button_reject.draw(self.screen)
-        self.button_handover.draw(self.screen)
+        # self.button_handover.draw(self.screen)
 
         # Workload block
-        self.workload_text = Font(FONT, FONT_SIZE, (250, 70))
-        self.workload = 'low'
-        self.workload_text.update('Workload: '+ self.workload)
-        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
+        # self.workload_text = Font(FONT, FONT_SIZE, (50, 200))
+        # self.workload = 'low'
+        # self.workload_text.update('Workload: '+ self.workload)
+        # self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])
         
-        # weather block
-        weather_x = 600
-        weather_y = 150
+        # weather block (-> temporarily used as Survivor Triage)
+        weather_x = 50
+        weather_y = 710
         self.weather_text = Font(FONT, FONT_SIZE, (weather_x, weather_y))
         self.weather = 'sunny'
         self.weather_text.update('Weather: '+ self.weather)
-        self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), BLUE, "Emergency")
-        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Major")
-        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Minor")
+        self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Emergency", text_color=BLACK)
+        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), YELLOW, "Injury", text_color=BLACK)
+        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Minor", text_color=BLACK)
         self.button_wind_change.draw(self.screen)
         self.button_wind_maintain.draw(self.screen)
         self.button_wind_handover.draw(self.screen)
@@ -199,12 +200,12 @@ class UserGUI:
             2 * FONT_SIZE * line_height + 10
 )
         # Task block
-        self.task_x = 550
-        self.task_y = 400
+        self.task_x = 720
+        self.task_y = 270
         # self.received_new_tasks = False
         self.task_text = Font(FONT, FONT_SIZE, (self.task_x, self.task_y))
         self.task_text.update('                                                Task Monitor')
-        self.task_text.update('Task ID                 Target pos              Priority                Assigned Drone       Assigned GV')
+        self.task_text.update('Task ID                 Target pos              Priority                Assigned Drone')
         for text in self.task_text.texts:
             self.screen.blit(text[0], text[1])
         self.task_list_x = self.task_x
@@ -229,11 +230,11 @@ class UserGUI:
                              6 * (grid_width + spacing), 3 * FONT_SIZE * line_height + 10)
 
         # Response block
-        response_x = 40
-        response_y = 650
+        response_x = 720
+        response_y = 30
         self.response_title = Font(FONT, FONT_SIZE, (response_x, response_y))
         self.response_title.update('Air Traffic Management')
-        self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
+        # self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
         self.response_text = Font(FONT, FONT_SIZE, (response_x, response_y + FONT_SIZE * line_height))
         self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 400, FONT_SIZE * line_height), color=WHITE, maximum=1000)
 
@@ -270,7 +271,7 @@ class UserGUI:
         t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
 
         if torch.isnan(t2).any() or torch.isinf(t2).any():
-            print("⚠️ NaN or Inf detected in t2 (gaze input)")
+            print("NaN or Inf detected in t2 (gaze input)")
 
         with torch.no_grad():
             out = model(t1, t2)
@@ -278,22 +279,22 @@ class UserGUI:
             # print(out, pred_label)
 
         # 3. update workload  
-        if pred_label > 0.5:
-            workload_text = 'high'
-        else:
-            workload_text = 'low'
+        # if pred_label > 0.5:
+        #     workload_text = 'high'
+        # else:
+        #     workload_text = 'low'
 
-        self.workload_text.clear()
-        self.workload_text.update('Workload: ' + workload_text)  
-        area = self.workload_text.rect.copy()
-        area.width += 100  # Adjust width to fit the screen
-        pygame.draw.rect(self.screen, WHITE, area)
-        self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])          
+        # self.workload_text.clear()
+        # self.workload_text.update('Workload: ' + workload_text)  
+        # area = self.workload_text.rect.copy()
+        # area.width += 100  # Adjust width to fit the screen
+        # pygame.draw.rect(self.screen, WHITE, area)
+        # self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])          
 
         # Render meter graphics
         heart_plot.update(ecg); heart_plot.render(self.screen)                                     # ONE LINE for HR
         workload_meter.update(pred_label)
-        workload_meter.render(self.screen, (100, 100)) # ONE LINE for WL   
+        workload_meter.render(self.screen, (100, 80)) # ONE LINE for WL   
         ###################### Update workload text ends #####################
 
 
@@ -339,16 +340,15 @@ class UserGUI:
         ###################### Task block ######################
         # print('data before receiving tasks: ', data)
         if self.tasks_received is not None:
-            # print('Received tasks from server: ', data['tasks'])
             self.task_list = []
             for i, task in enumerate(self.tasks_received):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
-                task_id, target_loc, priority, assigned_drone = task
+                # [task_id, [x,y], priority, assigned_drone, assigned_gv]
+                task_id, target_loc, priority, assigned_drone, assigned_gv = task
                 new_task = Task(self.screen, task_id, target_loc, task_pos, priority)
-                new_task.assigned_drone = assigned_drone
-                # print(assigned_drone)
+                new_task.assigned_drone = assigned_drone  # may be None
+                # new_task.assigned_gv = assigned_gv        # may be None
                 self.task_list.append(new_task)
-                # print(new_task.priority_input.text)
             self.tasks_received = None
 
         # Clear the task area before drawing
@@ -361,12 +361,16 @@ class UserGUI:
             # assert False
             if self.n_previous_tasks != len(self.task_list):
                 task_list_temp = []
-                # Reposition remaining tasks to the top of the task region
                 for i, task in enumerate(self.task_list):
                     task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
-                    task_id, target_loc, priority, assigned_drone = task.task_id, task.target_pos, task.priority, task.assigned_drone
+                    task_id = task.task_id
+                    target_loc = task.target_pos
+                    priority = task.priority
+                    assigned_drone = task.assigned_drone
+                    # assigned_gv = task.assigned_gv
                     new_task = Task(self.screen, task_id, target_loc, task_pos, priority)
                     new_task.assigned_drone = assigned_drone
+                    # new_task.assigned_gv = assigned_gv
                     task_list_temp.append(new_task)
                 self.task_list = task_list_temp
                 self.n_previous_tasks = len(self.task_list)
@@ -400,24 +404,28 @@ class UserGUI:
         ###################### Survivor Triage ends ######################
 
         ####################### Response block ##########################
-        response_region_width = 520
-        response_region_height = 3 * FONT_SIZE * line_height + 20
-        pygame.draw.rect(self.screen, WHITE, (40, 650, response_region_width, response_region_height))
+        # Use the current title position as the block's origin
+        response_x, response_y = self.response_title.pos
+        line_h = int(FONT_SIZE * line_height)
 
-        # Title (always ATM)
+        # Clear a fixed wide area (from response_x to screen right)
+        response_region_width  = self.screen_width - response_x - 10
+        response_region_height = 3 * line_h + 30   # title + one line + padding + input
+        pygame.draw.rect(self.screen, WHITE, (response_x, response_y, response_region_width, response_region_height))
+
+        # Title
         self.response_title.clear()
         self.response_title.update('Air Traffic Management')
         self.screen.blit(self.response_title.texts[0][0], self.response_title.texts[0][1])
 
-        # Body (ATM prompt or default)
+        # Body
         self.response_text.clear()
-        if atm_active and atm_text:
-            self.response_text.update(atm_text)  # client can colorize if desired
-        else:
-            self.response_text.update('No active ATM message.')
+        msg = atm_text if atm_active and atm_text else 'No active ATM message.'
+        self.response_text.update(msg)
         self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
 
-        # Input (same widget)
+        # Input just below
+        self.response_input.rect.topleft = (response_x, response_y + 2 * line_h + 10)
         self.response_input.draw(self.screen)
         ###################### Response block ends ######################
         pygame.display.flip()
@@ -436,8 +444,8 @@ if __name__ == '__main__':
 
     gui = UserGUI()
 
-    # Meter Graphics initailization
-    heart_plot = RealtimeHeartPlot(position=(50, 800), hr_interval_seconds= 10)
+    # Meter Graphics initailization (ECG graphic)
+    heart_plot = RealtimeHeartPlot(position=(250, 20), hr_interval_seconds= 10)
     workload_meter = WorkloadSpeedometer(850, 500)
 
     # response['victim']: 'reject' or 'accept'
@@ -516,7 +524,7 @@ if __name__ == '__main__':
                                         surv_choices = value.get("choices") or ["Emergency","Serious","Minor"]
                                     if key == 'surv_clear':
                                         # {"id":..., "ok": True|False}
-                                        if value.get("ok") is True and value.get("id") == surv_prompt_id:
+                                        if value.get("id") == surv_prompt_id:
                                             surv_active = False
                                             surv_prompt_id = None
                                             surv_text = ""
@@ -564,14 +572,14 @@ if __name__ == '__main__':
                         str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
                     )
 
-                elif gui.button_handover.handle_event(event):
-                    gui.image = None
-                    clicked_item = victim_buffer.pop(0) if victim_buffer else None
-                    response_changed = True
-                    response['victim'] = 'handover'
-                    response['verify_tid'] = (
-                        str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
-                    )
+                # elif gui.button_handover.handle_event(event):
+                #     gui.image = None
+                #     clicked_item = victim_buffer.pop(0) if victim_buffer else None
+                #     response_changed = True
+                #     response['victim'] = 'handover'
+                #     response['verify_tid'] = (
+                #         str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
+                #     )
 
                 else:
                     pass

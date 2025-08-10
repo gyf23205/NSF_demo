@@ -51,6 +51,14 @@ fire_sent_for_prompt = set()
 fire_results = []              # True/False history
 
 
+def _ap_target_id(ap: str):
+    try:
+        parts = ap.split('_')
+        return int(parts[2])  # 0-based target id in your APs
+    except Exception:
+        return None
+
+
 def _pick_coord_avoiding_targets(ws, grid_size=(50, 40)):
     """Pick a grid (x,y) not overlapping any target."""
     import random
@@ -65,8 +73,7 @@ def _pick_coord_avoiding_targets(ws, grid_size=(50, 40)):
 
 def _make_atm_prompt(x, y):
     token = f"NO_FLY_{x}_{y}"
-    # keep text short, assertive; client will render red+bold
-    text = f"Grid ({x}, {y}) is reserved for helicopter traffic. Keep out. Confirm by typing '{token}'."
+    text  = f"Grid ({x}, {y}) reserved for helicopter traffic. Confirm by typing '{token}'."
     return token, text
 
 
@@ -240,7 +247,7 @@ if __name__ == "__main__":
 
         # === Constants ===
         hover_duration = 10
-        n_targets = 15
+        n_targets = 4
         n_drones = 4
         n_gvs = 2
         n_humans = 2
@@ -303,7 +310,8 @@ if __name__ == "__main__":
         tasks = []
         for idx, pos in enumerate(ws.target_locations):
             gui_pos = ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(900, 720))
-            tasks.append([idx + 1, list(gui_pos), 0, 0])
+            # [target_id (1-based), [x,y], priority, assigned_drone, assigned_gv]
+            tasks.append([idx + 1, list(gui_pos), 0, None, None])
         game_mgr.set_task(tasks)
 
         # === Labeler setup ===
@@ -442,6 +450,41 @@ if __name__ == "__main__":
                 unlocked = sim_outputs["unlocked"]
                 assignments = sim_outputs["assignments"]
                 completed = sim_outputs["completed"]
+
+                # Build "currently assigned" maps from assignments → {tid: idx}
+                assigned_drone_by_tid = {}
+                assigned_gv_by_tid = {}
+
+                for agent, ap in assignments.items():
+                    if not isinstance(ap, str):
+                        continue
+                    tid0 = _ap_target_id(ap)  # 0-based
+                    if tid0 is None:
+                        continue
+                    role = getattr(agent, "role", None)
+                    if role == "drones":
+                        # agent.label like 'D0' → 0
+                        try:
+                            assigned_drone_by_tid[tid0] = int(agent.label[1:])
+                        except Exception:
+                            assigned_drone_by_tid[tid0] = None
+                    elif role == "gvs":
+                        try:
+                            assigned_gv_by_tid[tid0] = int(agent.label[1:])
+                        except Exception:
+                            assigned_gv_by_tid[tid0] = None
+
+                # Update the tasks table to reflect current assignments (None if not assigned)
+                for row in tasks:
+                    target_id_1b = row[0]
+                    tid0 = target_id_1b - 1
+                    row[3] = assigned_drone_by_tid.get(tid0, None)  # assigned_drone
+                    row[4] = assigned_gv_by_tid.get(tid0, None)     # assigned_gv
+
+                # Whenever assignments change, also push the refreshed task table to the client
+                if assignments != prev_assignments:
+                    import copy
+                    buffers['tasks'].append(copy.deepcopy(tasks))
 
                 # === Working area: temporary ===
                 if assignments != prev_assignments:
@@ -712,15 +755,14 @@ if __name__ == "__main__":
                     choice = payload.get("choice")
                     ok = (choice == current_surv_prompt["correct"])
                     surv_results.append(ok)
-                    if ok:
-                        # Human action AP after correct triage
-                        labeler.advance({"p_message_0_3_1_0"})
-                        buffers['surv_clear'].append({"id": current_surv_prompt["id"], "ok": True})
-                        current_surv_prompt = None
-                        surv_sent_for_prompt.clear()
-                    else:
-                        # keep prompt active, nudge client if you want
-                        buffers['surv_clear'].append({"id": current_surv_prompt["id"], "ok": False})
+
+                    # Advance regardless of correctness
+                    labeler.advance({"p_message_0_3_1_0"})
+
+                    # Clear the prompt, but report correctness in the message
+                    buffers['surv_clear'].append({"id": current_surv_prompt["id"], "ok": ok})
+                    current_surv_prompt = None
+                    surv_sent_for_prompt.clear()
             
             # === Fire→Priority reply handling (right-bottom numeric input) ===
             if isinstance(data, dict) and data.get('priority_reply') is not None:
