@@ -767,11 +767,6 @@ if __name__ == "__main__":
                 if current_fire_prompt["task_id"] not in current_ids:
                     fire_results.append(False)
                     labeler.advance({"p_priority_0_3_1_0"})
-                    buffers['fire_clear'].append({
-                        "id": current_fire_prompt["id"],
-                        "ok": False,
-                        "reason": "task_gone"
-                    })
                     current_fire_prompt = None
                     fire_sent_for_prompt.clear()
 
