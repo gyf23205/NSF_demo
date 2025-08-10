@@ -243,7 +243,7 @@ class UserGUI:
         self.surv_clear_rect = pygame.Rect(
             self.surv_header_pos[0],
             self.surv_header_pos[1],
-            3 * (grid_width + spacing) + 400,   # wide enough to cover header + one line msg
+            3 * (grid_width + spacing),   # wide enough to cover header + one line msg
             2 * FONT_SIZE * line_height + 10
         )
 
@@ -265,6 +265,11 @@ class UserGUI:
         self.tasks_received = None
 
         # --- Fire→Priority block (text + input) just above Task Monitor ---
+        self.fire_active = False
+        self.fire_prompt_id = None
+        self.fire_task_id = None
+        self.fire_required = None
+        self.fire_text = ""
         # Position it a bit above the task header area
         self.fire_x = self.task_x
         self.fire_y = self.task_y - 3.5 * FONT_SIZE * line_height
@@ -422,8 +427,11 @@ class UserGUI:
 
         # Body & input
         self.fire_body.clear()
-        if fire_active and fire_text:
-            self.fire_body.update(fire_text, text_color=RED)  # e.g., "Region 3 is in danger. Set its priority to HIGH (2)."
+        for t in self.task_list:
+            if t.task_id == self.fire_task_id and t.priority == int(self.fire_required):
+                self.fire_active = False
+        if self.fire_active and self.fire_text:
+            self.fire_body.update(self.fire_text, text_color=RED)  # e.g., "Region 3 is in danger. Set its priority to HIGH (2)."
         else:
             self.fire_body.update('No active fire-related priority request.')
         self.screen.blit(self.fire_body.texts[0][0], self.fire_body.texts[0][1])
@@ -555,7 +563,7 @@ class UserGUI:
         atm_start = self.atm_timer_start if (atm_active and atm_text) else None
         self._draw_panel_timer(self.panel_atm, atm_start)
         # Priority (fire) message
-        fire_start = self.fire_timer_start if (fire_active and fire_text) else None
+        fire_start = self.fire_timer_start if (self.fire_active and self.fire_text) else None
         self._draw_panel_timer(self.panel_tasks, fire_start)
         # Survivor image (accept/reject)
         victim_start = self.victim_timer_start if (self.image is not None) else None
@@ -604,11 +612,11 @@ if __name__ == '__main__':
     surv_choices = ["Emergency", "Serious", "Minor"]
 
     # Fire→Priority (right-bottom, above Task Monitor)
-    fire_active = False
-    fire_prompt_id = None
-    fire_task_id = None
-    fire_required = None
-    fire_text = ""
+    # fire_active = False
+    # fire_prompt_id = None
+    # fire_task_id = None
+    # fire_required = None
+    # fire_text = ""
 
     # data = {'idx_image': None, 'tasks': None, 'wind_speed': None, 'vic_msg': None}  # Initialize data
     try:
@@ -636,15 +644,15 @@ if __name__ == '__main__':
                                     if key == 'tasks':
                                         gui.tasks_received = value
                                         # --- FIRE SAFETY: if our targeted task is gone, clear local fire UI ---
-                                        if fire_active and fire_task_id is not None:
+                                        if gui.fire_active and gui.fire_task_id is not None:
                                             try:
                                                 current_ids = {t[0] for t in gui.tasks_received}
-                                                if int(fire_task_id) not in current_ids:
-                                                    fire_active = False
-                                                    fire_prompt_id = None
-                                                    fire_task_id = None
-                                                    fire_required = None
-                                                    fire_text = ""
+                                                if int(gui.fire_task_id) not in current_ids:
+                                                    gui.fire_active = False
+                                                    gui.fire_prompt_id = None
+                                                    gui.fire_task_id = None
+                                                    gui.fire_required = None
+                                                    gui.fire_text = ""
                                                     gui.fire_timer_start = None
                                             except Exception:
                                                 # ignore malformed rows
@@ -672,11 +680,11 @@ if __name__ == '__main__':
                                         if gui.sfx_triage: gui.sfx_triage.play()
                                     if key == 'fire_prompt':
                                         # {"id","task_id","text","required"}
-                                        fire_active = True
-                                        fire_prompt_id = value.get("id")
-                                        fire_task_id = value.get("task_id")
-                                        fire_required = value.get("required")
-                                        fire_text = value.get("text") or ""
+                                        gui.fire_active = True
+                                        gui.fire_prompt_id = value.get("id")
+                                        gui.fire_task_id = value.get("task_id")
+                                        gui.fire_required = value.get("required")
+                                        gui.fire_text = value.get("text") or ""
                                         gui.fire_timer_start = pygame.time.get_ticks()
                                         if gui.sfx_priority: gui.sfx_priority.play()
                                     if key == 'shutdown':
@@ -792,25 +800,25 @@ if __name__ == '__main__':
                     user_text = getattr(gui.fire_input, 'text_send', gui.fire_input.text).strip()
                     gui.fire_input.finish = False
                     gui.fire_input.text = ""
-                    if fire_active and fire_prompt_id is not None and fire_task_id is not None:
+                    if gui.fire_active and gui.fire_prompt_id is not None and gui.fire_task_id is not None:
                         try:
                             priority_val = int(user_text)
                         except ValueError:
                             priority_val = user_text
                         s.sendall((json.dumps({
                             "priority_reply": {
-                                "id": fire_prompt_id,
-                                "task_id": int(fire_task_id),
+                                "id": gui.fire_prompt_id,
+                                "task_id": int(gui.fire_task_id),
                                 "priority": priority_val
                             }
                         }) + '\n').encode('utf-8'))
 
                         # --- SELF-CLEAR FIRE UI ---
-                        fire_active = False
-                        fire_prompt_id = None
-                        fire_task_id = None
-                        fire_required = None
-                        fire_text = ""
+                        gui.fire_active = False
+                        gui.fire_prompt_id = None
+                        gui.fire_task_id = None
+                        gui.fire_required = None
+                        gui.fire_text = ""
                         gui.fire_timer_start = None
 
             # Render the GUI and get the response

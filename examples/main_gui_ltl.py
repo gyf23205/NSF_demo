@@ -222,7 +222,7 @@ if __name__ == "__main__":
     try:
         # === Setup socket for GUI communication ===
         # Create a server for socket communication
-        host = '0.0.0.0'  # Use '127.0.0.1' to accept connections only from localhost
+        host = '127.0.0.1'  # Use '127.0.0.1' to accept connections only from localhost
         port = 8888
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))
@@ -427,6 +427,8 @@ if __name__ == "__main__":
                         if ta[0] == task['task_id'] and ta[2] != task['priority']:
                             ta[2] = task['priority']
                             print(f'reset task {task["task_id"]} priority to {task["priority"]}')
+                            # If priority changed, remove the corresponding special region
+                            game_mgr.special_regions.remove_region(ta[0])
                             break
                 
                 buffers['tasks'].append(tasks)
@@ -573,16 +575,19 @@ if __name__ == "__main__":
 
                 # 1-2. If we have a credit and at least one remaining task, create a prompt now
                 if (fire_time_credit > 0) and (current_fire_prompt is None) and (len(tasks) > 0):
-                    available_task_ids = [t[0] for t in tasks]  # 1-based ids still on table
-                    if available_task_ids:
-                        chosen_task_id = int(np.random.choice(available_task_ids))
+                    # available_task = [t for t in tasks]  # 1-based ids still on table
+                    if tasks:
+                        chosen_task = int(np.random.choice(len(tasks)))
+                        chosen_task_id = tasks[chosen_task][0]
+                        chosen_task_pos = tasks[chosen_task][1]
                         fire_prompt_id += 1
-                        required = 2  # HIGH on your 0/1/2 scale
+                        required = np.random.choice([1, 2])
+                        game_mgr.special_regions.add_region(chosen_task_id, chosen_task_pos, 50, required)
                         text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
                         current_fire_prompt = {
                             "id": fire_prompt_id,
                             "task_id": chosen_task_id,
-                            "required": required,
+                            "required": str(required),
                             "text": text,
                             "time": running_time,
                         }
