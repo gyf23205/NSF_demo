@@ -336,7 +336,7 @@ class UserGUI:
         # Body & input
         self.fire_body.clear()
         if fire_active and fire_text:
-            self.fire_body.update(fire_text)  # e.g., "Region 3 is in danger. Set its priority to HIGH (2)."
+            self.fire_body.update(fire_text, text_color=RED)  # e.g., "Region 3 is in danger. Set its priority to HIGH (2)."
         else:
             self.fire_body.update('No active fire-related priority request.')
         self.screen.blit(self.fire_body.texts[0][0], self.fire_body.texts[0][1])
@@ -361,9 +361,9 @@ class UserGUI:
 
         # Clear the task area before drawing
         task_table_width = 6 * (grid_width + spacing)
-        task_table_height =  self.screen_height - self.task_y
-        # print(f'Number of previous tasks: {self.n_previous_tasks}')
-        pygame.draw.rect(self.screen, WHITE, (self.task_x, self.task_y + 2 * line_height * FONT_SIZE, task_table_width, task_table_height))
+        task_table_top = self.task_list_y                 # under the 1-line header
+        task_table_height = self.screen_height - task_table_top
+        pygame.draw.rect(self.screen, WHITE, (self.task_x, task_table_top, task_table_width, task_table_height))
         
         if self.task_list:
             # assert False
@@ -399,7 +399,10 @@ class UserGUI:
 
         # Message line below header
         self.surv_msg_font.clear()
-        self.surv_msg_font.update(surv_text if surv_active and surv_text else "No active survivor message.")
+        if surv_active and surv_text:
+            self.surv_msg_font.update(surv_text, text_color=RED)
+        else:
+            self.surv_msg_font.update("No active survivor message.", text_color=BLACK)
         self.screen.blit(self.surv_msg_font.texts[0][0], self.surv_msg_font.texts[0][1])
 
         # Buttons: keep using existing buttons; just redraw them each frame
@@ -418,7 +421,7 @@ class UserGUI:
 
         # Clear a fixed wide area (from response_x to screen right)
         response_region_width  = self.screen_width - response_x - 10
-        response_region_height = 5 * line_h + 30   # title + one line + padding + input
+        response_region_height = 3 * line_h + 30   # title + one line + padding + input
         pygame.draw.rect(self.screen, WHITE, (response_x, response_y, response_region_width, response_region_height))
 
         # Title
@@ -428,8 +431,10 @@ class UserGUI:
 
         # Body
         self.response_text.clear()
-        msg = atm_text if atm_active and atm_text else 'No active ATM message.'
-        self.response_text.update(msg)
+        if atm_active and atm_text:
+            self.response_text.update(atm_text, text_color=RED)
+        else:
+            self.response_text.update("No active ATM message.", text_color=BLACK)
         self.screen.blit(self.response_text.texts[0][0], self.response_text.texts[0][1])
 
         # Input just below
