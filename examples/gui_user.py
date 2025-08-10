@@ -178,7 +178,7 @@ class UserGUI:
         self.sfx_survivor = _sequence([(523, 0.10), (659, 0.12)], gap=0.04)  # short chime
 
         # Screen
-        self.screen_width = 1300
+        self.screen_width = 1350
         self.screen_height = 850
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.screen.fill(WHITE)
@@ -292,8 +292,8 @@ class UserGUI:
         self.panel_workload = pygame.Rect(10, 10, 660, 160)
         self.panel_survivor = pygame.Rect(10, 180, 660, 510)
         self.panel_triage   = pygame.Rect(10, 700, 660, 140)
-        self.panel_atm      = pygame.Rect(680, 10, 610, 160)
-        self.panel_tasks    = pygame.Rect(680, 180, 610, 660)
+        self.panel_atm      = pygame.Rect(680, 10, 660, 160)
+        self.panel_tasks    = pygame.Rect(680, 180, 660, 660)
 
         # Timers (ms since pygame start or None when inactive)
         self.atm_timer_start  = None

@@ -73,15 +73,9 @@ def _pick_coord_avoiding_targets(ws, grid_size=(50, 40)):
     forbidden = set(tuple(t) for t in ws.target_locations)
     # optionally avoid base/hospital if you like:
     forbidden |= set(ws.base_area) | set(ws.hospital_area)
-    rng = random.Random(314159)  # or use ws.rng for determinism
+    rng = random.Random()  # or use ws.rng for determinism
     candidates = [(x, y) for x in range(rows) for y in range(cols) if (x, y) not in forbidden]
     return rng.choice(candidates) if candidates else (rows // 2, cols // 2)
-
-
-def _make_atm_prompt(x, y):
-    token = f"NO_FLY_{x}_{y}"
-    text  = f"Grid ({x}, {y}) reserved for helicopter traffic. Confirm by typing '{token}'."
-    return token, text
 
 
 def compute_utilization(human, now, window=SLIDING_WINDOW):
@@ -284,6 +278,18 @@ if __name__ == "__main__":
                     triage_symptoms[lab].append(row['symptom'])
                 except Exception:
                     pass
+
+        # === Load ATM message templates (token,sentence) ===
+        atm_rows = []  # list of (token_tmpl, sentence_tmpl)
+        with open('examples/data/atm_messages.csv', 'r', encoding='utf-8', newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                tok = (row.get('token') or '').strip()       # e.g. "NO_FLY_{x}_{y}"
+                sent = (row.get('sentence') or '').strip()   # e.g. "Grid ({x}, {y}) ... '{token}'."
+                if tok and sent:
+                    atm_rows.append((tok, sent))
+        if not atm_rows:
+            raise RuntimeError("No ATM templates loaded from data/atm_messages.csv")
 
         # === Agents and Binding Manager ===
         agents_by_type = {
@@ -612,30 +618,30 @@ if __name__ == "__main__":
 
                 # 3. ATM scheduler (prompt + env broadcast)
                 if (atmmsg_idx < len(ATMMSG_TIMES)) and (running_time >= ATMMSG_TIMES[atmmsg_idx]):
-                    from math import isfinite
-                    # global atm_prompt_id, current_atm_prompt, atm_sent_for_prompt
-
-                    # If previous prompt is still pending, record failure and replace it
+                    # If a previous prompt is still pending, mark it failed (your existing logic)
                     if current_atm_prompt is not None:
-                        print(f"[t={running_time:.1f}] ATM overrun: previous prompt {current_atm_prompt['id']} failed")
                         atm_results.append(False)
 
-                    # Create a new prompt
+                    # Pick a new grid that avoids targets (you already have this)
                     x, y = _pick_coord_avoiding_targets(ws, grid_size=grid_size)
-                    token, text = _make_atm_prompt(x, y)
+
+                    # --- NEW: build token/text from CSV template ---
+                    token_tmpl, text_tmpl = random.choice(atm_rows)          # e.g., ("NO_FLY_{x}_{y}", "Grid ({x}, {y}) ... '{token}'.")
+                    token = token_tmpl.format(x=x, y=y)
+                    text  = text_tmpl.format(x=x, y=y, token=token)
+
                     atm_prompt_id += 1
                     current_atm_prompt = {"id": atm_prompt_id, "coord": (x, y), "token": token, "text": text, "time": running_time}
                     atm_sent_for_prompt.clear()
 
-                    # Add a small no-fly dot to the environment so path planners can avoid it
-                    # (we'll handle planner-side propagation in rrt_connect_ltl / utils later)
+                    # (optional: add a small no-fly circle—keep your existing code)
                     try:
                         ws.env.obs_circle.append([x, y, 0.8])
                     except Exception as e:
                         print(f"[ATM] Warning: failed to add no-fly dot: {e}")
 
-                    # Environment AP broadcast occurs at the scheduled tick
-                    print(f"[t={running_time:.1f}] ATM broadcast: {token} @ ({x},{y})")
+                    # Broadcast the env AP at the scheduled tick (keep as-is)
+                    # print(f"[t={running_time:.1f}] ATM broadcast: {token} @ ({x},{y})")
                     labeler.advance({"p_atmmsg_0_0_0_0"})
 
                     atmmsg_idx += 1
