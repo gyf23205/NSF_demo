@@ -222,14 +222,14 @@ if __name__ == "__main__":
     try:
         # === Setup socket for GUI communication ===
         # Create a server for socket communication
-        host = '127.0.0.1'  # Use '127.0.0.1' to accept connections only from localhost
+        host = '0.0.0.0'  # Use '127.0.0.1' to accept connections only from localhost
         port = 8888
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))
         s.listen()
         clients = []  # Track all client addresses
         print("Server waiting for connection...")
-        while len(clients) < 1:  # !!! Wait for all client to connect
+        while len(clients) < 2:  # !!! Wait for all client to connect
             conn, addr = s.accept()
             print("Connected by", addr)
             clients.append((conn, addr))  # Store the address
@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
         # === Constants ===
         hover_duration = 10
-        n_targets = 4
+        n_targets = 15
         n_drones = 4
         n_gvs = 2
         n_humans = 2
@@ -394,11 +394,8 @@ if __name__ == "__main__":
             'workload':[],
             'vic_msg':[],
             'atm_prompt':[],   # server → one client: {"id","text","token","coord":[x,y]}
-            'atm_clear':[],    # server → one client: {"id": ...}
             'surv_prompt': [],   # server→one: {"id","text","choices":["Emergency","Serious","Minor"]}
-            'surv_clear':  [],   # server→one: {"id":...,"ok":True/False}
             'fire_prompt': [],   # server→one: {"id","task_id","text","required"}
-            'fire_clear':  [],   # server→one: {"id","ok":True|False,"reason":...}
             }
         while running:
             # === Avoid high CPU usage ===
@@ -789,7 +786,6 @@ if __name__ == "__main__":
                         print(f"[t={running_time:.1f}] ATM confirmation accepted: {token}")
                         # mark the human action complete
                         labeler.advance({"p_nofly_0_3_1_0"})
-                        buffers['atm_clear'].append({"id": current_atm_prompt["id"]})
                         current_atm_prompt = None
                         atm_sent_for_prompt.clear()
 
@@ -805,7 +801,6 @@ if __name__ == "__main__":
                     labeler.advance({"p_message_0_3_1_0"})
 
                     # Clear the prompt, but report correctness in the message
-                    buffers['surv_clear'].append({"id": current_surv_prompt["id"], "ok": ok})
                     current_surv_prompt = None
                     surv_sent_for_prompt.clear()
             
@@ -822,7 +817,6 @@ if __name__ == "__main__":
                         # Task disappeared before reply → FAIL & advance
                         fire_results.append(False)
                         labeler.advance({"p_priority_0_3_1_0"})
-                        buffers['fire_clear'].append({"id": current_fire_prompt["id"], "ok": False, "reason": "task_gone"})
                         current_fire_prompt = None
                         fire_sent_for_prompt.clear()
                     else:
@@ -837,12 +831,8 @@ if __name__ == "__main__":
 
                             fire_results.append(True)
                             labeler.advance({"p_priority_0_3_1_0"})
-                            buffers['fire_clear'].append({"id": current_fire_prompt["id"], "ok": True})
                             current_fire_prompt = None
                             fire_sent_for_prompt.clear()
-                        else:
-                            # Keep prompt active; optional nudge
-                            buffers['fire_clear'].append({"id": current_fire_prompt["id"], "ok": False, "reason": "wrong_value"})
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
@@ -886,9 +876,9 @@ if __name__ == "__main__":
             if any(len(v) > 0 for v in buffers.values()):
                 message_all = {'tasks': None, 'wind_speed': None}
                 message_one = {'idx_image': None, 'vic_msg': None, 'workload': None,
-                               'atm_prompt': None, 'atm_clear': None,
-                               'surv_prompt': None, 'surv_clear': None,
-                               'fire_prompt': None, 'fire_clear': None}
+                               'atm_prompt': None,
+                               'surv_prompt': None,
+                               'fire_prompt': None}
 
                 if buffers['idx_image']:
                     message_one['idx_image'] = buffers['idx_image'].pop(0)
@@ -911,18 +901,12 @@ if __name__ == "__main__":
                 # ATM prompt/clear
                 if buffers['atm_prompt']:
                     message_one['atm_prompt'] = buffers['atm_prompt'].pop(0)
-                if buffers['atm_clear']:
-                    message_one['atm_clear'] = buffers['atm_clear'].pop(0)
 
                 if buffers['surv_prompt']:
                     message_one['surv_prompt'] = buffers['surv_prompt'].pop(0)
-                if buffers['surv_clear']:
-                    message_one['surv_clear'] = buffers['surv_clear'].pop(0)
 
                 if buffers['fire_prompt']:
                     message_one['fire_prompt'] = buffers['fire_prompt'].pop(0)
-                if buffers['fire_clear']:
-                    message_one['fire_clear'] = buffers['fire_clear'].pop(0)
 
                 # Send messages to clients
                 if any(v is not None for v in message_all.values()):

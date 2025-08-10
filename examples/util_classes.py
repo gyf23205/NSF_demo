@@ -164,7 +164,7 @@ class TextInputResponse:
         
         if self.temp_flag != self.active:
             print(f"TextInput active state changed: {self.active}")
-            print(f"TextInput text updated: {self.text}")
+            print(f"TextInput text updated: " + self.text)
             self.temp_flag = self.active
 
         if event.type == pygame.MOUSEBUTTONUP and self.lock:

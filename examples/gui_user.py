@@ -567,7 +567,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '192.168.123.225'  # IP of the server (localhost)
+    host = '127.0.0.1'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -635,6 +635,20 @@ if __name__ == '__main__':
                                         if gui.sfx_survivor: gui.sfx_survivor.play()
                                     if key == 'tasks':
                                         gui.tasks_received = value
+                                        # --- FIRE SAFETY: if our targeted task is gone, clear local fire UI ---
+                                        if fire_active and fire_task_id is not None:
+                                            try:
+                                                current_ids = {t[0] for t in gui.tasks_received}
+                                                if int(fire_task_id) not in current_ids:
+                                                    fire_active = False
+                                                    fire_prompt_id = None
+                                                    fire_task_id = None
+                                                    fire_required = None
+                                                    fire_text = ""
+                                                    gui.fire_timer_start = None
+                                            except Exception:
+                                                # ignore malformed rows
+                                                pass
                                     # if key == 'wind_speed':
                                         # gui.wind_speed_received = value
                                     # if key == 'vic_msg':
@@ -647,13 +661,6 @@ if __name__ == '__main__':
                                         atm_text = value.get("text") or ""
                                         gui.atm_timer_start = pygame.time.get_ticks()
                                         if gui.sfx_atm: gui.sfx_atm.play()
-                                    if key == 'atm_clear':
-                                        # value: {"id": ...}
-                                        atm_active = False
-                                        atm_prompt_id = None
-                                        atm_token = None
-                                        atm_text = ""  # will fall back to existing buffer or placeholder
-                                        gui.atm_timer_start = None
                                     if key == 'surv_prompt':
                                         # {"id","text","choices":[...]}
                                         surv_active = True
@@ -663,14 +670,6 @@ if __name__ == '__main__':
                                         surv_choices = value.get("choices") or ["Emergency","Serious","Minor"]
                                         gui.surv_timer_start = pygame.time.get_ticks()
                                         if gui.sfx_triage: gui.sfx_triage.play()
-                                    if key == 'surv_clear':
-                                        # {"id":..., "ok": True|False}
-                                        if value.get("id") == surv_prompt_id:
-                                            surv_active = False
-                                            surv_prompt_id = None
-                                            surv_text = ""
-                                            gui.surv_timer_start = None
-                                            gui.surv_symptoms = []
                                     if key == 'fire_prompt':
                                         # {"id","task_id","text","required"}
                                         fire_active = True
@@ -680,16 +679,6 @@ if __name__ == '__main__':
                                         fire_text = value.get("text") or ""
                                         gui.fire_timer_start = pygame.time.get_ticks()
                                         if gui.sfx_priority: gui.sfx_priority.play()
-                                    if key == 'fire_clear':
-                                        # {"id":..., "ok": True|False, "reason": "..."}
-                                        if value.get("id") == fire_prompt_id:
-                                            # clear regardless of ok to match server contract
-                                            fire_active = False
-                                            fire_prompt_id = None
-                                            fire_task_id = None
-                                            fire_required = None
-                                            fire_text = ""
-                                            gui.fire_timer_start = None
                                     if key == 'shutdown':
                                         running = False
                                         break
@@ -754,14 +743,32 @@ if __name__ == '__main__':
                 if gui.button_wind_change.handle_event(event):
                     if surv_active and surv_prompt_id is not None:
                         s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[0]}}) + '\n').encode('utf-8'))
+                        # --- SELF-CLEAR SURV ---
+                        surv_active = False
+                        surv_prompt_id = None
+                        surv_text = ""
+                        gui.surv_timer_start = None
+                        gui.surv_symptoms = []
 
                 elif gui.button_wind_maintain.handle_event(event):
                     if surv_active and surv_prompt_id is not None:
                         s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[1]}}) + '\n').encode('utf-8'))
+                        # --- SELF-CLEAR SURV ---
+                        surv_active = False
+                        surv_prompt_id = None
+                        surv_text = ""
+                        gui.surv_timer_start = None
+                        gui.surv_symptoms = []
 
                 elif gui.button_wind_handover.handle_event(event):
                     if surv_active and surv_prompt_id is not None:
                         s.sendall((json.dumps({"surv_reply": {"id": surv_prompt_id, "choice": surv_choices[2]}}) + '\n').encode('utf-8'))
+                        # --- SELF-CLEAR SURV ---
+                        surv_active = False
+                        surv_prompt_id = None
+                        surv_text = ""
+                        gui.surv_timer_start = None
+                        gui.surv_symptoms = []
                     
                 # ATM response handling
                 gui.response_input.handle_event(event)
@@ -772,6 +779,12 @@ if __name__ == '__main__':
 
                     if atm_active and atm_prompt_id is not None:
                         s.sendall((json.dumps({"atm_reply": {"id": atm_prompt_id, "typed": user_text}}) + '\n').encode('utf-8'))
+                        # --- SELF-CLEAR ATM ---
+                        atm_active = False
+                        atm_prompt_id = None
+                        atm_token = None
+                        atm_text = ""
+                        gui.atm_timer_start = None
                 
                 # Fire→Priority input handling
                 gui.fire_input.handle_event(event)
@@ -791,6 +804,14 @@ if __name__ == '__main__':
                                 "priority": priority_val
                             }
                         }) + '\n').encode('utf-8'))
+
+                        # --- SELF-CLEAR FIRE UI ---
+                        fire_active = False
+                        fire_prompt_id = None
+                        fire_task_id = None
+                        fire_required = None
+                        fire_text = ""
+                        gui.fire_timer_start = None
 
             # Render the GUI and get the response
             gui.render()
