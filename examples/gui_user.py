@@ -690,6 +690,9 @@ if __name__ == '__main__':
                                             fire_required = None
                                             fire_text = ""
                                             gui.fire_timer_start = None
+                                    if key == 'shutdown':
+                                        running = False
+                                        break
                     data_received = None
             except BlockingIOError:
                 pass

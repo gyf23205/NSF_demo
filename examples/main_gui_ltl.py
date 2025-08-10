@@ -936,7 +936,14 @@ if __name__ == "__main__":
     finally:
         # Close the socket
         for conn, addr in clients:
-            conn.close()
+            try:
+                conn.sendall((json.dumps({"shutdown": True}) + '\n').encode('utf-8'))
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
         s.close()
         pygame.quit()
         # Collect data
