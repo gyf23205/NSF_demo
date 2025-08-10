@@ -22,6 +22,45 @@ from realtime_heart_plot import RealtimeHeartPlot
 from workload_speedometer import WorkloadSpeedometer
 
 
+# Sound track
+def _init_mixer():
+    if not pygame.mixer.get_init():
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+    pygame.mixer.set_num_channels(8)
+
+def _tone(freq=440, dur=0.2, vol=0.6, sr=44100):
+    """Return a pygame Sound of a single sine tone."""
+    n = int(sr * dur)
+    t = np.linspace(0, dur, n, endpoint=False)
+    wave = (np.sin(2 * np.pi * freq * t) * (32767 * vol)).astype(np.int16)
+    stereo = np.column_stack((wave, wave))      # 2 channels
+    return pygame.sndarray.make_sound(stereo.copy())
+
+def _silence(dur=0.03, sr=44100):
+    n = int(sr * dur)
+    z = np.zeros((n, 2), dtype=np.int16)
+    return pygame.sndarray.make_sound(z.copy())
+
+def _sequence(pairs, gap=0.03, sr=44100, vol=0.6):
+    """
+    Build a single Sound from [(freq, dur), ...], with short gaps between notes.
+    """
+    chunks = []
+    for i, (f, d) in enumerate(pairs):
+        n = int(sr * d)
+        t = np.linspace(0, d, n, endpoint=False)
+        wave = (np.sin(2 * np.pi * f * t) * (32767 * vol)).astype(np.int16)
+        stereo = np.column_stack((wave, wave))
+        chunks.append(stereo)
+        if i < len(pairs) - 1 and gap > 0:
+            g = np.zeros((int(sr * gap), 2), dtype=np.int16)
+            chunks.append(g)
+    if not chunks:
+        chunks = [np.zeros((int(sr * 0.01), 2), dtype=np.int16)]
+    arr = np.concatenate(chunks, axis=0)
+    return pygame.sndarray.make_sound(arr.copy())
+
+
 class Task:
     def __init__(self, surface, task_id, target_loc, task_pos, priority=0):
         self.task_id = task_id
@@ -131,6 +170,14 @@ class Human:
 class UserGUI:
     def __init__(self):
         pygame.init()
+        # ---- audio (synth) ----
+        _init_mixer()
+        self.sfx_atm      = _sequence([(880, 0.08), (1175, 0.08)])          # two quick beeps, rising
+        self.sfx_priority = _sequence([(300, 0.28)])                         # low warning
+        self.sfx_triage   = _sequence([(660, 0.09), (660, 0.09), (660, 0.09)], gap=0.05)  # triple ping
+        self.sfx_survivor = _sequence([(523, 0.10), (659, 0.12)], gap=0.04)  # short chime
+
+        # Screen
         self.screen_width = 1300
         self.screen_height = 850
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
@@ -572,6 +619,7 @@ if __name__ == '__main__':
                                         # value is {"image_id": int, "tid": "2"} from server
                                         victim_buffer.append(value)
                                         gui.victim_timer_start = pygame.time.get_ticks()  # start survivor-image timer
+                                        if gui.sfx_survivor: gui.sfx_survivor.play()
                                     if key == 'tasks':
                                         gui.tasks_received = value
                                     # if key == 'wind_speed':
@@ -585,6 +633,7 @@ if __name__ == '__main__':
                                         atm_token = value.get("token")
                                         atm_text = value.get("text") or ""
                                         gui.atm_timer_start = pygame.time.get_ticks()
+                                        if gui.sfx_atm: gui.sfx_atm.play()
                                     if key == 'atm_clear':
                                         # value: {"id": ...}
                                         atm_active = False
@@ -599,6 +648,7 @@ if __name__ == '__main__':
                                         surv_text = value.get("text") or ""
                                         surv_choices = value.get("choices") or ["Emergency","Serious","Minor"]
                                         gui.surv_timer_start = pygame.time.get_ticks()
+                                        if gui.sfx_triage: gui.sfx_triage.play()
                                     if key == 'surv_clear':
                                         # {"id":..., "ok": True|False}
                                         if value.get("id") == surv_prompt_id:
@@ -614,6 +664,7 @@ if __name__ == '__main__':
                                         fire_required = value.get("required")
                                         fire_text = value.get("text") or ""
                                         gui.fire_timer_start = pygame.time.get_ticks()
+                                        if gui.sfx_priority: gui.sfx_priority.play()
                                     if key == 'fire_clear':
                                         # {"id":..., "ok": True|False, "reason": "..."}
                                         if value.get("id") == fire_prompt_id:
