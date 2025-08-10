@@ -245,6 +245,43 @@ class UserGUI:
         self.panel_atm      = pygame.Rect(680, 10, 610, 160)
         self.panel_tasks    = pygame.Rect(680, 180, 610, 660)
 
+        # Timers (ms since pygame start or None when inactive)
+        self.atm_timer_start  = None
+        self.fire_timer_start = None
+        self.surv_timer_start = None
+        self.victim_timer_start = None
+        # Font for timers
+        self.timer_font = pygame.font.SysFont(FONT, FONT_SIZE)
+
+
+    @staticmethod
+    def _timer_color(elapsed_s: float):
+        if elapsed_s >= 7:
+            return RED
+        if elapsed_s >= 3.5:
+            return (255, 165, 0)   # Orange
+        return BLACK
+    
+
+    def _draw_panel_timer(self, panel_rect, start_ms):
+        """Draw a timer in the top-right of a panel. Clears the spot first."""
+        line_h = int(FONT_SIZE * line_height)
+        px, py, pw, ph = panel_rect
+        tx = px + pw - 46   # timer x
+        ty = py + 6         # timer y
+
+        # Clear the small area where the timer goes, every frame
+        pygame.draw.rect(self.screen, WHITE, (tx - 2, ty - 2, 44, line_h))
+
+        # If no active timer, we're done (the clear above erased old digits)
+        if start_ms is None:
+            return
+
+        elapsed = (pygame.time.get_ticks() - start_ms) / 1000.0
+        color = self._timer_color(elapsed)
+        surf  = self.timer_font.render(f"{int(elapsed)}s", True, color)
+        self.screen.blit(surf, (tx, ty))
+
 
     def render(self):
         # self.screen.fill(WHITE)
@@ -450,6 +487,20 @@ class UserGUI:
                   self.panel_tasks):
             pygame.draw.rect(self.screen, BLACK, r, width=2)
 
+        # ====== Timers =========
+        # Survivor triage 
+        triage_start = self.surv_timer_start if (surv_active and surv_text) else None
+        self._draw_panel_timer(self.panel_triage, triage_start)
+        # ATM message
+        atm_start = self.atm_timer_start if (atm_active and atm_text) else None
+        self._draw_panel_timer(self.panel_atm, atm_start)
+        # Priority (fire) message
+        fire_start = self.fire_timer_start if (fire_active and fire_text) else None
+        self._draw_panel_timer(self.panel_tasks, fire_start)
+        # Survivor image (accept/reject)
+        victim_start = self.victim_timer_start if (self.image is not None) else None
+        self._draw_panel_timer(self.panel_survivor, victim_start)
+
         pygame.display.flip()
 
 
@@ -520,6 +571,7 @@ if __name__ == '__main__':
                                     if key == 'idx_image':
                                         # value is {"image_id": int, "tid": "2"} from server
                                         victim_buffer.append(value)
+                                        gui.victim_timer_start = pygame.time.get_ticks()  # start survivor-image timer
                                     if key == 'tasks':
                                         gui.tasks_received = value
                                     # if key == 'wind_speed':
@@ -532,24 +584,28 @@ if __name__ == '__main__':
                                         atm_prompt_id = value.get("id")
                                         atm_token = value.get("token")
                                         atm_text = value.get("text") or ""
+                                        gui.atm_timer_start = pygame.time.get_ticks()
                                     if key == 'atm_clear':
                                         # value: {"id": ...}
                                         atm_active = False
                                         atm_prompt_id = None
                                         atm_token = None
                                         atm_text = ""  # will fall back to existing buffer or placeholder
+                                        gui.atm_timer_start = None
                                     if key == 'surv_prompt':
                                         # {"id","text","choices":[...]}
                                         surv_active = True
                                         surv_prompt_id = value.get("id")
                                         surv_text = value.get("text") or ""
                                         surv_choices = value.get("choices") or ["Emergency","Serious","Minor"]
+                                        gui.surv_timer_start = pygame.time.get_ticks()
                                     if key == 'surv_clear':
                                         # {"id":..., "ok": True|False}
                                         if value.get("id") == surv_prompt_id:
                                             surv_active = False
                                             surv_prompt_id = None
                                             surv_text = ""
+                                            gui.surv_timer_start = None
                                     if key == 'fire_prompt':
                                         # {"id","task_id","text","required"}
                                         fire_active = True
@@ -557,6 +613,7 @@ if __name__ == '__main__':
                                         fire_task_id = value.get("task_id")
                                         fire_required = value.get("required")
                                         fire_text = value.get("text") or ""
+                                        gui.fire_timer_start = pygame.time.get_ticks()
                                     if key == 'fire_clear':
                                         # {"id":..., "ok": True|False, "reason": "..."}
                                         if value.get("id") == fire_prompt_id:
@@ -566,6 +623,7 @@ if __name__ == '__main__':
                                             fire_task_id = None
                                             fire_required = None
                                             fire_text = ""
+                                            gui.fire_timer_start = None
                     data_received = None
             except BlockingIOError:
                 pass
@@ -584,6 +642,7 @@ if __name__ == '__main__':
                     response['verify_tid'] = (
                         str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
                     )
+                    gui.victim_timer_start = None  # stop timer
 
                 elif gui.button_reject.handle_event(event):
                     gui.image = None
@@ -593,6 +652,7 @@ if __name__ == '__main__':
                     response['verify_tid'] = (
                         str(clicked_item['tid']) if isinstance(clicked_item, dict) and 'tid' in clicked_item else None
                     )
+                    gui.victim_timer_start = None  # stop timer
 
                 # elif gui.button_handover.handle_event(event):
                 #     gui.image = None
