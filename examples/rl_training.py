@@ -64,9 +64,9 @@ if __name__ == '__main__':
 
     # Agents
     agents_by_type = {
-        "drone": ws.agents["drones"],
-        "gv": ws.agents["gvs"],
-        "human": ws.agents["humans"]
+        "drones": ws.agents["drones"],
+        "gvs": ws.agents["gvs"],
+        "humans": ws.agents["humans"]
     }
     binding_mgr.agents_by_type = agents_by_type
 

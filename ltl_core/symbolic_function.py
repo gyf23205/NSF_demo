@@ -34,7 +34,7 @@ class SymbolicFunction:
         return f"p_{self.ap_type}_{suffix}"
 
     def _role_index(self):
-        return {"drone": 1, "gv": 2, "human": 3}.get(self.role, 0)
+        return {"drones": 1, "gvs": 2, "humans": 3}.get(self.role, 0)
 
     def activate(self):
         """Set the function as ready to begin progressing."""

@@ -14,7 +14,7 @@ class RandomAllocator:
         assigned = set()
 
         # Human - assigned symbolic function check (RESPECT BINDING)
-        for agent in self.agents_by_type.get("human", []):
+        for agent in self.agents_by_type.get("humans", []):
             task = agent.current_symbolic_task
             if task and task in unlocked and task not in completed and task not in aps:
                 agent_type = self.spec.get_required_role_by_ap(task)
@@ -44,7 +44,7 @@ class RandomAllocator:
                         continue
 
                     # BLOCK: GV should not take new pickup if already assigned dropoff
-                    # if agent_type == "gv" and agent.label in busy_gvs and task.startswith("p_pickup_"):
+                    # if agent_type == "gvs" and agent.label in busy_gvs and task.startswith("p_pickup_"):
                         # continue
 
                     success = self.binding_manager.record_assignment(task, agent, agent_type)

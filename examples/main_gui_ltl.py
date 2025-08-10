@@ -53,6 +53,9 @@ current_fire_prompt = None     # {"id","task_id","required","text","time"}
 fire_sent_for_prompt = set()
 fire_results = []              # True/False history
 
+# --- Task removal after pickup gating ---
+pickup_cleared = set()
+
 
 def _ap_target_id(ap: str):
     try:
@@ -283,9 +286,9 @@ if __name__ == "__main__":
 
         # === Agents and Binding Manager ===
         agents_by_type = {
-            "drone": ws.agents["drones"],
-            "gv": ws.agents["gvs"],
-            "human": ws.agents["humans"]
+            "drones": ws.agents["drones"],
+            "gvs": ws.agents["gvs"],
+            "humans": ws.agents["humans"]
         }
         binding_manager.agents_by_type = agents_by_type
 
@@ -295,14 +298,14 @@ if __name__ == "__main__":
         humans = ws.agents["humans"]
         agent_to_visual = {}
 
-        for i, agent in enumerate(agents_by_type["drone"]):
+        for i, agent in enumerate(agents_by_type["drones"]):
             pos = agent.pos
             if len(pos) == 2:
                 pos = np.append(pos, 0.0)  # Add dummy altitude
             vd = VirtualDrone(i, tuple(pos))
             drones.append(vd)
             agent_to_visual[agent] = vd
-        for i, agent in enumerate(agents_by_type["gv"]):
+        for i, agent in enumerate(agents_by_type["gvs"]):
             pos = agent.pos
             gv = VirtualGV(i, tuple(pos))
             gvs.append(gv)
@@ -316,7 +319,7 @@ if __name__ == "__main__":
         game_mgr = GameMgr(drones, gvs, humans, ws)
 
         # === Get drone start positions in GUI space ===
-        takeoff_positions = [agent.pos[:2] for agent in agents_by_type["drone"]]
+        takeoff_positions = [agent.pos[:2] for agent in agents_by_type["drones"]]
         takeoff_gui = [ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(900, 720)) for pos in takeoff_positions]
         game_mgr.set_takeoff_positions(takeoff_gui)
 
@@ -464,6 +467,27 @@ if __name__ == "__main__":
                 unlocked = sim_outputs["unlocked"]
                 assignments = sim_outputs["assignments"]
                 completed = sim_outputs["completed"]
+
+                # === Remove task rows once p_pickup_*_2_1_0 is completed ===
+                removed_any = False
+                for ap in completed:
+                    if isinstance(ap, str) and ap.startswith("p_pickup_") and ap.endswith("_2_1_0"):
+                        try:
+                            tid0 = int(ap.split("_")[2])   # 0-based target id in the AP
+                        except (ValueError, IndexError):
+                            continue
+                        if tid0 in pickup_cleared:
+                            continue  # already removed
+                        pickup_cleared.add(tid0)
+
+                        tid1 = tid0 + 1  # your task table uses 1-based ids
+                        # Remove from both server-side task list and GameMgr copy
+                        tasks = [row for row in tasks if row[0] != tid1]
+                        game_mgr.task = [row for row in game_mgr.task if row[0] != tid1]
+                        removed_any = True
+                if removed_any:
+                    # Notify clients once per tick with the updated table
+                    buffers['tasks'].append(tasks[:])  # shallow copy is fine
 
                 # Build "currently assigned" maps from assignments → {tid: idx}
                 assigned_drone_by_tid = {}
@@ -616,7 +640,7 @@ if __name__ == "__main__":
                 # === Victim detection after p_scan_i ===
                 for ap in completed:
                     if ap.startswith("p_scan_") and ap not in victim_detected:
-                        for agent in agents_by_type["drone"]:
+                        for agent in agents_by_type["drones"]:
                             if agent.has_completed(ap):
                                 drone_idx = int(agent.label[1:])
                                 victim_detected.add(ap)
@@ -635,7 +659,7 @@ if __name__ == "__main__":
 
                 # === If a human is assigned p_verify_*, send the pending image now ===
                 for agent, ap in assignments.items():
-                    if isinstance(ap, str) and ap.startswith("p_verify_") and str(getattr(agent, "role", "")).startswith("human"):
+                    if isinstance(ap, str) and ap.startswith("p_verify_") and str(getattr(agent, "role", "")).startswith("humans"):
                         tid = ap.split("_")[2]  # target id as string
                         # only send once per target, and only if we actually have an image
                         if tid in pending_images and tid not in sent_for_target:
@@ -649,7 +673,7 @@ if __name__ == "__main__":
 
                 # === If a human is assigned p_nofly_*, send the ATM prompt now ===
                 for agent, ap in assignments.items():
-                    if isinstance(ap, str) and ap.startswith("p_nofly_") and str(getattr(agent, "role", "")).startswith("human"):
+                    if isinstance(ap, str) and ap.startswith("p_nofly_") and str(getattr(agent, "role", "")).startswith("humans"):
                         if current_atm_prompt and (current_atm_prompt["id"] not in atm_sent_for_prompt):
                             buffers['atm_prompt'].append({
                                 "id": current_atm_prompt["id"],
@@ -661,7 +685,7 @@ if __name__ == "__main__":
 
                 # === If a human is assigned p_message_*, send the survivor prompt now ===
                 for agent, ap in assignments.items():
-                    if isinstance(ap, str) and ap.startswith("p_message_") and str(getattr(agent, "role", "")).startswith("human"):
+                    if isinstance(ap, str) and ap.startswith("p_message_") and str(getattr(agent, "role", "")).startswith("humans"):
                         if current_surv_prompt and (current_surv_prompt["id"] not in surv_sent_for_prompt):
                             buffers['surv_prompt'].append({
                                 "id": current_surv_prompt["id"],
@@ -673,7 +697,7 @@ if __name__ == "__main__":
 
                 # === If a human is assigned p_priority_*, send the fire/priority prompt now ===
                 for agent, ap in assignments.items():
-                    if isinstance(ap, str) and ap.startswith("p_priority_") and str(getattr(agent, "role", "")).startswith("human"):
+                    if isinstance(ap, str) and ap.startswith("p_priority_") and str(getattr(agent, "role", "")).startswith("humans"):
                         if current_fire_prompt and (current_fire_prompt["id"] not in fire_sent_for_prompt):
                             buffers['fire_prompt'].append({
                                 "id": current_fire_prompt["id"],
@@ -708,6 +732,10 @@ if __name__ == "__main__":
                         labeler.chosen_gate_per_group[target_id] = f"p_foundgate_{target_id}"
                     elif data['victim'] in ('reject', 'handover'):
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
+                        # Remove rejected task
+                        tasks = [row for row in tasks if row[0] != idx + 1 ]
+                        game_mgr.task = [row for row in game_mgr.task if row[0] != idx + 1 ]
+                        buffers['tasks'].append(tasks[:])
 
                     chosen_gate = labeler.chosen_gate_per_group.get(target_id)
                     if chosen_gate:
@@ -719,11 +747,6 @@ if __name__ == "__main__":
                     if image_id is not None:
                         victim_id[idx] = image_id
                     victim_timing[idx] = running_time
-
-                    # remove from task list
-                    tasks = [item for item in tasks if item[0] != idx + 1]
-                    buffers['tasks'].append(tasks)
-                    game_mgr.task = [item for item in game_mgr.task if item[0] != idx + 1]
 
                     # clear this target’s pending state
                     pending_images.pop(target_id, None)

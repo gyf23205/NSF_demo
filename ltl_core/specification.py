@@ -216,9 +216,9 @@ class Specification:
     @staticmethod
     def resolve_role(agent_type: int):
         return {
-            1: "drone",
-            2: "gv",
-            3: "human"
+            1: "drones",
+            2: "gvs",
+            3: "humans"
         }.get(agent_type, "unknown")
 
     def get_all_function_names(self):

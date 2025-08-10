@@ -23,7 +23,7 @@ class BindingManager:
         # group_key -> {agent_type: agent_id}
         self.bindings: Dict[str, Dict[str, str]] = defaultdict(dict)
 
-        # group_key -> allowed agent types (e.g., {"drone"}, {"gv"}, {"drone", "human"})
+        # group_key -> allowed agent types (e.g., {"drones"}, {"gvs"}, {"drones", "humans"})
         self.group_types: Dict[str, Set[str]] = {}
 
         # task_name with explicitly disabled binding
@@ -37,7 +37,7 @@ class BindingManager:
         # agent_type → [Agent list]
         self.agents_by_type: Dict[str, List[Agent]] = {}
 
-    def register_group(self, group_key: str, tasks: List[str], group_type: str = "drone"):
+    def register_group(self, group_key: str, tasks: List[str], group_type: str = "drones"):
         """Register a group and allowed agent types for that group."""
         for task in tasks:
             self.task_to_group[task] = group_key

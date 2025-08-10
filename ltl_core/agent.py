@@ -4,7 +4,7 @@ import numpy as np
 class Agent:
     def __init__(self, pos, role, label=None, speed=2.0):
         self.pos = np.array(pos, dtype=float)   # Continuous 2D position
-        self.role = role                        # "drone", "gv", or "human"
+        self.role = role                        # "drones", "gvs", or "humans"
         self.label = label                      # Optional string label like "D0", "H1"
         self.traj = [tuple(self.pos)]           # Continuous position trace
 

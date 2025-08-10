@@ -203,8 +203,8 @@ class Labeler:
 
     @staticmethod
     def _get_agent_type(ap: str) -> str:
-        # e.g., p_nave_0_1_1_0 -> "drone" "if type = 1"
-        role_map = {"1": "drone", "2": "gv", "3": "human"}
+        # e.g., p_nave_0_1_1_0 -> "drones" "if type = 1"
+        role_map = {"1": "drones", "2": "gvs", "3": "humans"}
         return role_map.get(ap.split("_")[3], "unknown")
 
     def empty_extract_APs(self, state) -> Set[str]:
@@ -240,7 +240,7 @@ class Labeler:
             self.uncomplete_node_only("p_102")
 
             # 3) Clear symbolic progress for the follow-up AP
-            for agent in self.binding_manager.agents_by_type.get("human", []):
+            for agent in self.binding_manager.agents_by_type.get("humans", []):
                 if agent.current_symbolic_task == followup_ap:
                     agent.reset_symbolic()
                 agent.symbolic_progress.pop(followup_ap, None)

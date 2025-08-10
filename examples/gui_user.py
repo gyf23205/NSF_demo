@@ -289,9 +289,9 @@ class UserGUI:
         self.response_input = TextInputResponse((response_x, response_y + 2 * FONT_SIZE * line_height, 400, FONT_SIZE * line_height), color=WHITE, maximum=1000)
 
         # ====== Panel rectangles (black outlines) ======
-        self.panel_workload = pygame.Rect(10, 10, 640, 160)
-        self.panel_survivor = pygame.Rect(10, 180, 640, 510)
-        self.panel_triage   = pygame.Rect(10, 700, 640, 140)
+        self.panel_workload = pygame.Rect(10, 10, 660, 160)
+        self.panel_survivor = pygame.Rect(10, 180, 660, 510)
+        self.panel_triage   = pygame.Rect(10, 700, 660, 140)
         self.panel_atm      = pygame.Rect(680, 10, 610, 160)
         self.panel_tasks    = pygame.Rect(680, 180, 610, 660)
 

@@ -45,7 +45,7 @@ class Workspace:
         candidates = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0)]
         for i in range(num):
             label = f"H{i}"
-            fixed.append(Agent(pos=np.array(candidates[i % len(candidates)], dtype=float), role="human", label=label))
+            fixed.append(Agent(pos=np.array(candidates[i % len(candidates)], dtype=float), role="humans", label=label))
         return fixed
 
     def _place_agents_in_base(self, num, role):
