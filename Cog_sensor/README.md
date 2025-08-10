@@ -8,9 +8,8 @@ Terminal 1:
 python ecg_record.py
 
 Terminal 2: 
-python online_data_collector.py --gaze-dir "C:\Users\JW Choi\Desktop\WE_transformer\data_collection\openface" --ecg-csv "C:\Users\JW Choi\Desktop\NSF_2025_demo\dataset\JW_record\ecg_log.csv"
+python online_data_collector.py --gaze-dir "[YOUR OPENFACE CSV LOCATION]" --ecg-csv "[YOUR ECG CSV LOCATION]"
 
-python online_data_collector.py --gaze-dir "C:\Users\JW Choi\Desktop\NSF_2025_demo\dataset\JW_record" --ecg-csv "C:\Users\JW Choi\Desktop\NSF_2025_demo\dataset\JW_record\ecg_log.csv"
 
 Terminal 3:
-python data_aggregator.py --gaze-csv gaze_cleaned.csv --ecg-csv "C:\Users\JW Choi\Desktop\NSF_2025_demo\dataset\JW_record\ecg_log.csv"
+python data_aggregator.py --gaze-csv gaze_cleaned.csv --ecg-csv "[YOUR ECG CSV LOCATION]"
