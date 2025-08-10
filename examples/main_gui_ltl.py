@@ -427,8 +427,28 @@ if __name__ == "__main__":
                         if ta[0] == task['task_id'] and ta[2] != task['priority']:
                             ta[2] = task['priority']
                             print(f'reset task {task["task_id"]} priority to {task["priority"]}')
-                            # If priority changed, remove the corresponding special region
-                            game_mgr.special_regions.remove_region(ta[0])
+
+                            # Complete the fire-priority prompt only if this edit satisfies it
+                            if current_fire_prompt and task['task_id'] == current_fire_prompt.get('task_id'):
+                                def _as_int(v):
+                                    try:
+                                        # handles int, str like "2", and numpy ints
+                                        return int(str(v).strip())
+                                    except Exception:
+                                        return None
+
+                                new_pr = _as_int(task['priority'])
+                                req_pr = _as_int(current_fire_prompt.get('required'))
+
+                                if new_pr is not None and req_pr is not None and new_pr == req_pr:
+                                    fire_results.append(True)
+                                    labeler.advance({"p_priority_0_3_1_0"})
+                                    # only clear the highlight when the requirement is met
+                                    game_mgr.special_regions.remove_region(ta[0])
+                                    current_fire_prompt = None
+                                    fire_sent_for_prompt.clear()
+                                # else: leave the region and prompt active
+
                             break
                 
                 buffers['tasks'].append(tasks)
@@ -578,18 +598,20 @@ if __name__ == "__main__":
                     # available_task = [t for t in tasks]  # 1-based ids still on table
                     if tasks:
                         chosen_task = int(np.random.choice(len(tasks)))
-                        chosen_task_id = tasks[chosen_task][0]
+                        chosen_task_id = int(tasks[chosen_task][0])
                         chosen_task_pos = tasks[chosen_task][1]
                         fire_prompt_id += 1
-                        required = np.random.choice([1, 2])
+                        # required = 2
+                        required = int(np.random.choice([1, 2]))
                         game_mgr.special_regions.add_region(chosen_task_id, chosen_task_pos, 50, required)
-                        text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
+                        # text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
+                        text = "Fire is approaching to one of rescue regions. Set priority!"
                         current_fire_prompt = {
-                            "id": fire_prompt_id,
+                            "id": int(fire_prompt_id),
                             "task_id": chosen_task_id,
-                            "required": str(required),
+                            "required": required,
                             "text": text,
-                            "time": running_time,
+                            "time": float(running_time),
                         }
                         fire_sent_for_prompt.clear()
                         fire_time_credit -= 1
@@ -781,13 +803,19 @@ if __name__ == "__main__":
                 if current_atm_prompt and payload.get("id") == current_atm_prompt["id"]:
                     typed = payload.get("typed", "")
                     token = current_atm_prompt["token"]
+
                     if isinstance(typed, str) and typed.startswith(token):
                         atm_results.append(True)
                         print(f"[t={running_time:.1f}] ATM confirmation accepted: {token}")
-                        # mark the human action complete
-                        labeler.advance({"p_nofly_0_3_1_0"})
-                        current_atm_prompt = None
-                        atm_sent_for_prompt.clear()
+                    else:
+                        atm_results.append(False)
+                        print(f"[t={running_time:.1f}] ATM confirmation FAIL (expected '{token}', got '{typed}')")
+
+                    # Advance regardless of correctness
+                    labeler.advance({"p_nofly_0_3_1_0"})
+                    # Clear current prompt so allocator won’t reassign p_nofly_* again
+                    current_atm_prompt = None
+                    atm_sent_for_prompt.clear()
 
             # === Survivor reply handling (top-right buttons) ===
             if isinstance(data, dict) and data.get('surv_reply') is not None:
@@ -805,34 +833,52 @@ if __name__ == "__main__":
                     surv_sent_for_prompt.clear()
             
             # === Fire→Priority reply handling (right-bottom numeric input) ===
-            if isinstance(data, dict) and data.get('priority_reply') is not None:
-                payload = data['priority_reply']  # {"id":..., "task_id": int, "priority": int}
-                if current_fire_prompt and payload.get("id") == current_fire_prompt["id"]:
-                    tid = int(payload.get("task_id"))
-                    pr  = payload.get("priority")
+            # if isinstance(data, dict) and data.get('priority_reply') is not None:
+            #     payload = data['priority_reply']  # {"id":..., "task_id": int, "priority": int|str}
+            #     if current_fire_prompt and payload.get("id") == current_fire_prompt["id"]:
+            #         tid = int(payload.get("task_id"))
 
-                    # Check availability of the task *now*
-                    available_ids = [t[0] for t in tasks]
-                    if tid not in available_ids:
-                        # Task disappeared before reply → FAIL & advance
-                        fire_results.append(False)
-                        labeler.advance({"p_priority_0_3_1_0"})
-                        current_fire_prompt = None
-                        fire_sent_for_prompt.clear()
-                    else:
-                        # Validate priority
-                        if isinstance(pr, int) and pr == current_fire_prompt["required"]:
-                            # Update the task table priority
-                            for ta in tasks:
-                                if ta[0] == tid:
-                                    ta[2] = pr
-                                    break
-                            buffers['tasks'].append(tasks)
+            #         # Normalize both the user-provided priority and the required value
+            #         def _norm_priority(x):
+            #             if isinstance(x, int):
+            #                 return x
+            #             if isinstance(x, str):
+            #                 xs = x.strip().lower()
+            #                 if xs.isdigit():
+            #                     return int(xs)
+            #                 # Optional: accept words
+            #                 word_map = {"low": 0, "medium": 1, "mid": 1, "high": 2}
+            #                 return word_map.get(xs, None)
+            #             return None
 
-                            fire_results.append(True)
-                            labeler.advance({"p_priority_0_3_1_0"})
-                            current_fire_prompt = None
-                            fire_sent_for_prompt.clear()
+            #         pr  = _norm_priority(payload.get("priority"))
+            #         req = _norm_priority(current_fire_prompt.get("required"))
+
+            #         available_ids = [t[0] for t in tasks]
+            #         if tid not in available_ids:
+            #             fire_results.append(False)
+            #             labeler.advance({"p_priority_0_3_1_0"})
+            #             current_fire_prompt = None
+            #             fire_sent_for_prompt.clear()
+            #         else:
+            #             if pr is not None and req is not None and pr == req:
+            #                 # Update the task table priority
+            #                 for ta in tasks:
+            #                     if ta[0] == tid:
+            #                         ta[2] = pr
+            #                         break
+            #                 buffers['tasks'].append(tasks)
+
+            #                 fire_results.append(True)
+            #                 labeler.advance({"p_priority_0_3_1_0"})
+            #                 current_fire_prompt = None
+            #                 fire_sent_for_prompt.clear()
+            #             else:
+            #                 # (Optional) treat as incorrect but still advance the human action:
+            #                 fire_results.append(False)
+            #                 labeler.advance({"p_priority_0_3_1_0"})
+            #                 current_fire_prompt = None
+            #                 fire_sent_for_prompt.clear()
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
@@ -907,6 +953,17 @@ if __name__ == "__main__":
 
                 if buffers['fire_prompt']:
                     message_one['fire_prompt'] = buffers['fire_prompt'].pop(0)
+
+                try:
+                    payload = json.dumps(message_one)  # test serialization
+                except TypeError as e:
+                    print("[JSON DEBUG] message_one failed:", e)
+                    for k, v in message_one.items():
+                        try:
+                            json.dumps(v)
+                        except TypeError as e2:
+                            print(f"[JSON DEBUG] key={k}, type={type(v)}, value={v}, err={e2}")
+                    raise  # keep the stack trace for now
 
                 # Send messages to clients
                 if any(v is not None for v in message_all.values()):

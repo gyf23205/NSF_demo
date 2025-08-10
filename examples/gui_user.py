@@ -255,7 +255,7 @@ class UserGUI:
         # self.received_new_tasks = False
         self.task_text = Font(FONT, FONT_SIZE, (self.task_x, self.task_y))
         # self.task_text.update('                                              Task Monitor')
-        self.task_text.update('Task ID                 Target pos              Priority                Assigned Drone')
+        self.task_text.update('Task ID                 Region pos              Priority                Assigned Drone')
         for text in self.task_text.texts:
             self.screen.blit(text[0], text[1])
         self.task_list_x = self.task_x
@@ -277,8 +277,8 @@ class UserGUI:
         self.fire_title = Font(FONT, FONT_SIZE, (self.fire_x, self.fire_y))
         self.fire_body  = Font(FONT, FONT_SIZE, (self.fire_x, self.fire_y + FONT_SIZE * line_height))
         # Input for numeric priority
-        self.fire_input = TextInputResponse((self.fire_x, self.fire_y + 2 * FONT_SIZE * line_height,
-                                            220, FONT_SIZE * line_height), color=WHITE, maximum=3)
+        # self.fire_input = TextInputResponse((self.fire_x, self.fire_y + 2 * FONT_SIZE * line_height,
+        #                                     220, FONT_SIZE * line_height), color=WHITE, maximum=3)
 
         # Region to clear each frame
         self.fire_rect = pygame.Rect(self.fire_x, self.fire_y,
@@ -306,7 +306,7 @@ class UserGUI:
         self.surv_timer_start = None
         self.victim_timer_start = None
         # Font for timers
-        self.timer_font = pygame.font.SysFont(FONT, FONT_SIZE)
+        self.timer_font = pygame.font.SysFont(FONT, int(1.8 * FONT_SIZE))
 
 
     @staticmethod
@@ -320,21 +320,33 @@ class UserGUI:
 
     def _draw_panel_timer(self, panel_rect, start_ms):
         """Draw a timer in the top-right of a panel. Clears the spot first."""
-        line_h = int(FONT_SIZE * line_height)
         px, py, pw, ph = panel_rect
-        tx = px + pw - 46   # timer x
-        ty = py + 6         # timer y
+        pad = 8  # right/top padding inside the panel
 
-        # Clear the small area where the timer goes, every frame
-        pygame.draw.rect(self.screen, WHITE, (tx - 2, ty - 2, 44, line_h))
-
-        # If no active timer, we're done (the clear above erased old digits)
+        # If no active timer, clear a reasonable area and return
         if start_ms is None:
+            # Clear using a sample width so stale digits disappear
+            sample = "000s"
+            w, h = self.timer_font.size(sample)
+            tx = px + pw - w - pad
+            ty = py + pad
+            pygame.draw.rect(self.screen, WHITE, (tx - 2, ty - 2, w + 4, h + 4))
             return
 
+        # Compute current text and size
         elapsed = (pygame.time.get_ticks() - start_ms) / 1000.0
+        text = f"{int(elapsed)}s"
         color = self._timer_color(elapsed)
-        surf  = self.timer_font.render(f"{int(elapsed)}s", True, color)
+
+        w, h = self.timer_font.size(text)
+        tx = px + pw - w - pad  # right-align inside the panel
+        ty = py + pad
+
+        # Clear the background exactly under the text
+        pygame.draw.rect(self.screen, WHITE, (tx - 2, ty - 2, w + 4, h + 4))
+
+        # Draw the timer
+        surf = self.timer_font.render(text, True, color)
         self.screen.blit(surf, (tx, ty))
 
 
@@ -437,7 +449,7 @@ class UserGUI:
         self.screen.blit(self.fire_body.texts[0][0], self.fire_body.texts[0][1])
 
         # Input box (always drawn, but only meaningful if active)
-        self.fire_input.draw(self.screen)
+        # self.fire_input.draw(self.screen)
         ###################### Fire→Priority block ends ######################
 
         ###################### Task block ######################
@@ -795,31 +807,27 @@ if __name__ == '__main__':
                         gui.atm_timer_start = None
                 
                 # Fire→Priority input handling
-                gui.fire_input.handle_event(event)
-                if gui.fire_input.finish:
-                    user_text = getattr(gui.fire_input, 'text_send', gui.fire_input.text).strip()
-                    gui.fire_input.finish = False
-                    gui.fire_input.text = ""
-                    if gui.fire_active and gui.fire_prompt_id is not None and gui.fire_task_id is not None:
-                        try:
-                            priority_val = int(user_text)
-                        except ValueError:
-                            priority_val = user_text
-                        s.sendall((json.dumps({
-                            "priority_reply": {
-                                "id": gui.fire_prompt_id,
-                                "task_id": int(gui.fire_task_id),
-                                "priority": priority_val
-                            }
-                        }) + '\n').encode('utf-8'))
+                # gui.fire_input.handle_event(event)
+                # if gui.fire_input.finish:
+                #     user_text = getattr(gui.fire_input, 'text_send', gui.fire_input.text).strip()
+                #     gui.fire_input.finish = False
+                #     gui.fire_input.text = ""
+                #     if gui.fire_active and gui.fire_prompt_id is not None and gui.fire_task_id is not None:
+                #         s.sendall((json.dumps({
+                #             "priority_reply": {
+                #                 "id": gui.fire_prompt_id,
+                #                 "task_id": int(gui.fire_task_id),
+                #                 "priority": user_text  # ← always send as string
+                #             }
+                #         }) + '\n').encode('utf-8'))
 
-                        # --- SELF-CLEAR FIRE UI ---
-                        gui.fire_active = False
-                        gui.fire_prompt_id = None
-                        gui.fire_task_id = None
-                        gui.fire_required = None
-                        gui.fire_text = ""
-                        gui.fire_timer_start = None
+                #         # --- SELF-CLEAR FIRE UI ---
+                #         gui.fire_active = False
+                #         gui.fire_prompt_id = None
+                #         gui.fire_task_id = None
+                #         gui.fire_required = None
+                #         gui.fire_text = ""
+                #         gui.fire_timer_start = None
 
             # Render the GUI and get the response
             gui.render()
