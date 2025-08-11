@@ -951,7 +951,7 @@ if __name__ == "__main__":
                         for p in agent.path
                     ]
                     # choose a color per type
-                    col = (240, 128, 128) if agent.role == 'drones' else (255, 255, 150)
+                    col = (240, 128, 128) if agent.role == 'drones' else (200, 200, 200)
                     game_mgr.paths.append((col, gui_pts))
 
             # === Draw GUI: Render the game manager ===

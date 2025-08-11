@@ -36,7 +36,12 @@ class Env:
             # [2.6 - 2.5, 0.7 - 1.3, 0.2, 1.2],
             # [3.2 - 2.5, 1.4 - 1.3, 1.0, 0.2]
         # ]
-        obs_rectangle = [[26, 1, 1, 15]]
+        obs_rectangle = [[10, 5, 7, 12],
+                         [23, 17, 8, 11],
+                         [7, 20, 13, 7],
+                         [13, 32, 14, 7],
+                         [37, 29, 7, 8],
+                         [40, 6, 5, 6]]
         # [start_x, start_y, horizontal length, vertical length]
         return obs_rectangle
 

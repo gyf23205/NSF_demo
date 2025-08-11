@@ -5,7 +5,6 @@ from constants import *
 from util_classes import Font, Button, Bar
 from pygame.font import SysFont
 from shapely.geometry import LineString, box
-from ltl_core import env_ltl as env
 
 
 class DroneHealth:
@@ -408,21 +407,37 @@ class GameMgr:
         # self.screen.blit(self.vor.surface, self.vor.rect)
 
         # ---- draw all rectangular obstacles ----
-        for (x, y, w, h) in env.Env().obs_boundary + env.Env().obs_rectangle:
-            # top‐left
-            px1, py1 = self.workspace.meter_to_pixel((x,      y+h), screen_size=(1125,900))
-            # bottom‐right
-            px2, py2 = self.workspace.meter_to_pixel((x + w,  y    ), screen_size=(1125,900))
-            rect = pygame.Rect(px1, py1, px2 - px1, py2 - py1)
-            pygame.draw.rect(self.screen, (178, 34, 34), rect)  # dark grey fill
+        env_obj = self.workspace.env 
 
-        # ---- draw all circular obstacles ----
-        for (cx, cy, r) in env.Env().obs_circle:
-            cx_px, cy_px = self.workspace.meter_to_pixel((cx, cy), screen_size=(1125,900))
-            # find one point r meters to the right, to measure pixel‐radius
-            xedge_px, _ = self.workspace.meter_to_pixel((cx + r, cy), screen_size=(1125,900))
+        # ---- draw all rectangular obstacles with transparency and grey ----
+        for (x, y, w, h) in env_obj.obs_boundary + env_obj.obs_rectangle:
+            px1, py1 = self.workspace.meter_to_pixel((x,      y + h), screen_size=(1125, 900))
+            px2, py2 = self.workspace.meter_to_pixel((x + w,  y    ), screen_size=(1125, 900))
+
+            rect_width = px2 - px1
+            rect_height = py2 - py1
+
+            # Create a semi-transparent surface
+            rect_surface = pygame.Surface((rect_width, rect_height), pygame.SRCALPHA)
+            grey_with_alpha = (200, 200, 200, 200)  # grey + 120/255 alpha
+            pygame.draw.rect(rect_surface, grey_with_alpha, rect_surface.get_rect())
+
+            # Blit onto main screen
+            self.screen.blit(rect_surface, (px1, py1))
+
+        # ---- draw all circular obstacles with transparency and grey ----
+        for (cx, cy, r) in env_obj.obs_circle:
+            cx_px, cy_px = self.workspace.meter_to_pixel((cx, cy), screen_size=(1125, 900))
+            xedge_px, _  = self.workspace.meter_to_pixel((cx + r, cy), screen_size=(1125, 900))
             radius_px = abs(xedge_px - cx_px)
-            pygame.draw.circle(self.screen, (178, 34, 34), (int(cx_px), int(cy_px)), int(radius_px))
+
+            # Create a semi-transparent surface
+            circle_surface = pygame.Surface((2*radius_px, 2*radius_px), pygame.SRCALPHA)
+            grey_with_alpha = (150, 255, 255, 200)  # grey + transparency
+            pygame.draw.circle(circle_surface, grey_with_alpha, (radius_px, radius_px), radius_px)
+
+            # Blit onto main screen (centered)
+            self.screen.blit(circle_surface, (cx_px - radius_px, cy_px - radius_px))
 
         # Draw Voronoi boundaries
         for ridge in vor.ridge_vertices:
