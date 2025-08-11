@@ -58,6 +58,10 @@ fire_time_credit = 0
 pickup_cleared = set()
 
 
+def _atm_region_id(pid: int) -> str:
+    return f"ATM_{pid}"
+
+
 def _ap_target_id(ap: str):
     try:
         parts = ap.split('_')
@@ -593,32 +597,44 @@ if __name__ == "__main__":
 
                 # 3. ATM scheduler (prompt + env broadcast)
                 if (atmmsg_idx < len(ATMMSG_TIMES)) and (running_time >= ATMMSG_TIMES[atmmsg_idx]):
-                    # If a previous prompt is still pending, mark it failed (your existing logic)
+                    # If a previous prompt is still pending, mark it failed
                     if current_atm_prompt is not None:
                         atm_results.append(False)
+                        # also remove its SEE circle if it existed
+                        try:
+                            old_id = current_atm_prompt.get("region_id")
+                            if old_id:
+                                game_mgr.special_regions.remove_region(old_id)
+                        except Exception as e:
+                            print(f"[ATM] remove previous SEE circle failed: {e}")
 
-                    # Pick a new grid that avoids targets (you already have this)
+                    # Pick coord, build token/text (existing code) ...
                     x, y = _pick_coord_avoiding_targets(ws, grid_size=grid_size)
-
-                    # --- NEW: build token/text from CSV template ---
-                    token_tmpl, text_tmpl = random.choice(atm_rows)          # e.g., ("NO_FLY_{x}_{y}", "Grid ({x}, {y}) ... '{token}'.")
+                    token_tmpl, text_tmpl = random.choice(atm_rows)
                     token = token_tmpl.format(x=x, y=y)
                     text  = text_tmpl.format(x=x, y=y, token=token)
 
                     atm_prompt_id += 1
-                    current_atm_prompt = {"id": atm_prompt_id, "coord": (x, y), "token": token, "text": text, "time": running_time}
+                    current_atm_prompt = {
+                        "id": atm_prompt_id,
+                        "coord": (x, y),
+                        "token": token,
+                        "text": text,
+                        "time": running_time
+                    }
                     atm_sent_for_prompt.clear()
-
-                    # (optional: add a small no-fly circle—keep your existing code)
+                    # Circle
                     try:
-                        ws.env.obs_circle.append([x, y, 0.8])
+                        gui_xy = ws.grid_to_pixel((x, y), grid_size=grid_size, screen_size=(1125, 900))
+                        region_id = _atm_region_id(atm_prompt_id)
+                        # pass code 3 → SpecialRegions maps to SEE color
+                        game_mgr.special_regions.add_region(region_id, gui_xy, 50, 3)
+                        current_atm_prompt["region_id"] = region_id
                     except Exception as e:
-                        print(f"[ATM] Warning: failed to add no-fly dot: {e}")
+                        print(f"[ATM] Warning: failed to add SEE circle: {e}")
 
-                    # Broadcast the env AP at the scheduled tick (keep as-is)
-                    # print(f"[t={running_time:.1f}] ATM broadcast: {token} @ ({x},{y})")
+                    # Broadcast AP & bump index (existing)
                     labeler.advance({"p_atmmsg_0_0_0_0"})
-
                     atmmsg_idx += 1
 
                 # === Victim detection after p_scan_i ===
@@ -768,7 +784,16 @@ if __name__ == "__main__":
 
                     # Advance regardless of correctness
                     labeler.advance({"p_atmconfirm_0_3_1_0"})
-                    # Clear current prompt so allocator won’t reassign atmconfirm_* again
+
+                    # NEW: remove SEE circle for this prompt
+                    try:
+                        rid = current_atm_prompt.get("region_id")
+                        if rid:
+                            game_mgr.special_regions.remove_region(rid)
+                    except Exception as e:
+                        print(f"[ATM] Warning: failed to remove SEE circle: {e}")
+
+                    # Clear prompt
                     current_atm_prompt = None
                     atm_sent_for_prompt.clear()
 

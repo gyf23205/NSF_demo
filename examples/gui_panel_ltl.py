@@ -67,7 +67,8 @@ class SpecialRegions:
         self.regions = [] # Each region is a tuple (task_id, center, radius, color)
         self.num2color_dict = {
             1: ORANGE,  # Orange
-            2: RED   # Red
+            2: RED,   # Red
+            3: SEE
         }
         self.color2num_dict = {v: k for k, v in self.num2color_dict.items()}
 
@@ -77,7 +78,6 @@ class SpecialRegions:
             surface = pygame.Surface((2*radius, 2*radius), pygame.SRCALPHA)
             pygame.draw.circle(surface, color + (100,), (radius, radius), radius)
             self.screen.blit(surface, (center[0] - radius, center[1] - radius))
-
         
     def add_region(self, id, center, radius, priority):
         # Ensure the new region does not overlap with existing ones
