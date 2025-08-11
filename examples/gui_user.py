@@ -227,8 +227,8 @@ class UserGUI:
         self.weather = 'sunny'
         self.weather_text.update('Weather: '+ self.weather)
         self.button_wind_change = Button((weather_x, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), RED, "Emergency", text_color=BLACK)
-        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), YELLOW, "Injury", text_color=BLACK)
-        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Minor", text_color=BLACK)
+        self.button_wind_maintain = Button((weather_x + button_width + spacing, weather_y + FONT_SIZE * line_height + 30, button_width, button_height), YELLOW, "Delayed", text_color=BLACK)
+        self.button_wind_handover = Button((weather_x + 2 * (button_width + spacing), weather_y + FONT_SIZE * line_height + 30, button_width, button_height), GREEN, "Minimal", text_color=BLACK)
         self.button_wind_change.draw(self.screen)
         self.button_wind_maintain.draw(self.screen)
         self.button_wind_handover.draw(self.screen)

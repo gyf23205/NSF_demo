@@ -9,7 +9,7 @@ from scipy.spatial import Voronoi
 import numpy as np
 import socket
 import json
-from ltl_core.specification import Specification, ENVIRONMENT_AP_PREFIXES
+from ltl_core.specification import Specification, ENVIRONMENT_AP_PREFIXES, AP_TYPE_PREFIX_MAP, get_ap_prefix
 from ltl_core.binding_manager import BindingManager
 from ltl_core.workspace import Workspace
 from ltl_core.dag_builder import build_dag
@@ -27,6 +27,10 @@ grid_size = (50, 40)
 FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0]
 SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0]
 ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0]
+
+# Drone latency
+L_MIN, L_MAX = 40.0, 500.0      # realistic latency bounds (ms)
+EMA = 0.85                      # smoothing (higher = smoother)
 
 # Event variables
 firemsg_idx = 0
@@ -266,6 +270,7 @@ if __name__ == "__main__":
             if len(pos) == 2:
                 pos = np.append(pos, 0.0)  # Add dummy altitude
             vd = VirtualDrone(i, tuple(pos))
+            vd.latency_ms = 110
             drones.append(vd)
             agent_to_visual[agent] = vd
         for i, agent in enumerate(agents_by_type["gvs"]):
@@ -520,6 +525,31 @@ if __name__ == "__main__":
                     human_ap = to_human_label(raw_ap)
                     sym.status = human_ap
                     visual.status = human_ap
+                    # Carrying = True only during dropoff; False otherwise
+                    if getattr(sym, "role", "") == "gvs":
+                        visual.carrying = bool(isinstance(raw_ap, str) and raw_ap.startswith("p_dropoff_"))
+
+                # === Drone latency update (EMA + noise; uses spec.AP_TYPE_PREFIX_MAP) ===
+                for sym, visual in agent_to_visual.items():
+                    if getattr(sym, "role", "") != "drones":
+                        continue
+
+                    ap = assignments.get(sym, None)         # e.g., 'p_scan_0_1_1_0'
+                    # default to moderate if idle/unknown
+                    target_mu, target_sigma = 110.0, 15.0
+
+                    if isinstance(ap, str):
+                        prefix = get_ap_prefix(ap)          # e.g., 'p_scan'
+                        ap_type = AP_TYPE_PREFIX_MAP.get(prefix)  # 'physical'|'symbolic'|None
+                        if ap_type == "symbolic":
+                            target_mu, target_sigma = 350.0, 30.0   # high during symbolic
+                        elif ap_type == "physical":
+                            target_mu, target_sigma = 110.0, 15.0   # moderate during physical
+
+                    sample = float(np.random.normal(target_mu, target_sigma))
+                    sample = max(L_MIN, min(L_MAX, sample))         # clamp
+                    prev = getattr(visual, "latency_ms", 110.0)
+                    visual.latency_ms = EMA * prev + (1.0 - EMA) * sample
 
                 # === Human assignment history & utilization ===
                 now = running_time
