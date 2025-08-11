@@ -55,7 +55,7 @@ class RrtConnect:
         self.obs_rectangle = self.env.obs_rectangle
         self.obs_boundary = self.env.obs_boundary
 
-        self.dist = 2.8 * dt     # 0.28 * dt
+        self.dist = 0.28 * 3 * dt     # 0.28 * dt / 2.8 * dt
 
     def planning(self):
         # Drone vs GVs

@@ -24,9 +24,15 @@ grid_size = (50, 40)
 # screen_size = (grid_size[0] * 30, grid_size[1] * 30)
 
 # Event setup: TO DO: They should be time + progress based triggers
-FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0]
-SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0]
-ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0]
+# FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0]
+# SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0]
+# ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0]
+FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0, 135.0, 150.0, 200.0, 250.0, 300.0]
+SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0, 140.0, 156.0, 169.3, 205.0, 264.5]
+ATMMSG_TIMES = [35.0, 65.0, 90.0, 105.0, 120.0, 154.2, 185.3, 210.4, 250.4, 290.0]
+# FIREMSG_TIMES = [80.0]
+# SURVIVORMSG_TIMES = [100.0]
+# ATMMSG_TIMES = [120.0]
 
 # Drone latency
 L_MIN, L_MAX = 40.0, 500.0      # realistic latency bounds (ms)
@@ -209,8 +215,8 @@ if __name__ == "__main__":
         # === Constants ===
         hover_duration = 10
         n_targets = 15
-        n_drones = 4
-        n_gvs = 2
+        n_drones = 3
+        n_gvs = 4
         n_humans = 2
         n_wind = 3
 
