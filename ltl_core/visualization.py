@@ -6,6 +6,7 @@ import matplotlib.animation as animation
 import networkx as nx
 import numpy as np
 from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
+from ltl_core import env_ltl as env
 
 
 def draw_workspace(screen, ws, font=None, screensize=(1200, 900), cell_size=30):
@@ -78,12 +79,17 @@ def _english_label(node: str) -> str:
       'rescue':       'Rescue',
       'oversight':    'Oversight',
       'navscan':      'NavScan',
-      'confirm':      'Confirm',
+      'nav':          'Navigate',
+      'scan':         'Scan',
+      'verify':       'Verify',
       'foundgate':    'Found',
       'notfoundgate': 'Not Found',
       'skip':         'Skip',
       'pickup':       'Pick Up',
       'dropoff':      'Drop Off',
+      'fire':         'Fire',
+      'survivor':     'Survivor',
+      'atm':          'Air Traffic',
       'firemsg':      'Fire Msg',
       'priority':     'Set Priority',
       'survivormsg':  'Survivor Msg',
@@ -296,6 +302,9 @@ def animate_workspace(
         record: if True, saves a GIF to output_path (Pillow writer)
         output_path: path to .gif
     """
+    # local import so you don't have to edit module-level imports
+    from ltl_core import env_ltl as env
+
     fig, ax = plt.subplots(figsize=(8, 8))
 
     # Because we flip across y=x, swap the axis extents too:
@@ -308,21 +317,46 @@ def animate_workspace(
     for (x, y) in ws.base_area:
         ax.add_patch(
             patches.Rectangle((x, y), 1, 1, linewidth=1,
-                              edgecolor='blue', facecolor='lightblue', alpha=0.3)
+                              edgecolor='blue', facecolor='lightblue', alpha=0.3, zorder=1)
         )
     for (x, y) in ws.hospital_area:
         ax.add_patch(
             patches.Rectangle((x, y), 1, 1, linewidth=1,
-                              edgecolor='red', facecolor='mistyrose', alpha=0.3)
+                              edgecolor='red', facecolor='mistyrose', alpha=0.3, zorder=1)
         )
+
+    # --- Obstacles (draw beneath targets/agents) ---
+    obstacle_artists = []
+    # Rectangular obstacles: boundary + internal rectangles
+    for (x, y, w, h) in env.Env().obs_boundary + env.Env().obs_rectangle:
+        r = patches.Rectangle(
+            (x, y), w, h,
+            linewidth=1.0,
+            edgecolor=(0.2, 0.2, 0.2, 1.0),
+            facecolor=(0.5, 0.5, 0.5, 0.55),
+            zorder=2
+        )
+        ax.add_patch(r)
+        obstacle_artists.append(r)
+    # Circular obstacles
+    for (cx, cy, rad) in env.Env().obs_circle:
+        c = plt.Circle(
+            (cx, cy), rad,
+            linewidth=1.0,
+            edgecolor=(0.25, 0.05, 0.05, 1.0),
+            facecolor=(0.7, 0.1, 0.1, 0.5),
+            zorder=2
+        )
+        ax.add_patch(c)
+        obstacle_artists.append(c)
 
     # --- Targets (swap x,y for visual flip) ---
     target_dots = []
     target_texts = []
     for i, (x, y) in enumerate(ws.target_locations):
-        dot, = ax.plot(x + 0.5, y + 0.5, 'ro', markersize=10)
+        dot, = ax.plot(x + 0.5, y + 0.5, 'ro', markersize=10, zorder=4)
         txt = ax.text(x + 0.5, y + 0.5, f"T{i}", color='black',
-                      fontsize=12, ha='center', va='center')
+                      fontsize=12, ha='center', va='center', zorder=5)
         target_dots.append(dot)
         target_texts.append(txt)
 
@@ -331,21 +365,20 @@ def animate_workspace(
     for role in ["drones", "gvs"]:
         color = {'drones': 'b', 'gvs': 'g'}[role]
         for agent in ws.agents[role]:
-            dot, = ax.plot([], [], 'o', label=agent.label, color=color, markersize=10)
+            dot, = ax.plot([], [], 'o', label=agent.label, color=color, markersize=10, zorder=6)
             agent_dots[agent.label] = dot
 
     # --- Humans (static positions) ---
     for agent in ws.agents["humans"]:
-        x, y = agent.pos  # (row, col) stored in Agent.pos
-        # For the flip, draw at (x+0.5, y+0.5) instead of (y+0.5, x+0.5)
-        ax.plot(x + 0.5, y + 0.5, 'o', color='orange', markersize=10)
-        ax.text(x + 0.5, y + 0.5, agent.label, fontsize=12, ha='center', va='center')
+        x, y = agent.pos
+        ax.plot(x + 0.5, y + 0.5, 'o', color='orange', markersize=10, zorder=6)
+        ax.text(x + 0.5, y + 0.5, agent.label, fontsize=12, ha='center', va='center', zorder=7)
 
     # --- Per-frame overlays ---
     progress_halos = []
     progress_texts = []
     # Put step text near the (flipped) top-left corner
-    step_text = ax.text(0.5, ws.size[1] - 0.5, "", fontsize=12, color='gray', ha='left')
+    step_text = ax.text(0.5, ws.size[1] - 0.5, "", fontsize=12, color='gray', ha='left', zorder=8)
 
     live_mode = sim is not None
 
@@ -353,7 +386,8 @@ def animate_workspace(
         for dot in agent_dots.values():
             dot.set_data([], [])
         step_text.set_text("")
-        return list(agent_dots.values()) + target_dots + target_texts + [step_text]
+        # return static obstacle artists too (even though blit=False, keeps references tidy)
+        return obstacle_artists + list(agent_dots.values()) + target_dots + target_texts + [step_text]
 
     def update(frame):
         # Clear previous overlays
@@ -385,7 +419,7 @@ def animate_workspace(
                 # Flip across y=x by swapping x/y for plotting
                 x_plot, y_plot = row + 0.5, col + 0.5
 
-                # set_data needs sequences (fix for Line2D)
+                # set_data needs sequences
                 agent_dots[agent.label].set_data([x_plot], [y_plot])
 
                 # Progress halo & text
@@ -396,8 +430,8 @@ def animate_workspace(
                     p_val = agent.progress_traj[frame] if frame < len(agent.progress_traj) else 0.0
 
                 if p_val > 0:
-                    halo, = ax.plot([x_plot], [y_plot], 'o', color='lime', markersize=15, alpha=p_val * 0.6)
-                    text = ax.text(x_plot, y_plot + 0.3, f"{p_val:.1f}", fontsize=8, color='green', ha='center')
+                    halo, = ax.plot([x_plot], [y_plot], 'o', color='lime', markersize=15, alpha=p_val * 0.6, zorder=7)
+                    text = ax.text(x_plot, y_plot + 0.3, f"{p_val:.1f}", fontsize=8, color='green', ha='center', zorder=8)
                     progress_halos.append(halo)
                     progress_texts.append(text)
 
@@ -412,12 +446,12 @@ def animate_workspace(
                 p_val = agent.progress_traj[frame] if frame < len(agent.progress_traj) else 0.0
 
             if p_val > 0:
-                halo, = ax.plot([x_plot], [y_plot], 'o', color='lime', markersize=15, alpha=p_val * 0.6)
-                text = ax.text(x_plot, y_plot + 0.3, f"{p_val:.1f}", fontsize=8, color='green', ha='center')
+                halo, = ax.plot([x_plot], [y_plot], 'o', color='lime', markersize=15, alpha=p_val * 0.6, zorder=7)
+                text = ax.text(x_plot, y_plot + 0.3, f"{p_val:.1f}", fontsize=8, color='green', ha='center', zorder=8)
                 progress_halos.append(halo)
                 progress_texts.append(text)
 
-        return list(agent_dots.values()) + progress_halos + progress_texts + target_dots + target_texts + [step_text]
+        return obstacle_artists + list(agent_dots.values()) + progress_halos + progress_texts + target_dots + target_texts + [step_text]
 
     ani = animation.FuncAnimation(
         fig, update, init_func=init,

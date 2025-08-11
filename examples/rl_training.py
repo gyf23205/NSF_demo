@@ -50,7 +50,7 @@ if __name__ == '__main__':
     survivor_scanned = set()
 
     # Search regions
-    s_mask = [1] * 10
+    s_mask = [1] * 1
 
     # Setup binding manager
     binding_mgr = BindingManager(verbose=False)
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     labeler = Labeler(spec)
 
     # Draw: Hierarchical structure
-    # draw_composite_hierarchy(spec)
+    draw_composite_hierarchy(spec)
 
     # Setup random allocator (place holder)
     allocator = RandomAllocator(spec, agents_by_type, binding_mgr, labeler)
