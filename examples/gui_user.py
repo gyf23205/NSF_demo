@@ -352,6 +352,9 @@ class UserGUI:
         surf = self.timer_font.render(text, True, color)
         self.screen.blit(surf, (tx, ty))
 
+        # Current workload
+        self.pred_label = None
+
 
     def render(self):
         # self.screen.fill(WHITE)
@@ -390,11 +393,11 @@ class UserGUI:
 
         with torch.no_grad():
             out = model(t1, t2)
-            pred_label = torch.argmax(out).item()
+            self.pred_label = torch.argmax(out).item()
             # print(out, pred_label)
 
-        # 3. update workload  
-        # if pred_label > 0.5:
+        # 3. update workload
+        # if self.pred_label > 0.5:
         #     workload_text = 'high'
         # else:
         #     workload_text = 'low'
@@ -408,8 +411,8 @@ class UserGUI:
 
         # Render meter graphics
         heart_plot.update(ecg); heart_plot.render(self.screen)                                     # ONE LINE for HR
-        workload_meter.update(pred_label)
-        workload_meter.render(self.screen, (110, 80)) # ONE LINE for WL   
+        workload_meter.update(self.pred_label)
+        workload_meter.render(self.screen, (110, 80)) # ONE LINE for WL
         ###################### Update workload text ends #####################
 
 
@@ -610,7 +613,7 @@ if __name__ == '__main__':
     # response['victim']: 'reject' or 'accept'
     # response['weather_decision']: 'change' or 'maintain'
     # response['tasks']: list of Task objects
-    response = {'victim': None, 'weather_decision': None, 'tasks': None} # Response to be sent back to the server
+    response = {'victim': None, 'weather_decision': None, 'tasks': None, 'workload': None} # Response to be sent back to the server
     running = True
 
     # Survivor image
@@ -841,6 +844,7 @@ if __name__ == '__main__':
 
             # Send response back to the server if it has changed
             if response_changed:
+                response['workload'] = gui.pred_label
                 print(response['tasks'])
                 msg = json.dumps(response) + '\n'
                 s.sendall(msg.encode('utf-8'))
