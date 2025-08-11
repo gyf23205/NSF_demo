@@ -844,7 +844,7 @@ if __name__ == '__main__':
 
             # Send response back to the server if it has changed
             if response_changed:
-                response['workload'] = gui.pred_label
+                response['workload'] = float(gui.pred_label)
                 print(response['tasks'])
                 msg = json.dumps(response) + '\n'
                 s.sendall(msg.encode('utf-8'))
