@@ -87,7 +87,10 @@ class Task:
         # self.assigned_gv_input = TextInput((self.x0 + 3 * self.grid_width, self.y0, self.grid_width, self.grid_height), color=WHITE, maximum=n_gvs)
         
         self.task_id_text.update('    ' + f'{self.task_id}')
-        self.target_pos_text.update(f'{self.target_pos}')
+        if isinstance(self.target_pos, (list, tuple)) and all(isinstance(v, (int, float)) for v in self.target_pos):
+            self.target_pos_text.update(f'({int(self.target_pos[0])}, {int(self.target_pos[1])})')
+        else:
+            self.target_pos_text.update(str(self.target_pos))
         self.priority_input.text = str(self.priority)
         self.assigned_drone_text.update(str(self.assigned_drone))
         # self.assigned_gv_text.update(str(self.assigned_gv))
@@ -458,10 +461,13 @@ class UserGUI:
             self.task_list = []
             for i, task in enumerate(self.tasks_received):
                 task_pos = (self.task_list_x, self.task_list_y + i * FONT_SIZE * line_height)
-                # [task_id, [x,y], priority, assigned_drone, assigned_gv]
-                task_id, target_loc, priority, assigned_drone, assigned_gv = task
-                new_task = Task(self.screen, task_id, target_loc, task_pos, priority)
-                new_task.assigned_drone = assigned_drone  # may be None
+                if len(task) > 5:
+                    task_id, target_loc_px, priority, assigned_drone, assigned_gv, grid_loc = task
+                else:
+                    task_id, target_loc_px, priority, assigned_drone, assigned_gv = task
+                    grid_loc = None
+                new_task = Task(self.screen, task_id, (grid_loc or target_loc_px), task_pos, priority)
+                new_task.assigned_drone = assigned_drone
                 # new_task.assigned_gv = assigned_gv        # may be None
                 self.task_list.append(new_task)
             self.tasks_received = None

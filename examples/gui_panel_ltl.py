@@ -9,7 +9,7 @@ from ltl_core import env_ltl as env
 
 
 class DroneHealth:
-    def __init__(self, screen, pos, virtual_drone):
+    def __init__(self, screen, pos, virtual_drone, workspace):
         self.screen = screen
         self.x0, self.y0 = pos
         self.drone = virtual_drone
@@ -22,21 +22,21 @@ class DroneHealth:
         self.current_pos_txt = SysFont(FONT, FONT_SIZE)
         self.current_target = SysFont(FONT, FONT_SIZE)
         self.status_txt = SysFont(FONT, FONT_SIZE)
+        self.ws = workspace
 
     def draw(self):
         idx_txt = self.idx_txt.render('         ' + str(self.drone.idx), True, BLACK)
         self.screen.blit(idx_txt, (self.x0, self.y0, self.grid_width, self.grid_height))
         self.alt_bar.draw(self.drone.position[2]/2 * 100)
         self.health_bar.draw(self.drone.health)
-        pos_str = f"({self.drone.position[0]:.2f}, {self.drone.position[1]:.2f})"
+        gx, gy = self.ws.game_mgr_to_grid(self.drone.position[:2])
+        pos_str = f"({gx:.0f}, {gy:.0f})"   # grid coords instead of meters
         pos_txt = self.current_pos_txt.render(pos_str, True, BLACK)
         self.screen.blit(pos_txt, (self.x0 + 3*(self.grid_width+self.spacing), self.y0, self.grid_width, self.grid_height))
-        status_txt = self.status_txt.render(self.drone.status, True, BLACK)
-        self.screen.blit(status_txt, (self.x0 + 4*(self.grid_width+self.spacing), self.y0, self.grid_width, self.grid_height))
 
 
 class GVHealth:
-    def __init__(self, screen, pos, virtual_gv):
+    def __init__(self, screen, pos, virtual_gv, workspace):
         self.screen = screen
         self.x0, self.y0 = pos
         self.gv = virtual_gv
@@ -48,6 +48,7 @@ class GVHealth:
         self.health_bar = Bar(screen, (self.x0 + (self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height))
         self.current_pos_txt = SysFont(FONT, FONT_SIZE)
         self.current_target = SysFont(FONT, FONT_SIZE)
+        self.ws = workspace
 
     def draw(self):
         idx_txt = self.idx_txt.render('         ' + str(self.gv.idx), True, BLACK)
@@ -55,7 +56,8 @@ class GVHealth:
         carrying_txt = self.carrying_txt.render(str(self.gv.carrying), True, BLACK)
         self.screen.blit(carrying_txt, (self.x0 + 2 * (self.grid_width + self.spacing), self.y0, self.grid_width, self.grid_height))
         self.health_bar.draw(self.gv.health)
-        pos_str = f"({self.gv.position[0]:.2f}, {self.gv.position[1]:.2f})"
+        gx, gy = self.ws.game_mgr_to_grid(self.gv.position[:2])
+        pos_str = f"({gx:.0f}, {gy:.0f})"
         pos_txt = self.current_pos_txt.render(pos_str, True, BLACK)
         self.screen.blit(pos_txt, (self.x0 + 3*(self.grid_width+self.spacing), self.y0, self.grid_width, self.grid_height))
 
@@ -124,25 +126,25 @@ class BackgroundNoScale:
         self.max_bound = np.array([bound_x_max, bound_y_max])
 
 
-class EnvironmentInfo:
-    def __init__(self, screen):
-        self.screen = screen
-        self.x0, self.y0 = 1150, 700
-        self.title = Font(FONT, FONT_SIZE, (self.x0, self.y0))
-        self.spacing = '               '
-        self.title.update('                 Environment Info')
-        self.title.update('Location' + self.spacing + self.spacing + '          Speed')
-        self.content = Font(FONT, FONT_SIZE, (self.x0, self.y0 + 2 * int(FONT_SIZE * line_height)))
+# class EnvironmentInfo:
+#     def __init__(self, screen):
+#         self.screen = screen
+#         self.x0, self.y0 = 1150, 700
+#         self.title = Font(FONT, FONT_SIZE, (self.x0, self.y0))
+#         self.spacing = '               '
+#         self.title.update('                 Environment Info')
+#         self.title.update('Location' + self.spacing + self.spacing + '          Speed')
+#         self.content = Font(FONT, FONT_SIZE, (self.x0, self.y0 + 2 * int(FONT_SIZE * line_height)))
 
-    def draw(self, wind):
-        for text, pos in self.title.texts:
-            self.screen.blit(text, pos)
-        self.content.clear()
-        for i, w in enumerate(wind):
-            content = f'Wind {i+1}: ({w[0]:.2f}, {w[1]:.2f}){self.spacing}{w[2]:.2f}'
-            self.content.update(content)
-        for text, pos in self.content.texts:
-            self.screen.blit(text, pos)
+#     def draw(self, wind):
+#         for text, pos in self.title.texts:
+#             self.screen.blit(text, pos)
+#         self.content.clear()
+#         for i, w in enumerate(wind):
+#             content = f'Wind {i+1}: ({w[0]:.2f}, {w[1]:.2f}){self.spacing}{w[2]:.2f}'
+#             self.content.update(content)
+#         for text, pos in self.content.texts:
+#             self.screen.blit(text, pos)
 
 
 class HumanWorkload:
@@ -253,6 +255,8 @@ class GameMgr:
         ############# Legends ##########################
         self.legends = Background(file_name=IMAGE_PATH + 'legend.png',
                                   bound_x_min=900, bound_x_max=1100, bound_y_min=0, bound_y_max=520)
+        ################## Workspace ##################
+        self.workspace = ws
         ############### Drone health ###################
         # Add title
         self.title_drone_health = Font(FONT, FONT_SIZE, (self.tf_health_drone[0], self.tf_health_drone[1] - 2 * FONT_SIZE * line_height))
@@ -261,7 +265,12 @@ class GameMgr:
         # Small drone icon at the topleft of the drone health block
         self.drone_icon = Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.05, rt=0.0)
         # Drone health table
-        self.health = [DroneHealth(self.screen, (self.tf_health_drone[0], self.tf_health_drone[1] + i*(line_height*FONT_SIZE + 20)), d) for i, d in enumerate(self.drones)]
+        self.health = [DroneHealth(
+            self.screen,
+            (self.tf_health_drone[0], self.tf_health_drone[1] + i*(line_height*FONT_SIZE + 20)),
+            d,
+            self.workspace
+        ) for i, d in enumerate(self.drones)]
         ############## Drone health ends ################
 
         ###################### Ground vehicle health #####################
@@ -272,7 +281,12 @@ class GameMgr:
         # Small ground vehicle icon at the topleft of the ground vehicle health block
         self.gv_icon = Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.05, rt=0.0)
         # Ground vehicle health table
-        self.gv_health = [GVHealth(self.screen, (self.tf_health_gv[0], self.tf_health_gv[1] + i*(line_height*FONT_SIZE + 20)), g) for i, g in enumerate(self.gvs)]
+        self.gv_health = [GVHealth(
+            self.screen,
+            (self.tf_health_gv[0], self.tf_health_gv[1] + i*(line_height*FONT_SIZE + 20)),
+            g,
+            self.workspace
+        ) for i, g in enumerate(self.gvs)]
         ##################### Ground vehicle health ends ##################
 
         ###################### Wind #####################
@@ -280,12 +294,8 @@ class GameMgr:
         #################### Wind ends ##################
 
         ###################### Environment #####################
-        self.environment_info = EnvironmentInfo(self.screen)
+        # self.environment_info = EnvironmentInfo(self.screen)
         #################### Environment ends ##################
-
-        ################## Workspace ##################
-        self.workspace = ws
-        ################ Workspace ends ###############
 
         ################## Path planning ##################
         self.paths = []
@@ -474,7 +484,7 @@ class GameMgr:
         ####################### Special regions end #############
 
         ####################### Environment ######################
-        self.environment_info.draw(wind_gui)
+        # self.environment_info.draw(wind_gui)
         ####################### Environment ends ##################
 
         ##################### Time status ##########################

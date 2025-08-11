@@ -139,54 +139,6 @@ def to_human_label(ap):
     return ap
 
 
-def update_wind(game_mgr, wind_time, old_avg_speed, n_wind, message, threshold=1.0):
-    """
-    Update the wind field in the environment and return the updated values.
-    """
-    import numpy as np
-    from time import time
-
-    new_time = time()
-
-    if not game_mgr.wind:
-        wind = [[
-            np.random.uniform(-1.9, 1.9),
-            np.random.uniform(-1.25, 1.25),
-            np.random.uniform(0.06, 0.15),
-            np.random.uniform(0.0, 10)
-        ] for _ in range(n_wind)]
-    else:
-        wind = game_mgr.wind.copy()
-        increment = [[
-            np.random.uniform(-0.1, 0.1),
-            np.random.uniform(-0.1, 0.1),
-            np.random.uniform(-0.05, 0.05),
-            np.random.uniform(-2, 2)
-        ] for _ in range(n_wind)]
-
-        for i in range(n_wind):
-            for j in range(4):
-                wind[i][j] += increment[i][j]
-
-            # Clamp values to domain bounds
-            wind[i][0] = np.clip(wind[i][0], -1.9, 1.9)
-            wind[i][1] = np.clip(wind[i][1], -1.25, 1.25)
-            wind[i][2] = np.clip(wind[i][2], 0.06, 0.15)
-            wind[i][3] = np.clip(wind[i][3], 0.0, 10.0)
-
-    game_mgr.reset_wind()
-    for w in wind:
-        game_mgr.set_wind(w)
-
-    avg_speed = np.mean([w[3] for w in wind]) if wind else 0.0
-
-    if abs(avg_speed - old_avg_speed) > threshold:
-        message["wind_speed"] = avg_speed
-        buffers['wind_speed'].append(avg_speed)
-
-    return new_time, avg_speed
-
-
 def compute_spiral_position(agent, dt, r_max=1.0, r_rate=0.02, angular_speed=0.6):
     """
     Update and return the agent's spiral (x, y) position for circling motion.
@@ -334,8 +286,7 @@ if __name__ == "__main__":
         tasks = []
         for idx, pos in enumerate(ws.target_locations):
             gui_pos = ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(1125, 900))
-            # [target_id (1-based), [x,y], priority, assigned_drone, assigned_gv]
-            tasks.append([idx + 1, list(gui_pos), 0, None, None])
+            tasks.append([idx + 1, list(gui_pos), 0, None, None, [int(pos[0]), int(pos[1])]])
         game_mgr.set_task(tasks)
 
         # === Labeler setup ===
@@ -794,6 +745,10 @@ if __name__ == "__main__":
                 if current_fire_prompt["task_id"] not in current_ids:
                     fire_results.append(False)
                     labeler.advance({"p_priority_0_3_1_0"})
+                    try:
+                        game_mgr.special_regions.remove_region(current_fire_prompt["task_id"])
+                    except Exception as e:
+                        print("[FIRE AUTOCLEAR] remove_region failed:", e)
                     current_fire_prompt = None
                     fire_sent_for_prompt.clear()
 
@@ -865,9 +820,9 @@ if __name__ == "__main__":
             game_mgr.update_awareness(pos_aware, radius=40)
 
             # === Busy airspace ===
-            if time() - wind_time > 3:
-                wind_time, old_wind_average_speed = update_wind(
-                    game_mgr, wind_time, old_wind_average_speed, n_wind, message)
+            # if time() - wind_time > 3:
+            #     wind_time, old_wind_average_speed = update_wind(
+            #         game_mgr, wind_time, old_wind_average_speed, n_wind, message)
                 
             # === Soket send ===
             # Decide which client to send the message!!!
