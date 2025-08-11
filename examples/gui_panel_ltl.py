@@ -289,7 +289,7 @@ class GameMgr:
 
         ################# Main map ####################
         # Terrain
-        self.background = Background(file_name=IMAGE_PATH + 'terrain_blur.png',
+        self.background = Background(file_name=IMAGE_PATH + 'terrain_blur2.png',
                                      bound_x_min=0, bound_x_max=1125, bound_y_min=0, bound_y_max=900)
         self.map_height, self.map_width = self.background.max_bound[0], self.background.max_bound[1]
         # Awareness
