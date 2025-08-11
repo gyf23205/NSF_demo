@@ -259,7 +259,7 @@ class Workspace:
             agent.step_symbolic(dt)
         self.update_true_aps()
 
-    def meter_to_pixel(self, pos, screen_size=(1200, 900)):
+    def meter_to_pixel(self, pos, screen_size=(1125, 900)):
         """
         Convert a (x, y) position in meters to pixel coordinates.
         Assumes (0,0) is bottom-left and y increases upward.
@@ -281,7 +281,7 @@ class Workspace:
         return [self.meter_to_pixel(pos, screen_size) for pos in positions]
     
     @staticmethod
-    def grid_to_pixel(grid_pos, grid_size=(50, 40), screen_size=(900, 720)):
+    def grid_to_pixel(grid_pos, grid_size=(50, 40), screen_size=(1125, 900)):
         """
         Convert from (x, y) in grid units to (px, py) in pixel coordinates.
         Assumes (0, 0) is bottom-left of screen and Y increases upward in grid.
@@ -299,7 +299,7 @@ class Workspace:
         return px, py
     
     @staticmethod
-    def grid_to_pixel_array(positions, grid_size=(50, 40), screen_size=(900, 720)):
+    def grid_to_pixel_array(positions, grid_size=(50, 40), screen_size=(1125, 900)):
         """
         Convert list of (x, y) grid positions to a NumPy array of pixel coordinates
         scaled ×10 and with y flipped and negated (for downstream geometric use).

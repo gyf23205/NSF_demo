@@ -72,8 +72,8 @@ class Labeler:
         # Map: trigger_prefix -> (subtree_root, followup_atomic_AP)
         self._reset_triggers = {
             "p_firemsg_0":      ("p_fire_0",     "p_priority_0_3_1_0"),
-            "p_survivormsg_0":  ("p_survivor_0", "p_message_0_3_1_0"),
-            "p_atmmsg_0":       ("p_atm_0",      "p_nofly_0_3_1_0"),
+            "p_survivormsg_0":  ("p_survivor_0", "p_triage_0_3_1_0"),
+            "p_atmmsg_0":       ("p_atm_0",      "p_atmconfirm_0_3_1_0"),
         }
 
         # Track previously true environment message APs for rising-edge detection

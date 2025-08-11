@@ -202,8 +202,8 @@ class GameMgr:
         self.screen = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX), 0)
 
         # Size transform from meter to gui
-        self.ratio = 240.0
-        self.center = [450.0, 360.0]
+        self.ratio = 900 / 3.0
+        self.center = [1125 / 2.0, 900 / 2.0]
         self.altitude = [-75.0, 200.0]
 
         # Game title on the window
@@ -215,7 +215,7 @@ class GameMgr:
         ################# Main map ####################
         # Terrain
         self.background = Background(file_name=IMAGE_PATH + 'terrain_blur.png',
-                                     bound_x_min=0, bound_x_max=900, bound_y_min=0, bound_y_max=720)
+                                     bound_x_min=0, bound_x_max=1125, bound_y_min=0, bound_y_max=900)
         self.map_height, self.map_width = self.background.max_bound[0], self.background.max_bound[1]
         # Awareness
         self.awareness_map = np.ones((self.map_height, self.map_width), dtype=np.float32) # Should be zeros, ones is just for testing
@@ -309,7 +309,7 @@ class GameMgr:
     def set_voronoi(self):
         print(IMAGE_PATH + 'voronoi_regions.png')
         self.vor = Background(file_name=IMAGE_PATH + 'voronoi_regions_cropped.png',
-                                     bound_x_min=0, bound_x_max=900, bound_y_min=0, bound_y_max=720)
+                                     bound_x_min=0, bound_x_max=1125, bound_y_min=0, bound_y_max=900)
         self.vor.surface.set_alpha(128)
 
     def render(self, vor, centroids):
@@ -327,17 +327,17 @@ class GameMgr:
         # ---- draw all rectangular obstacles ----
         for (x, y, w, h) in env.Env().obs_boundary + env.Env().obs_rectangle:
             # top‐left
-            px1, py1 = self.workspace.meter_to_pixel((x,      y+h), screen_size=(900,720))
+            px1, py1 = self.workspace.meter_to_pixel((x,      y+h), screen_size=(1125,900))
             # bottom‐right
-            px2, py2 = self.workspace.meter_to_pixel((x + w,  y    ), screen_size=(900,720))
+            px2, py2 = self.workspace.meter_to_pixel((x + w,  y    ), screen_size=(1125,900))
             rect = pygame.Rect(px1, py1, px2 - px1, py2 - py1)
             pygame.draw.rect(self.screen, (178, 34, 34), rect)  # dark grey fill
 
         # ---- draw all circular obstacles ----
         for (cx, cy, r) in env.Env().obs_circle:
-            cx_px, cy_px = self.workspace.meter_to_pixel((cx, cy), screen_size=(900,720))
+            cx_px, cy_px = self.workspace.meter_to_pixel((cx, cy), screen_size=(1125,900))
             # find one point r meters to the right, to measure pixel‐radius
-            xedge_px, _ = self.workspace.meter_to_pixel((cx + r, cy), screen_size=(900,720))
+            xedge_px, _ = self.workspace.meter_to_pixel((cx + r, cy), screen_size=(1125,900))
             radius_px = abs(xedge_px - cx_px)
             pygame.draw.circle(self.screen, (178, 34, 34), (int(cx_px), int(cy_px)), int(radius_px))
 
@@ -345,7 +345,6 @@ class GameMgr:
         for ridge in vor.ridge_vertices:
             if -1 in ridge:
                 continue  # Skip infinite ridges
-            # ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(900, 720))
             pt1 = self.workspace.grid_to_pixel(vor.vertices[ridge[0]])
             pt2 = self.workspace.grid_to_pixel(vor.vertices[ridge[1]])
             # Clip the line to the background boundary
@@ -397,24 +396,24 @@ class GameMgr:
         ###################### Legends #####################
         # Draw grid-based base area (e.g., 3x3 at bottom-left)
         for (x, y) in self.workspace.base_area:
-            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(900, 720))
-            rect = pygame.Rect(px - 30, py, 18, 18)  # 18x18 = 900/50, 720/40
+            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(1125, 900))
+            rect = pygame.Rect(px - 30, py, 22.5, 22.5)  # 22.5x22.5 = 1125/50, 900/40
             pygame.draw.rect(self.screen, (173, 216, 230), rect)  # light blue
         
         bx = sum([x for (x, y) in self.workspace.base_area]) / len(self.workspace.base_area)
         by = sum([y for (x, y) in self.workspace.base_area]) / len(self.workspace.base_area)
-        px, py = self.workspace.meter_to_pixel((bx + 0.5, by + 0.5), screen_size=(900, 720))
+        px, py = self.workspace.meter_to_pixel((bx + 0.5, by + 0.5), screen_size=(1125, 900))
         pygame.draw.circle(self.screen, (0, 0, 0), (px - 30, py + 18), 15)
 
         # Draw hospital area and icon
         for (x, y) in self.workspace.hospital_area:
-            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(900, 720))
+            px, py = self.workspace.meter_to_pixel((x, y), screen_size=(1125, 900))
             rect = pygame.Rect(px, py, 18, 18)  # Adjust cell size if needed
             pygame.draw.rect(self.screen, (255, 182, 193), rect)  # light pink
 
         hx = sum([x for (x, y) in self.workspace.hospital_area]) / len(self.workspace.hospital_area)
         hy = sum([y for (x, y) in self.workspace.hospital_area]) / len(self.workspace.hospital_area)
-        hx_px, hy_px = self.workspace.meter_to_pixel((hx + 0.5, hy + 0.5), screen_size=(900, 720))
+        hx_px, hy_px = self.workspace.meter_to_pixel((hx + 0.5, hy + 0.5), screen_size=(1125, 900))
         self.hospital.draw((hx_px, hy_px))
         ##################### Legends ends ####################
 

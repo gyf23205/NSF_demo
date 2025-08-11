@@ -66,6 +66,11 @@ def _english_label(node: str) -> str:
     if node == 'p_101':   return 'Search and Rescue'
     if node == 'p_102':   return 'Supervision'
     parts = node.split('_')
+
+    # Special case: p_101_aux_{region}
+    if len(parts) >= 4 and parts[0] == 'p' and parts[1] == '101' and parts[2] == 'aux':
+        return f"Region {parts[3]}"
+
     kind = parts[1]
     region = parts[2] if len(parts) > 2 else ''
     m = {
@@ -79,10 +84,12 @@ def _english_label(node: str) -> str:
       'skip':         'Skip',
       'pickup':       'Pick Up',
       'dropoff':      'Drop Off',
-      'fire':         'Set Priority',
-      'survivor':     'Message',
-      'atm':          'Air Traffic',
-      'aux':          'Region'
+      'firemsg':      'Fire Msg',
+      'priority':     'Set Priority',
+      'survivormsg':  'Survivor Msg',
+      'triage':       'Triage',
+      'atmmsg':       'ATM Msg',
+      'atmconfirm':   'ATM Confirm',
     }
     label = m.get(kind, node)
     return f"{label} {region}".strip()
@@ -164,7 +171,7 @@ def draw_composite_hierarchy(spec, figsize=(10, 6)):
         components = list(nx.connected_components(subG))
 
         if len(components) == 1:
-            # 🔸 All children are connected: vertical stack at parent's x
+            # All children are connected: vertical stack at parent's x
             x = pos[parent][0]
             sorted_chain = sorted(components[0], key=lambda n: pos[n][1])
             y_start = min(pos[n][1] for n in sorted_chain)
@@ -172,7 +179,7 @@ def draw_composite_hierarchy(spec, figsize=(10, 6)):
             for i, node in enumerate(sorted_chain):
                 pos[node] = (x, y_start + i * 40)
         else:
-            # 🔹 Multiple disconnected chains: spread horizontally around parent
+            # Multiple disconnected chains: spread horizontally around parent
             total_width = 80 * max(len(components) - 1, 1)
             x_center = pos[parent][0]
             x_start = x_center - total_width / 2

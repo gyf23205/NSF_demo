@@ -15,9 +15,9 @@ TIME_OUT = 3000.0
 grid_size = (50, 40)
 
 # Event setup
-FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0, 130.0, 160.0, 200.0]
-SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0, 120.0, 170.0, 210.0]
-ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0, 150.0, 180.0, 220.0]
+FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0]
+SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0]
+ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0]
 
 
 def compute_utilization(human, now, window=SLIDING_WINDOW):

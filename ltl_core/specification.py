@@ -15,8 +15,8 @@ AP_TYPE_PREFIX_MAP = {
     "p_dropoff": "physical",
     "p_verify": "symbolic",
     "p_priority": "symbolic",
-    "p_message": "symbolic",
-    "p_nofly": "symbolic",
+    "p_triage": "symbolic",
+    "p_atmconfirm": "symbolic",
 }
 
 
@@ -106,8 +106,8 @@ class Specification:
 
             # oversight unchanged
             level_three["p_fire_0"] = f"<> (p_firemsg_0 && <> p_priority_0)"
-            level_three["p_survivor_0"] = f"<> (p_survivormsg_0 && <> p_message_0)"
-            level_three["p_atm_0"] = f"<> (p_atmmsg_0 && <> p_nofly_0)"
+            level_three["p_survivor_0"] = f"<> (p_survivormsg_0 && <> p_triage_0)"
+            level_three["p_atm_0"] = f"<> (p_atmmsg_0 && <> p_atmconfirm_0)"
             hierarchy.append(level_three)
 
             # Level 4: atomic definitions
@@ -129,8 +129,8 @@ class Specification:
             level_four[f"p_survivormsg_0"] = f"<> p_survivormsg_0_0_0_0"
             level_four[f"p_atmmsg_0"] = f"<> p_atmmsg_0_0_0_0"
             level_four[f"p_priority_0"] = f"<> p_priority_0_3_1_0 || <> p_priority_0_1_1_0"
-            level_four[f"p_message_0"] = f"<> p_message_0_3_1_0 || <> p_message_0_1_1_0"
-            level_four[f"p_nofly_0"] = f"<> p_nofly_0_3_1_0"
+            level_four[f"p_triage_0"] = f"<> p_triage_0_3_1_0 || <> p_triage_0_1_1_0"
+            level_four[f"p_atmconfirm_0"] = f"<> p_atmconfirm_0_3_1_0"
 
             hierarchy.append(level_four)
             self.hierarchy = hierarchy

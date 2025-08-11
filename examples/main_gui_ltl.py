@@ -124,10 +124,10 @@ def to_human_label(ap):
         return f'Drop off {idx}'
     if prefix == 'p_priority':
         return f'Set priority'
-    if prefix == 'p_message':
-        return f'Send Message'
-    if prefix == 'p_nofly':
-        return f'Set no fly'
+    if prefix == 'p_triage':
+        return f'Triage'
+    if prefix == 'p_atmconfirm':
+        return f'ATM confirm'
 
     # environment APs: just humanize the prefix
     if prefix in ENVIRONMENT_AP_PREFIXES:
@@ -327,13 +327,13 @@ if __name__ == "__main__":
 
         # === Get drone start positions in GUI space ===
         takeoff_positions = [agent.pos[:2] for agent in agents_by_type["drones"]]
-        takeoff_gui = [ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(900, 720)) for pos in takeoff_positions]
+        takeoff_gui = [ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(1125, 900)) for pos in takeoff_positions]
         game_mgr.set_takeoff_positions(takeoff_gui)
 
         # === Task interpretation ===
         tasks = []
         for idx, pos in enumerate(ws.target_locations):
-            gui_pos = ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(900, 720))
+            gui_pos = ws.grid_to_pixel(pos, grid_size=(50, 40), screen_size=(1125, 900))
             # [target_id (1-based), [x,y], priority, assigned_drone, assigned_gv]
             tasks.append([idx + 1, list(gui_pos), 0, None, None])
         game_mgr.set_task(tasks)
@@ -704,9 +704,9 @@ if __name__ == "__main__":
                             # (optional) keep active_target_for_user as a fallback, but no longer relied on
                             active_target_for_user = tid
 
-                # === If a human is assigned p_nofly_*, send the ATM prompt now ===
+                # === If a human is assigned p_atmconfirm_*, send the ATM prompt now ===
                 for agent, ap in assignments.items():
-                    if isinstance(ap, str) and ap.startswith("p_nofly_") and str(getattr(agent, "role", "")).startswith("humans"):
+                    if isinstance(ap, str) and ap.startswith("p_atmconfirm_") and str(getattr(agent, "role", "")).startswith("humans"):
                         if current_atm_prompt and (current_atm_prompt["id"] not in atm_sent_for_prompt):
                             buffers['atm_prompt'].append({
                                 "id": current_atm_prompt["id"],
@@ -716,9 +716,9 @@ if __name__ == "__main__":
                             })
                             atm_sent_for_prompt.add(current_atm_prompt["id"])
 
-                # === If a human is assigned p_message_*, send the survivor prompt now ===
+                # === If a human is assigned p_triage_*, send the survivor prompt now ===
                 for agent, ap in assignments.items():
-                    if isinstance(ap, str) and ap.startswith("p_message_") and str(getattr(agent, "role", "")).startswith("humans"):
+                    if isinstance(ap, str) and ap.startswith("p_triage_") and str(getattr(agent, "role", "")).startswith("humans"):
                         if current_surv_prompt and (current_surv_prompt["id"] not in surv_sent_for_prompt):
                             buffers['surv_prompt'].append({
                                 "id": current_surv_prompt["id"],
@@ -812,8 +812,8 @@ if __name__ == "__main__":
                         print(f"[t={running_time:.1f}] ATM confirmation FAIL (expected '{token}', got '{typed}')")
 
                     # Advance regardless of correctness
-                    labeler.advance({"p_nofly_0_3_1_0"})
-                    # Clear current prompt so allocator won’t reassign p_nofly_* again
+                    labeler.advance({"p_atmconfirm_0_3_1_0"})
+                    # Clear current prompt so allocator won’t reassign atmconfirm_* again
                     current_atm_prompt = None
                     atm_sent_for_prompt.clear()
 
@@ -826,59 +826,11 @@ if __name__ == "__main__":
                     surv_results.append(ok)
 
                     # Advance regardless of correctness
-                    labeler.advance({"p_message_0_3_1_0"})
+                    labeler.advance({"p_triage_0_3_1_0"})
 
                     # Clear the prompt, but report correctness in the message
                     current_surv_prompt = None
                     surv_sent_for_prompt.clear()
-            
-            # === Fire→Priority reply handling (right-bottom numeric input) ===
-            # if isinstance(data, dict) and data.get('priority_reply') is not None:
-            #     payload = data['priority_reply']  # {"id":..., "task_id": int, "priority": int|str}
-            #     if current_fire_prompt and payload.get("id") == current_fire_prompt["id"]:
-            #         tid = int(payload.get("task_id"))
-
-            #         # Normalize both the user-provided priority and the required value
-            #         def _norm_priority(x):
-            #             if isinstance(x, int):
-            #                 return x
-            #             if isinstance(x, str):
-            #                 xs = x.strip().lower()
-            #                 if xs.isdigit():
-            #                     return int(xs)
-            #                 # Optional: accept words
-            #                 word_map = {"low": 0, "medium": 1, "mid": 1, "high": 2}
-            #                 return word_map.get(xs, None)
-            #             return None
-
-            #         pr  = _norm_priority(payload.get("priority"))
-            #         req = _norm_priority(current_fire_prompt.get("required"))
-
-            #         available_ids = [t[0] for t in tasks]
-            #         if tid not in available_ids:
-            #             fire_results.append(False)
-            #             labeler.advance({"p_priority_0_3_1_0"})
-            #             current_fire_prompt = None
-            #             fire_sent_for_prompt.clear()
-            #         else:
-            #             if pr is not None and req is not None and pr == req:
-            #                 # Update the task table priority
-            #                 for ta in tasks:
-            #                     if ta[0] == tid:
-            #                         ta[2] = pr
-            #                         break
-            #                 buffers['tasks'].append(tasks)
-
-            #                 fire_results.append(True)
-            #                 labeler.advance({"p_priority_0_3_1_0"})
-            #                 current_fire_prompt = None
-            #                 fire_sent_for_prompt.clear()
-            #             else:
-            #                 # (Optional) treat as incorrect but still advance the human action:
-            #                 fire_results.append(False)
-            #                 labeler.advance({"p_priority_0_3_1_0"})
-            #                 current_fire_prompt = None
-            #                 fire_sent_for_prompt.clear()
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
@@ -983,7 +935,7 @@ if __name__ == "__main__":
                 if len(agent.path) > 1:
                     # convert each (x, y) in grid coords to pixel coords
                     gui_pts = [
-                        ws.grid_to_pixel(tuple(p), grid_size=grid_size, screen_size=(900, 720))
+                        ws.grid_to_pixel(tuple(p), grid_size=grid_size, screen_size=(1125, 900))
                         for p in agent.path
                     ]
                     # choose a color per type
