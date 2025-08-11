@@ -130,7 +130,7 @@ class Specification:
             level_four[f"p_atmmsg_0"] = f"<> p_atmmsg_0_0_0_0"
             level_four[f"p_priority_0"] = f"<> p_priority_0_3_1_0 || <> p_priority_0_1_1_0"
             level_four[f"p_message_0"] = f"<> p_message_0_3_1_0 || <> p_message_0_1_1_0"
-            level_four[f"p_nofly_0"] = f"<> p_nofly_0_3_1_0 || <> p_nofly_0_1_1_0"
+            level_four[f"p_nofly_0"] = f"<> p_nofly_0_3_1_0"
 
             hierarchy.append(level_four)
             self.hierarchy = hierarchy

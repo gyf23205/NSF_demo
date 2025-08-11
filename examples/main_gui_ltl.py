@@ -229,7 +229,7 @@ if __name__ == "__main__":
         s.listen()
         clients = []  # Track all client addresses
         print("Server waiting for connection...")
-        while len(clients) < 2:  # !!! Wait for all client to connect
+        while len(clients) < 1:  # !!! Wait for all client to connect
             conn, addr = s.accept()
             print("Connected by", addr)
             clients.append((conn, addr))  # Store the address
