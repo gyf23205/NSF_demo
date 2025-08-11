@@ -518,7 +518,8 @@ if __name__ == "__main__":
                 # === Agent: assigned function ===
                 # 1) update the symbolic Agents
                 for agent in ws.get_all_agents():
-                    agent.status = assignments.get(agent, 'Idle')
+                    raw_ap = assignments.get(agent)
+                    agent.status = to_human_label(raw_ap)
                 # 2) mirror it onto the visuals so GameMgr can see it
                 for sym, visual in agent_to_visual.items():
                     raw_ap = assignments.get(sym)
@@ -932,6 +933,7 @@ if __name__ == "__main__":
                     for conn, addr in clients:
                         conn.sendall((json.dumps(message_all) + '\n').encode())
                 if any(v is not None for v in message_one.values()):
+                    # Function allocation between humans
                     selected_client = np.random.choice(range(len(clients)))
                     conn, addr = clients[selected_client]
                     conn.sendall((json.dumps(message_one) + '\n').encode())

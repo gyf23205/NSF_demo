@@ -237,7 +237,7 @@ class HumanWorkload:
         # Task (humanized)
         task_str = getattr(self.human, 'status', 'Idle')
         task_surf = self.task_txt.render(task_str, True, BLACK)
-        self.screen.blit(task_surf, (self.x0 + 2*(self.grid_width + self.spacing) + 20, self.y0))
+        self.screen.blit(task_surf, (self.x0 + 2*(self.grid_width + self.spacing) + 60, self.y0))
 
 
 class GameMgr:
@@ -250,23 +250,29 @@ class GameMgr:
         self.humans = humans
         self.n_drones = len(drones)
         self.n_gvs = len(gvs)
+
+        # ====== Panel rectangles (black outlines) ======
+        self.panel_drones   = pygame.Rect(1135, 10,  775, 290)
+        self.panel_gvs      = pygame.Rect(1135, 310, 775, 200)
+        self.panel_humans   = pygame.Rect(1135, 520, 775, 180)
+        self.panel_legend   = pygame.Rect(1135, 710, 775, 180)
         
         # Define position of blocks, tf=topleft, c=center
-        self.tf_map = (100, 100)
-        self.tf_health_drone = (1150, 120)
-        self.tf_health_gv    = (1150, 360)   # was 500
-        self.c_drone_icon    = (1150, 70)
-        self.c_gv_icon       = (1150, 310)
+        # self.tf_map = (100, 100)
+        self.c_drone_icon    = (1200, 40)     # Drone icon
+        self.tf_health_drone = (1200, 100)     # Drone table top-left
+        self.c_gv_icon       = (1200, 330)    # GV icon
+        self.tf_health_gv    = (1200, 390)    # GV table top-left
 
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (0, 30)
         self.screen = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX), 0)
 
         # Human panel now sits below GV panel
-        self.title_human = Font(FONT, FONT_SIZE, (1150, 700))  # was 580
+        self.title_human = Font(FONT, FONT_SIZE, (1200, 380))  # was 580
         self.title_human.update('   Human Status')
         self.title_human.update('ID    Utilization        Task')
         self.human_panels = [
-            HumanWorkload(self.screen, (1150, 720 + i*(line_height*FONT_SIZE + 20)), human)
+            HumanWorkload(self.screen, (1200, 400 + i*(line_height*FONT_SIZE + 20)), human)
             for i, human in enumerate(self.humans)
         ]
 
@@ -321,14 +327,14 @@ class GameMgr:
 
         ############# Legends ##########################
         self.legends = Background(file_name=IMAGE_PATH + 'legend.png',
-                                  bound_x_min=1125, bound_x_max=1920, bound_y_min=700, bound_y_max=900)
+                                  bound_x_min=1135, bound_x_max=1910, bound_y_min=710, bound_y_max=890)
         ################## Workspace ##################
         self.workspace = ws
         ############### Drone health ###################
         # Add title
         self.title_drone_health = Font(FONT, FONT_SIZE, (self.tf_health_drone[0], self.tf_health_drone[1] - 2 * FONT_SIZE * line_height))
         self.title_drone_health.update('    Drone condition')
-        self.title_drone_health.update('Drone ID          Position        Latency        Task')
+        self.title_drone_health.update('Drone ID          Position               Latency             Task')
         # Small drone icon at the topleft of the drone health block
         self.drone_icon = Vehicle(file_name=IMAGE_PATH + 'drone1.png', surface=self.screen, sc=0.05, rt=0.0)
         # Drone health table
@@ -344,7 +350,7 @@ class GameMgr:
         # Add title
         self.title_gv_health = Font(FONT, FONT_SIZE, (self.tf_health_gv[0], self.tf_health_gv[1] - 2 * FONT_SIZE * line_height))
         self.title_gv_health.update('     Ground Vehicle condition')
-        self.title_gv_health.update('    GV ID            Carrying            Position         Task')
+        self.title_gv_health.update('    GV ID          Carrying            Position            Task')
         # Small ground vehicle icon at the topleft of the ground vehicle health block
         self.gv_icon = Vehicle(file_name=IMAGE_PATH + 'van.png', surface=self.screen, sc=0.05, rt=0.0)
         # Ground vehicle health table
@@ -371,13 +377,13 @@ class GameMgr:
         ################ Human workload ###################
         self.humans = humans
          # Title for human workload
-        self.title_human = Font(FONT, FONT_SIZE, (1150, 550))
-        self.title_human.update('   Human Workload')
-        self.title_human.update('ID    Utilization')
+        self.title_human = Font(FONT, FONT_SIZE, (1200, 530))
+        self.title_human.update('     Human condition')
+        self.title_human.update('ID                    Utilization                      Task')
         # Create one HumanWorkload per human
         self.human_panels = [
             HumanWorkload(self.screen,
-                          (1150, 600 + i*(line_height*FONT_SIZE + 20)),
+                          (1200, 600 + i*(line_height*FONT_SIZE + 20)),
                           human)
             for i, human in enumerate(self.humans)
         ]
@@ -561,6 +567,13 @@ class GameMgr:
         for text in self.status.texts:
             self.screen.blit(text[0], text[1])
         ######################## Time status ends ####################
+
+        # ====== Draw panel outlines (after content, so borders stay visible) ======
+        for r in (self.panel_drones,
+                  self.panel_gvs,
+                  self.panel_humans,
+                  self.panel_legend):
+            pygame.draw.rect(self.screen, BLACK, r, width=2)
 
         pygame.display.flip()
     
