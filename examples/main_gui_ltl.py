@@ -636,23 +636,27 @@ if __name__ == "__main__":
                         chosen_task = int(np.random.choice(len(tasks)))
                         chosen_task_id = int(tasks[chosen_task][0])
                         chosen_task_pos = tasks[chosen_task][1]
-                        fire_prompt_id += 1
-                        # required = 2
                         required = int(np.random.choice([1, 2]))
-                        game_mgr.special_regions.add_region(chosen_task_id, chosen_task_pos, 50, required)
-                        # text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
-                        text = "Fire is approaching to one of rescue regions. Set priority!"
-                        current_fire_prompt = {
-                            "id": int(fire_prompt_id),
-                            "task_id": chosen_task_id,
-                            "required": required,
-                            "text": text,
-                            "time": float(running_time),
-                        }
-                        fire_sent_for_prompt.clear()
-                        fire_time_credit -= 1
-                        # environment AP broadcast at the moment we actually create the prompt
-                        labeler.advance({"p_firemsg_0_0_0_0"})
+                        current_priority = tasks[chosen_task][2]
+
+                        if int(current_priority) == required:
+                            pass
+                        else:
+                            fire_prompt_id += 1
+                            game_mgr.special_regions.add_region(chosen_task_id, chosen_task_pos, 50, required)
+                            # text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
+                            text = "Fire is approaching to one of rescue regions. Set priority!"
+                            current_fire_prompt = {
+                                "id": int(fire_prompt_id),
+                                "task_id": chosen_task_id,
+                                "required": required,
+                                "text": text,
+                                "time": float(running_time),
+                            }
+                            fire_sent_for_prompt.clear()
+                            fire_time_credit -= 1
+                            # environment AP broadcast at the moment we actually create the prompt
+                            labeler.advance({"p_firemsg_0_0_0_0"})
 
                 # 2. possible new survivor messages (symptom-based triage)
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
