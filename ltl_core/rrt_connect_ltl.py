@@ -114,6 +114,19 @@ class RrtConnect:
             self.path = [self.path[0], self.path[0], self.path[0], self.path[0], self.path[0]]
             return []
         if len(self.path) < 7:
+            # Make sure path is a NumPy array
+            pts = np.array(self.path, dtype=float)
+            start, end = pts[0], pts[-1]
+            total_len = np.linalg.norm(end - start)
+            if total_len < 1e-9:
+                self.path = [start] * 2
+                return []
+            # Number of intervals based on self.dist
+            n_segments = max(1, int(np.ceil(total_len / self.dist)))
+            t_vals = np.linspace(0, 1, n_segments + 1)
+            discretized = [start + t * (end - start) for t in t_vals]
+            # Flip so it matches your reversed path convention
+            self.path = np.flip(np.array(discretized), axis=0)
             return []
 
         # 1) Eliminate redundant waypoints
