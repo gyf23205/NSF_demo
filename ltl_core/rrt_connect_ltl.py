@@ -133,7 +133,10 @@ class RrtConnect:
         dist = self.dist
 
         # Fit a B-spline
-        tck, u = splprep([path[:, 0], path[:, 1]], k=1, s=0)
+        try:
+            tck, u = splprep([path[:, 0], path[:, 1]], k=1, s=0)
+        except ValueError:
+            return []
 
         # Compute the total arc length of the B-spline
         num_points = 1000
