@@ -9,6 +9,7 @@ from scipy.spatial import Voronoi
 import numpy as np
 import socket
 import json
+import ctypes
 from ltl_core.specification import Specification, ENVIRONMENT_AP_PREFIXES, AP_TYPE_PREFIX_MAP, get_ap_prefix
 from ltl_core.binding_manager import BindingManager
 from ltl_core.workspace import Workspace
@@ -66,6 +67,44 @@ fire_time_credit = 0
 
 # --- Task removal after pickup gating ---
 pickup_cleared = set()
+
+
+def _init_mixer():
+    if not pygame.mixer.get_init():
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+    pygame.mixer.set_num_channels(8)
+
+
+def _tone(freq=660, dur=0.15, vol=0.5, sr=44100):
+    """Return a pygame Sound of a single sine tone."""
+    n = int(sr * dur)
+    t = np.linspace(0, dur, n, endpoint=False)
+    wave = (np.sin(2 * np.pi * freq * t) * (32767 * vol)).astype(np.int16)
+    stereo = np.column_stack((wave, wave))
+    return pygame.sndarray.make_sound(stereo.copy())
+
+
+def set_always_on_top(enable=True):
+    """Make the current Pygame window topmost (Windows only)."""
+    try:
+        hwnd = pygame.display.get_wm_info().get("window")
+    except Exception:
+        hwnd = None
+    if not hwnd:
+        return  # window not created yet
+
+    HWND_TOPMOST = -1
+    HWND_NOTOPMOST = -2
+    SWP_NOMOVE = 0x0002
+    SWP_NOSIZE = 0x0001
+    SWP_SHOWWINDOW = 0x0040
+
+    ctypes.windll.user32.SetWindowPos(
+        hwnd,
+        HWND_TOPMOST if enable else HWND_NOTOPMOST,
+        0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW
+    )
 
 
 def _atm_region_id(pid: int) -> str:
@@ -291,6 +330,7 @@ if __name__ == "__main__":
 
         # === GameMgr for rendering ===
         game_mgr = GameMgr(drones, gvs, humans, ws)
+        set_always_on_top(True)
 
         # === Get drone start positions in GUI space ===
         takeoff_positions = [agent.pos[:2] for agent in agents_by_type["drones"]]
@@ -351,6 +391,10 @@ if __name__ == "__main__":
 
         # The main loop for the GUI
         print('Main GUI initialized')
+
+        # Play short beep
+        _init_mixer()
+        _tone(660, 0.4, 0.8).play()
 
         buffers = {
             'idx_image':[],
@@ -613,24 +657,25 @@ if __name__ == "__main__":
                 # 2. possible new survivor messages (symptom-based triage)
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
                         and running_time >= SURVIVORMSG_TIMES[survivormsg_idx]):
+                    # Only allow if at least one survivor scan credit exists
+                    if surv_credit > 0 and current_surv_prompt is None and len(tasks) > 0:
+                        sev = random.choice([1, 2, 3])  # 1=Minor,2=Serious,3=Emergency
+                        picks = random.sample(triage_symptoms[sev], k=3)
+                        correct = {1:"Minor", 2:"Serious", 3:"Emergency"}[sev]
 
-                    # Pick a random severity bucket, then 3 symptoms from it
-                    sev = random.choice([1, 2, 3])  # 1=Minor,2=Serious,3=Emergency
-                    picks = random.sample(triage_symptoms[sev], k=3)
-                    correct = {1:"Minor", 2:"Serious", 3:"Emergency"}[sev]
+                        surv_prompt_id += 1
+                        current_surv_prompt = {
+                            "id": surv_prompt_id,
+                            "text": "Assess the patient based on these symptoms:",
+                            "symptoms": picks,    # <<< send the 3 symptoms
+                            "correct": correct
+                        }
+                        surv_sent_for_prompt.clear()
 
-                    surv_prompt_id += 1
-                    current_surv_prompt = {
-                        "id": surv_prompt_id,
-                        "text": "Assess the patient based on these symptoms:",
-                        "symptoms": picks,    # <<< send the 3 symptoms
-                        "correct": correct
-                    }
-                    surv_sent_for_prompt.clear()
-
-                    labeler.advance({"p_survivormsg_0_0_0_0"})
+                        labeler.advance({"p_survivormsg_0_0_0_0"})
+                        surv_credit -= 1
+                    # Regardless of whether we used it, move to the next scheduled time
                     survivormsg_idx += 1
-                    surv_credit -= 1 
 
                 # 3. ATM scheduler (prompt + env broadcast)
                 if (atmmsg_idx < len(ATMMSG_TIMES)) and (running_time >= ATMMSG_TIMES[atmmsg_idx]):
@@ -684,7 +729,6 @@ if __name__ == "__main__":
 
                                 image_id = survivor_images[survivor_index]
                                 survivor_index += 1
-                                surv_credit += 1
                                 print(f"time: {running_time}, survivor_index: {survivor_index}, AP: {ap}, Image: {image_id}")
 
                                 # Keep for later; only send when p_verify_* is actually assigned
@@ -779,6 +823,9 @@ if __name__ == "__main__":
                         labeler.advance({verify_ap, chosen_gate})
                     else:
                         labeler.advance({verify_ap})
+                    
+                    # Award survivor triage credit only after a verification completes
+                    surv_credit += 1
 
                     # bookkeep
                     if image_id is not None:

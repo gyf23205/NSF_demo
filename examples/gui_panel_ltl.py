@@ -388,6 +388,26 @@ class GameMgr:
         ]
         ############# Human workload ends #################
 
+    def draw_grid(self, step_cells=5, grid_size=(50, 40), color=(220, 220, 220), width=1):
+        """
+        Draw grid lines every `step_cells` cells over the 1125x900 map area.
+        grid_size = (#cols, #rows) in your world grid.
+        """
+        cols, rows = grid_size
+        cell_w = 1125 / cols
+        cell_h = 900 / rows
+
+        # Vertical lines
+        x = 0.0
+        for c in range(0, cols + 1, step_cells):
+            x = int(round(c * cell_w))
+            pygame.draw.line(self.screen, color, (x, 0), (x, 900), width)
+
+        # Horizontal lines
+        for r in range(0, rows + 1, step_cells):
+            y = int(round(r * cell_h))
+            pygame.draw.line(self.screen, color, (0, y), (1125, y), width)
+
     def set_voronoi(self):
         print(IMAGE_PATH + 'voronoi_regions.png')
         self.vor = Background(file_name=IMAGE_PATH + 'voronoi_regions_cropped.png',
@@ -405,6 +425,9 @@ class GameMgr:
         self.screen.fill(WHITE)
         self.screen.blit(self.background.surface, self.background.rect)
         # self.screen.blit(self.vor.surface, self.vor.rect)
+
+        # draw a light grid every 5 cells
+        self.draw_grid(step_cells=5, grid_size=(50, 40), color=(210, 210, 210), width=1)
 
         # ---- draw all rectangular obstacles ----
         env_obj = self.workspace.env 
@@ -636,8 +659,8 @@ class GameMgr:
         elif priority == 2:
             color = RED
 
-        pygame.draw.circle(self.screen, color, pos, 10)
-        font = pygame.font.Font(None, 24)
+        pygame.draw.circle(self.screen, color, pos, 15)
+        font = pygame.font.Font(None, 32)
         text = font.render(f'{idx}', True, WHITE)
         self.screen.blit(text, (pos[0]-6, pos[1]-6))
 
