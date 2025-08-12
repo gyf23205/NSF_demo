@@ -101,7 +101,9 @@ class RrtConnect:
                 self.V2 = self.V1
                 self.V1 = list_mid
 
-        return None
+        # ---- Fallback: no path found -> two-point path [goal, start] ----
+        self.path = [(self.s_goal.x, self.s_goal.y), (self.s_start.x, self.s_start.y)]
+        return self.path
 
     def smoothing(self):
         if not self.path:
