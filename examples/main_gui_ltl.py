@@ -69,6 +69,15 @@ fire_time_credit = 0
 pickup_cleared = set()
 
 
+def _human_index_for(prefix, assignments):
+    for agent, ap in assignments.items():
+        if getattr(agent, "role", "") == "humans" and isinstance(ap, str) and ap.startswith(prefix):
+            try:
+                return int(agent.label[1:])  # 'H0'->0
+            except Exception:
+                return None
+    return None
+
 def _init_mixer():
     if not pygame.mixer.get_init():
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -244,7 +253,7 @@ if __name__ == "__main__":
         s.listen()
         clients = []  # Track all client addresses
         print("Server waiting for connection...")
-        while len(clients) < 2:  # !!! Wait for all client to connect
+        while len(clients) < 1:  # !!! Wait for all client to connect
             conn, addr = s.accept()
             print("Connected by", addr)
             clients.append((conn, addr))  # Store the address
@@ -1041,10 +1050,24 @@ if __name__ == "__main__":
                 if any(v is not None for v in message_all.values()):
                     for conn, addr in clients:
                         conn.sendall((json.dumps(message_all) + '\n').encode())
+
                 if any(v is not None for v in message_one.values()):
-                    # Function allocation between humans
-                    selected_client = np.random.choice(range(len(clients)))
-                    conn, addr = clients[selected_client]
+                    # Decide which human this belongs to, by AP prefix in current assignments
+                    idx = None
+                    if message_one.get('idx_image') is not None:
+                        idx = _human_index_for("p_verify_", assignments)
+                    if idx is None and message_one.get('atm_prompt') is not None:
+                        idx = _human_index_for("p_atmconfirm_", assignments)
+                    if idx is None and message_one.get('surv_prompt') is not None:
+                        idx = _human_index_for("p_triage_", assignments)
+                    if idx is None and message_one.get('fire_prompt') is not None:
+                        idx = _human_index_for("p_priority_", assignments)
+
+                    # fallback if mapping is not found
+                    if idx is None or idx >= len(clients):
+                        idx = 0
+
+                    conn, addr = clients[idx]
                     conn.sendall((json.dumps(message_one) + '\n').encode())
 
             # === Draw GUI: simple ===
