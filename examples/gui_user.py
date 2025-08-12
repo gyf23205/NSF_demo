@@ -311,6 +311,9 @@ class UserGUI:
         # Font for timers
         self.timer_font = pygame.font.SysFont(FONT, int(1.8 * FONT_SIZE))
 
+        # Image overlap
+        self.current_image_id = None
+
 
     @staticmethod
     def _timer_color(elapsed_s: float):
@@ -338,7 +341,7 @@ class UserGUI:
 
         # Compute current text and size
         elapsed = (pygame.time.get_ticks() - start_ms) / 1000.0
-        text = f"{int(elapsed)}s"
+        text = f"{int(elapsed):02d}s"
         color = self._timer_color(elapsed)
 
         w, h = self.timer_font.size(text)
@@ -417,19 +420,24 @@ class UserGUI:
 
 
         ###################### Victim block ######################
-        # Show the image only after the survivor-image timer has started.
-        if victim_buffer and (self.victim_timer_start is not None):
+        # if data and data['idx_image'] is not None:
+        #     # print(data['idx_image'])
+        #     victim_buffer.append(data['idx_image'])
+        #     data['idx_image'] = None
+        if victim_buffer:
             image_id = victim_buffer[0]["image_id"] if isinstance(victim_buffer[0], dict) else victim_buffer[0]
+
+            # If a NEW image is about to be shown, start the timer now
+            if image_id != self.current_image_id:
+                self.victim_timer_start = pygame.time.get_ticks()
+                self.current_image_id = image_id
+
             image_path = f"examples/images/victim{image_id}.jpg"
-            pil_image = Image.open(image_path).resize((self.image_width, self.image_height))
+            pil_image = Image.open(image_path)
+            pil_image = pil_image.resize((self.image_width, self.image_height))
             image = pygame.image.fromstring(pil_image.tobytes(), pil_image.size, pil_image.mode)
             if image is not None:
                 self.image = image
-
-        # If no timer yet, don't draw (avoid early image)
-        if self.victim_timer_start is None:
-            self.image = None
-
         if self.image is not None:
             self.screen.blit(self.image, self.image_rect)
         else:
@@ -661,7 +669,7 @@ if __name__ == '__main__':
                                     if key == 'idx_image':
                                         # value is {"image_id": int, "tid": "2"} from server
                                         victim_buffer.append(value)
-                                        gui.victim_timer_start = pygame.time.get_ticks()  # start survivor-image timer
+                                        # gui.victim_timer_start = pygame.time.get_ticks()  # start survivor-image timer
                                         if gui.sfx_survivor: gui.sfx_survivor.play()
                                     if key == 'tasks':
                                         gui.tasks_received = value
@@ -724,6 +732,7 @@ if __name__ == '__main__':
                 # Victim handling
                 if gui.button_accept.handle_event(event):
                     gui.image = None
+                    gui.current_image_id = None
                     clicked_item = victim_buffer.pop(0) if victim_buffer else None
                     response_changed = True
                     response['victim'] = 'accept'
@@ -734,6 +743,7 @@ if __name__ == '__main__':
 
                 elif gui.button_reject.handle_event(event):
                     gui.image = None
+                    gui.current_image_id = None
                     clicked_item = victim_buffer.pop(0) if victim_buffer else None
                     response_changed = True
                     response['victim'] = 'reject'

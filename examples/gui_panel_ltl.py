@@ -494,8 +494,8 @@ class GameMgr:
         # Draw centroids as targets
         centroids_gui = self.workspace.grid_to_pixel_array(centroids)
         for idx, centroid in enumerate(centroids_gui):
-            pygame.draw.circle(self.screen, GREY, centroid.astype(int), 10)
-            font = pygame.font.Font(None, 24)
+            pygame.draw.circle(self.screen, GREY, centroid.astype(int), 15)
+            font = pygame.font.Font(None, 32)
             text = font.render(f'{idx+1}', True, (255,255,255))
             self.screen.blit(text, (centroid[0]-6, centroid[1]-6))
 
