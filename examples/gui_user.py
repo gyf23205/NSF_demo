@@ -16,8 +16,8 @@ import numpy as np
 import yaml
 
 # For workload estimation
-csv_path = 'dummy_log/aggregated_output.csv'
-# csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
+# csv_path = 'dummy_log/aggregated_output.csv'
+csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
 from realtime_heart_plot import RealtimeHeartPlot
 from workload_speedometer import WorkloadSpeedometer
 
@@ -388,19 +388,22 @@ class UserGUI:
         model.load_state_dict(state_dict, strict=False)
         model.eval()
 
-        ecg = last_row[:130]
-        gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
+        try:
+            ecg = last_row[:130]
+            gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
 
-        t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-        t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
+            t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
+            t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
 
-        if torch.isnan(t2).any() or torch.isinf(t2).any():
-            print("NaN or Inf detected in t2 (gaze input)")
+            if torch.isnan(t2).any() or torch.isinf(t2).any():
+                print("NaN or Inf detected in t2 (gaze input)")
 
-        with torch.no_grad():
-            out = model(t1, t2)
-            self.pred_label = torch.argmax(out).item()
-            # print(out, pred_label)
+            with torch.no_grad():
+                out = model(t1, t2)
+                self.pred_label = torch.argmax(out).item()
+                # print(out, pred_label)
+        except:
+            self.pred_label = 0.0
 
         # 3. update workload
         # if self.pred_label > 0.5:
@@ -608,7 +611,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server (localhost)
+    host = '192.168.123.225'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
