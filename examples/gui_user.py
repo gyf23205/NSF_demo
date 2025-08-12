@@ -176,7 +176,7 @@ class UserGUI:
         # ---- audio (synth) ----
         _init_mixer()
         self.sfx_atm      = _sequence([(880, 0.08), (1175, 0.08)])          # two quick beeps, rising
-        self.sfx_priority = _sequence([(300, 0.28)])                         # low warning
+        self.sfx_priority = _tone(dur=0.5, vol=0.8)
         self.sfx_triage   = _sequence([(660, 0.09), (660, 0.09), (660, 0.09)], gap=0.05)  # triple ping
         self.sfx_survivor = _sequence([(523, 0.10), (659, 0.12)], gap=0.04)  # short chime
 
