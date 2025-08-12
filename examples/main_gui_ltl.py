@@ -640,6 +640,34 @@ if __name__ == "__main__":
                     # 4) Compute % utilization over the last window
                     human.utilization = compute_utilization(human, now, SLIDING_WINDOW)
 
+                    # === Sustained overload & SA bookkeeping ===
+                    if not hasattr(human, "overload_streak_s"):
+                        human.overload_streak_s = 0.0
+                        human._last_util_t = now
+                    if not hasattr(human, "sa_score"):
+                        human.sa_score = 0.0
+
+                    dt_util = max(0.0, now - getattr(human, "_last_util_t", now))
+                    human._last_util_t = now
+
+                    # accumulate streak when utilization is high; decay when lower
+                    if human.utilization >= 85.0:
+                        human.overload_streak_s += dt_util
+                    else:
+                        human.overload_streak_s = max(0.0, human.overload_streak_s - 2.0 * dt_util)
+
+                    # light SA decay every tick
+                    human.sa_score *= 0.98
+
+                # === SA credit on symbolic completions ===
+                for h in ws.agents["humans"]:
+                    for ap in completed:
+                        try:
+                            if h.has_completed(ap):
+                                h.sa_score = getattr(h, "sa_score", 0.0) + 1.0
+                        except Exception:
+                            pass
+
                 # === Monitor APs tiggers
                 # 1-1. possible new emergency events (FIRE → ask human to set priority)
                 if (firemsg_idx < len(FIREMSG_TIMES)) and (running_time >= FIREMSG_TIMES[firemsg_idx]):
@@ -939,6 +967,13 @@ if __name__ == "__main__":
                 else:
                     # GVs and others are fine with 2D
                     visual.position = pos[:2]
+
+            # === Map GUI workload (0..2 or similar) onto the first human for now ===
+            # if isinstance(data, dict) and data.get('workload') is not None:
+            #     try:
+            #         ws.agents["humans"][0].workload_level = float(data['workload'])
+            #     except Exception:
+            #         pass
 
             # === Drone/GV status update ===
             for drone in drones:
