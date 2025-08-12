@@ -417,18 +417,19 @@ class UserGUI:
 
 
         ###################### Victim block ######################
-        # if data and data['idx_image'] is not None:
-        #     # print(data['idx_image'])
-        #     victim_buffer.append(data['idx_image'])
-        #     data['idx_image'] = None
-        if victim_buffer:
+        # Show the image only after the survivor-image timer has started.
+        if victim_buffer and (self.victim_timer_start is not None):
             image_id = victim_buffer[0]["image_id"] if isinstance(victim_buffer[0], dict) else victim_buffer[0]
             image_path = f"examples/images/victim{image_id}.jpg"
-            pil_image = Image.open(image_path)
-            pil_image = pil_image.resize((self.image_width, self.image_height))
+            pil_image = Image.open(image_path).resize((self.image_width, self.image_height))
             image = pygame.image.fromstring(pil_image.tobytes(), pil_image.size, pil_image.mode)
             if image is not None:
                 self.image = image
+
+        # If no timer yet, don't draw (avoid early image)
+        if self.victim_timer_start is None:
+            self.image = None
+
         if self.image is not None:
             self.screen.blit(self.image, self.image_rect)
         else:
