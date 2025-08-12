@@ -237,14 +237,14 @@ if __name__ == "__main__":
     try:
         # === Setup socket for GUI communication ===
         # Create a server for socket communication
-        host = '127.0.0.1'  # Use '127.0.0.1' to accept connections only from localhost
+        host = '0.0.0.0'  # Use '127.0.0.1' to accept connections only from localhost
         port = 8888
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))
         s.listen()
         clients = []  # Track all client addresses
         print("Server waiting for connection...")
-        while len(clients) < 1:  # !!! Wait for all client to connect
+        while len(clients) < 2:  # !!! Wait for all client to connect
             conn, addr = s.accept()
             print("Connected by", addr)
             clients.append((conn, addr))  # Store the address

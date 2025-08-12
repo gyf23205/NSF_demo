@@ -366,8 +366,11 @@ class UserGUI:
         with open(csv_path, 'r') as f:
             reader = csv.reader(f)
             rows = list(reader)
-            last_row = rows[-1]
-            last_row = list(map(float, last_row))
+            try:
+                last_row = rows[-1]
+                last_row = list(map(float, last_row))
+            except:
+                pass
 
         # with open(csv_path, 'w', newline='') as f:
         #     f.truncate()
