@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
         # === Constants ===
         hover_duration = 10
-        n_targets = 20
+        n_targets = 15
         n_drones = 3
         n_gvs = 4
         n_humans = 2

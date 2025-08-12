@@ -251,17 +251,17 @@ class GameMgr:
         self.n_gvs = len(gvs)
 
         # ====== Panel rectangles (black outlines) ======
-        self.panel_drones   = pygame.Rect(1135, 10,  775, 290)
-        self.panel_gvs      = pygame.Rect(1135, 310, 775, 200)
+        self.panel_drones   = pygame.Rect(1135, 10,  775, 240)
+        self.panel_gvs      = pygame.Rect(1135, 260, 775, 250)
         self.panel_humans   = pygame.Rect(1135, 520, 775, 180)
         self.panel_legend   = pygame.Rect(1135, 710, 775, 180)
         
         # Define position of blocks, tf=topleft, c=center
         # self.tf_map = (100, 100)
         self.c_drone_icon    = (1200, 40)     # Drone icon
-        self.tf_health_drone = (1200, 100)     # Drone table top-left
+        self.tf_health_drone = (1200, 100)    # Drone table top-left
         self.c_gv_icon       = (1200, 330)    # GV icon
-        self.tf_health_gv    = (1200, 390)    # GV table top-left
+        self.tf_health_gv    = (1200, 330)    # GV table top-left
 
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (0, 30)
         self.screen = pygame.display.set_mode((BOUND_X_MAX, BOUND_Y_MAX), 0)

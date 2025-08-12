@@ -413,7 +413,7 @@ class UserGUI:
         # self.screen.blit(self.workload_text.texts[0][0], self.workload_text.texts[0][1])          
 
         # Render meter graphics
-        heart_plot.update(ecg); heart_plot.render(self.screen)                                     # ONE LINE for HR
+        heart_plot.update(ecg); heart_plot.render(self.screen)    # ONE LINE for HR
         workload_meter.update(self.pred_label)
         workload_meter.render(self.screen, (110, 80)) # ONE LINE for WL
         ###################### Update workload text ends #####################
