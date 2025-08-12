@@ -132,18 +132,28 @@ def _pick_coord_avoiding_targets(ws, grid_size=(50, 40)):
 
 
 def compute_utilization(human, now, window=SLIDING_WINDOW):
-    # start from window‐ago
+    events = sorted(human.util_history, key=lambda x: x[0])
     t0 = now - window
-    busy_time = 0.0
-    prev_t, prev_s = t0, 'idle'
 
-    # walk through the history in order
-    for t, s in sorted(human.util_history, key=lambda x: x[0]):
+    # Determine state at t0 (last event at or before t0)
+    state_at_t0 = 'idle'
+    for t, s in events:
+        if t <= t0:
+            state_at_t0 = s
+        else:
+            break
+
+    busy_time = 0.0
+    prev_t, prev_s = t0, state_at_t0
+
+    # Integrate only over [t0, now]
+    for t, s in events:
+        if t < t0:
+            continue
         if prev_s == 'busy':
             busy_time += t - prev_t
         prev_t, prev_s = t, s
 
-    # account for final segment up to now
     if prev_s == 'busy':
         busy_time += now - prev_t
 
@@ -609,16 +619,23 @@ if __name__ == "__main__":
                     assigned = assignments.get(human)
                     new_state = 'busy' if assigned is not None else 'idle'
 
+                    # ensure history is seeded once
+                    if not getattr(human, "util_history", None):
+                        human.util_history = [(0.0, 'idle')]
+                        human.last_state = 'idle'
+
                     # 2) On state‐change, record the timestamp
                     if new_state != human.last_state:
                         human.util_history.append((now, new_state))
                         human.last_state = new_state
 
-                    # 3) Prune old events outside the sliding window
-                    human.util_history = [
-                        (t,s) for t,s in human.util_history
-                        if now - t <= SLIDING_WINDOW
-                    ]
+                    # 3) Prune old events, but KEEP the last event before t0 so we know the state at window start
+                    t0 = now - SLIDING_WINDOW
+                    ev = human.util_history
+                    older = [e for e in ev if e[0] < t0]
+                    newer = [e for e in ev if e[0] >= t0]
+                    keep = ([max(older, key=lambda x: x[0])] if older else []) + newer
+                    human.util_history = keep
 
                     # 4) Compute % utilization over the last window
                     human.utilization = compute_utilization(human, now, SLIDING_WINDOW)

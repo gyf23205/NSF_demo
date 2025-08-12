@@ -10,6 +10,7 @@ import csv, json
 import math
 from collections import defaultdict, deque
 from time import strftime
+from main_gui_ltl import compute_utilization
 from ltl_core.binding_manager import *
 from ltl_core.specification import *
 from ltl_core.workspace import *
@@ -30,26 +31,6 @@ ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0, 154.2, 185.3, 210.4, 290.0]
 # FIREMSG_TIMES = [30.0]
 # SURVIVORMSG_TIMES = [25.0]
 # ATMMSG_TIMES = [35.0]
-
-
-def compute_utilization(human, now, window=SLIDING_WINDOW):
-    # start from window‐ago
-    t0 = now - window
-    busy_time = 0.0
-    prev_t, prev_s = t0, 'idle'
-
-    # walk through the history in order
-    for t, s in sorted(human.util_history, key=lambda x: x[0]):
-        if prev_s == 'busy':
-            busy_time += t - prev_t
-        prev_t, prev_s = t, s
-
-    # account for final segment up to now
-    if prev_s == 'busy':
-        busy_time += now - prev_t
-
-    pct = int(100 * busy_time / window)
-    return max(0, min(100, pct))
 
 
 class MetricsRecorder:
@@ -303,7 +284,7 @@ if __name__ == '__main__':
     spec.get_task_specification("Case2", s=s_mask, binding_manager=binding_mgr)
 
     # Setup workspace
-    ws = Workspace(size=grid_size, target_mask=s_mask, num_drones=4, num_gvs=3, num_humans=2, margin=4)
+    ws = Workspace(size=grid_size, target_mask=s_mask, num_drones=3, num_gvs=4, num_humans=2, margin=4)
 
     # Agents
     agents_by_type = {
@@ -405,20 +386,28 @@ if __name__ == '__main__':
         
         # Human assignment history & utilization
         for human in ws.agents["humans"]:
-            # 1) Detect busy vs idle (busy if they _have_ an assignment)
+
+            # Seed once
+            if not getattr(human, "util_history", None):
+                human.util_history = [(0.0, 'idle')]
+                human.last_state = 'idle'
+
+            # 1) Detect busy vs idle (busy if they have an assignment)
             assigned = assignments.get(human)
             new_state = 'busy' if assigned is not None else 'idle'
 
-            # 2) On state‐change, record the timestamp
+            # 2) On state-change, record the timestamp
             if new_state != human.last_state:
                 human.util_history.append((running_time, new_state))
                 human.last_state = new_state
 
-            # 3) Prune old events outside the sliding window
-            human.util_history = [
-                (t,s) for t,s in human.util_history
-                if running_time - t <= SLIDING_WINDOW
-            ]
+            # 3) Prune old events, but keep the last before t0
+            t0 = running_time - SLIDING_WINDOW
+            ev = human.util_history
+            older = [e for e in ev if e[0] < t0]
+            newer = [e for e in ev if e[0] >= t0]
+            keep = ([max(older, key=lambda x: x[0])] if older else []) + newer
+            human.util_history = keep
 
             # 4) Compute % utilization over the last window
             human.utilization = compute_utilization(human, running_time, SLIDING_WINDOW)
