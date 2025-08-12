@@ -412,6 +412,32 @@ if __name__ == '__main__':
             # 4) Compute % utilization over the last window
             human.utilization = compute_utilization(human, running_time, SLIDING_WINDOW)
 
+            # Sustained overload & SA bookkeeping (sim)
+            if not hasattr(human, "overload_streak_s"):
+                human.overload_streak_s = 0.0
+                human._last_util_t = running_time
+            if not hasattr(human, "sa_score"):
+                human.sa_score = 0.0
+
+            dt_util = max(0.0, running_time - getattr(human, "_last_util_t", running_time))
+            human._last_util_t = running_time
+
+            if human.utilization >= 85.0:
+                human.overload_streak_s += dt_util
+            else:
+                human.overload_streak_s = max(0.0, human.overload_streak_s - 2.0 * dt_util)
+
+            human.sa_score *= 0.98
+
+        # SA credit on symbolic completions
+        for h in ws.agents["humans"]:
+            for ap in completed:
+                try:
+                    if h.has_completed(ap):
+                        h.sa_score = getattr(h, "sa_score", 0.0) + 1.0
+                except Exception:
+                    pass
+
             # Monitor APs triggers
             # 1. possible new emergency events (FIRE → ask human to set priority)
             if (firemsg_idx < len(FIREMSG_TIMES)

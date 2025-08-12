@@ -16,7 +16,7 @@ import numpy as np
 import yaml
 
 # For workload estimation
-csv_path = '"D:/Cog_sensor/aggregated_output.csv"'
+csv_path = 'dummy_log/aggregated_output.csv'
 # csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
 from realtime_heart_plot import RealtimeHeartPlot
 from workload_speedometer import WorkloadSpeedometer
