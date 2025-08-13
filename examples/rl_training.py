@@ -352,7 +352,7 @@ def run_one_episode(seed=None,
     prev_time = 0.0
     init_time = 0.0
     running_time = 0.0
-    dt = 1.0    # Discrete time (main)
+    dt = 2.0    # Discrete time (main)
 
     # ------------------------------- Main loop --------------------------------
     while running:
@@ -542,9 +542,9 @@ if __name__ == '__main__':
     # ===================== Batch controller ===================================
     # Exactly the behavior you asked:
     #  - BATCH_EPISODES == 1  -> behave exactly like current single-episode run
-    #  - BATCH_EPISODES >  2  -> run multiple episodes and show box plots
+    #  - BATCH_EPISODES >= 2  -> run multiple episodes and show box plots
     #  - otherwise            -> fall back to single-episode run
-    BATCH_EPISODES  = 1       # <--- set this as you like
+    BATCH_EPISODES  = 30       # <--- set this as you like
     SAVE_BOX_PLOTS  = False   # save multi-episode figures to LOG_DIR/figs_multi
     PLOT_LATENCIES  = False   # also plot AP latency box plots across episodes
 
@@ -558,7 +558,7 @@ if __name__ == '__main__':
             enable_manual_pick=False  # set True if you want the picker at the end
         )
 
-    elif BATCH_EPISODES > 2:
+    elif BATCH_EPISODES >= 2:
         # Multi-episode batch
         from pathlib import Path
         from ltl_core.visualization import (
