@@ -69,6 +69,17 @@ fire_time_credit = 0
 pickup_cleared = set()
 
 
+def human_index_for_verify_tid(assignments, tid_str):
+    for agent, ap in assignments.items():
+        if getattr(agent, "role", "") == "humans" and isinstance(ap, str) and ap.startswith("p_verify_"):
+            parts = ap.split("_")
+            if len(parts) >= 3 and parts[2] == str(tid_str):
+                try:
+                    return int(agent.label[1:])  # 'H0' -> 0
+                except Exception:
+                    return None
+    return None
+
 def clear_atm_prompt_by_id(pid, *, result=None):
     """Remove a single ATM prompt, optionally record a True/False result."""
     prompt = atm_prompts.pop(pid, None)
@@ -294,7 +305,7 @@ if __name__ == "__main__":
         s.listen()
         clients = []  # Track all client addresses
         print("Server waiting for connection...")
-        while len(clients) < 1:  # !!! Wait for all client to connect
+        while len(clients) < 2:  # !!! Wait for all client to connect
             conn, addr = s.accept()
             print("Connected by", addr)
             clients.append((conn, addr))  # Store the address
@@ -430,16 +441,16 @@ if __name__ == "__main__":
         survivor_index = 0
         verify_response_pending = set()  # APs like p_verify_0_3_1_0 waiting for user
         
-        # === Verify gating (single‑user routing) ===
+        # === Verify gating ===
         pending_images = {}         # target_id (str) -> image_id (int), waiting to be sent
         sent_for_target = set()     # target_ids already sent to user (avoid dup)
-        active_target_for_user = None
+        active_target_for_user_by_human = {}  # human_idx -> tid_str
 
         # === Message for GUI ===
         message = {'idx_image': None, 'tasks': tasks, 'wind_speed': None, 'progress': None, 'workload': None, 'vic_msg': None}
         for idx in range(len(clients)):
             clients[idx][0].sendall((json.dumps(message) + '\n').encode())
-        recv_buffer = ''
+        recv_buffers = [''] * len(clients)   # one buffer per client
 
         # === Initialize simulation time ===
         prev_time = time()
@@ -475,16 +486,21 @@ if __name__ == "__main__":
             data = None # Data received from the clients
 
             # === Socket receive ===
-            for conn, addr in clients:
+            for i, (conn, addr) in enumerate(clients):
                 try:
-                    chunk = conn.recv(4096).decode() # !!! Need to hear from all clients
+                    chunk = conn.recv(4096).decode()
                     if chunk:
-                        recv_buffer += chunk
-                        while '\n' in recv_buffer:
-                            line, recv_buffer = recv_buffer.split('\n', 1)
+                        recv_buffers[i] += chunk
+                        while '\n' in recv_buffers[i]:
+                            line, recv_buffers[i] = recv_buffers[i].split('\n', 1)
                             if line.strip():
-                                data = json.loads(line)
-                                # print("Received data:", repr(data))
+                                try:
+                                    obj = json.loads(line)
+                                    obj['_from_idx'] = i              # << tag who sent it
+                                    data = obj                         # last message wins (same behavior as before)
+                                    # print("Received data:", repr(data))
+                                except Exception as e:
+                                    print(f"[RX] Bad JSON from client {i}: {e} :: {line!r}")
                 except BlockingIOError:
                     pass
 
@@ -821,16 +837,22 @@ if __name__ == "__main__":
                 # === If a human is assigned p_verify_*, send the pending image now ===
                 for agent, ap in assignments.items():
                     if isinstance(ap, str) and ap.startswith("p_verify_") and str(getattr(agent, "role", "")).startswith("humans"):
-                        tid = ap.split("_")[2]  # target id as string
-                        # only send once per target, and only if we actually have an image
-                        if tid in pending_images and tid not in sent_for_target:
-                            img_id = pending_images[tid]
-                            # send both the image and the tid
-                            buffers['idx_image'].append({"image_id": int(img_id), "tid": tid})
-                            buffers['vic_msg'].append(f'Verify target {int(tid)+1}: please respond')
-                            sent_for_target.add(tid)
-                            # (optional) keep active_target_for_user as a fallback, but no longer relied on
-                            active_target_for_user = tid
+                        tid_str = ap.split("_")[2]  # keep as string
+                        if tid_str in pending_images and tid_str not in sent_for_target:
+                            img_id = pending_images[tid_str]
+
+                            # who owns THIS target's verify?
+                            route_to = human_index_for_verify_tid(assignments, tid_str)
+
+                            # enqueue image AND message with explicit routing
+                            buffers['idx_image'].append({"image_id": int(img_id), "tid": tid_str, "route_to": route_to})
+                            buffers['vic_msg'].append({"text": f'Verify target {int(tid_str) + 1}: please respond', "route_to": route_to})
+
+                            sent_for_target.add(tid_str)
+
+                            # remember this target for that human (fallback for old clients)
+                            if route_to is not None:
+                                active_target_for_user_by_human[route_to] = tid_str
 
                 # === If a human is assigned p_atmconfirm_*, send any unsent ATM prompts ===
                 for agent, ap in assignments.items():
@@ -872,34 +894,31 @@ if __name__ == "__main__":
                                 })
                                 fire_sent_for_prompt.add(pid)
 
-            # === GUI response handling ===
+            # === GUI response handling: verify accept/reject ===
             if isinstance(data, dict) and data.get('victim') is not None:
-                # respond to the specific target we sent to the user
-                if active_target_for_user is not None:
-                    target_id = active_target_for_user
+                # Prefer explicit tid from the GUI; fall back to sender's last assigned verify target
+                tid_raw = data.get('verify_tid')
+                if tid_raw is None:
+                    from_idx = data.get('_from_idx')                   # who sent this message
+                    tid_raw = active_target_for_user_by_human.get(from_idx)
+
+                if tid_raw is None:
+                    print("[VERIFY] No verify_tid and no per-human fallback; ignoring:", data)
+                    data['victim'] = None
+                else:
+                    target_id = str(tid_raw)                           # keep keys as strings everywhere
                     image_id = pending_images.get(target_id)
                     verify_ap = f"p_verify_{target_id}_3_1_0"
-                    idx = int(target_id)
-            
-            if isinstance(data, dict) and data.get('victim') is not None:
-                # prefer the tid the GUI tells us it acted on
-                target_id = data.get('verify_tid', None)
-                if target_id is None:
-                    # fallback to the last-active if old client, but new client will set verify_tid
-                    target_id = active_target_for_user
-                if target_id is not None:
-                    image_id = pending_images.get(target_id)
-                    verify_ap = f"p_verify_{target_id}_3_1_0"
-                    idx = int(target_id)
+                    idx = int(target_id)                               # numeric 0-based for task-table ops
 
                     # choose gate
                     if data['victim'] == 'accept':
                         labeler.chosen_gate_per_group[target_id] = f"p_foundgate_{target_id}"
                     elif data['victim'] in ('reject', 'handover'):
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
-                        # Remove rejected task
-                        tasks = [row for row in tasks if row[0] != idx + 1 ]
-                        game_mgr.task = [row for row in game_mgr.task if row[0] != idx + 1 ]
+                        # Remove rejected task (1-based ids in table)
+                        tasks = [row for row in tasks if row[0] != idx + 1]
+                        game_mgr.task = [row for row in game_mgr.task if row[0] != idx + 1]
                         buffers['tasks'].append(tasks[:])
 
                     chosen_gate = labeler.chosen_gate_per_group.get(target_id)
@@ -907,11 +926,11 @@ if __name__ == "__main__":
                         labeler.advance({verify_ap, chosen_gate})
                     else:
                         labeler.advance({verify_ap})
-                    
+
                     # Award survivor triage credit only after a verification completes
                     surv_credit += 1
 
-                    # bookkeep
+                    # bookkeeping (image/timing)
                     if image_id is not None:
                         victim_id[idx] = image_id
                     victim_timing[idx] = running_time
@@ -919,9 +938,13 @@ if __name__ == "__main__":
                     # clear this target’s pending state
                     pending_images.pop(target_id, None)
                     sent_for_target.discard(target_id)
-                    active_target_for_user = None
 
-                data['victim'] = None
+                    # clear the per-human fallback for the sender (so their next click can't hit old target)
+                    from_idx = data.get('_from_idx')
+                    if from_idx is not None:
+                        active_target_for_user_by_human.pop(from_idx, None)
+
+                    data['victim'] = None
             
             # === Auto-fail if the chosen task disappears while prompt is active ===
             if fire_prompts:
@@ -1001,83 +1024,76 @@ if __name__ == "__main__":
             pos_aware = [(d.position[0], d.position[1]) for d in drones]
             pos_aware = game_mgr.position_meter_to_gui(pos_aware)
             game_mgr.update_awareness(pos_aware, radius=40)
-
-            # === Busy airspace ===
-            # if time() - wind_time > 3:
-            #     wind_time, old_wind_average_speed = update_wind(
-            #         game_mgr, wind_time, old_wind_average_speed, n_wind, message)
                 
             # === Soket send ===
-            # Decide which client to send the message!!!
             if any(len(v) > 0 for v in buffers.values()):
                 message_all = {'tasks': None, 'wind_speed': None}
-                message_one = {'idx_image': None, 'vic_msg': None, 'workload': None,
-                               'atm_prompt': None,
-                               'surv_prompt': None,
-                               'fire_prompt': None}
 
-                if buffers['idx_image']:
-                    message_one['idx_image'] = buffers['idx_image'].pop(0)
-
+                # Pull and broadcast the latest “all” items once
                 if buffers['tasks']:
                     message_all['tasks'] = buffers['tasks'].pop(0)
-
                 if buffers['wind_speed']:
                     message_all['wind_speed'] = buffers['wind_speed'].pop(0)
 
-                # if buffers['progress']:
-                #     message['progress'] = buffers['progress'].pop(0)
-
-                if buffers['workload']:
-                    message_one['workload'] = buffers['workload'].pop(0)
-
-                if buffers['vic_msg']:
-                    message_one['vic_msg'] = buffers['vic_msg'].pop(0)
-
-                # ATM prompt/clear
-                if buffers['atm_prompt']:
-                    message_one['atm_prompt'] = buffers['atm_prompt'].pop(0)
-
-                if buffers['surv_prompt']:
-                    message_one['surv_prompt'] = buffers['surv_prompt'].pop(0)
-
-                if buffers['fire_prompt']:
-                    message_one['fire_prompt'] = buffers['fire_prompt'].pop(0)
-
-                try:
-                    payload = json.dumps(message_one)  # test serialization
-                except TypeError as e:
-                    print("[JSON DEBUG] message_one failed:", e)
-                    for k, v in message_one.items():
-                        try:
-                            json.dumps(v)
-                        except TypeError as e2:
-                            print(f"[JSON DEBUG] key={k}, type={type(v)}, value={v}, err={e2}")
-                    raise  # keep the stack trace for now
-
-                # Send messages to clients
                 if any(v is not None for v in message_all.values()):
                     for conn, addr in clients:
-                        conn.sendall((json.dumps(message_all) + '\n').encode())
+                        try:
+                            conn.sendall((json.dumps(message_all) + '\n').encode())
+                        except Exception as e:
+                            print(f"[TX all] send failed to {addr}: {e}")
 
-                if any(v is not None for v in message_one.values()):
-                    # Decide which human this belongs to, by AP prefix in current assignments
+                # Drain one-off / per-human items one at a time (so they never bundle to the wrong user)
+                while True:
+                    message_one = {'idx_image': None, 'vic_msg': None, 'workload': None,
+                                'atm_prompt': None, 'surv_prompt': None, 'fire_prompt': None}
                     idx = None
-                    if message_one.get('idx_image') is not None:
-                        idx = _human_index_for("p_verify_", assignments)
-                    if idx is None and message_one.get('atm_prompt') is not None:
+
+                    if buffers['idx_image']:
+                        message_one['idx_image'] = buffers['idx_image'].pop(0)
+                        idx = message_one['idx_image'].get('route_to')
+                        if idx is None:
+                            idx = _human_index_for("p_verify_", assignments)
+
+                    elif buffers['vic_msg']:
+                        message_one['vic_msg'] = buffers['vic_msg'].pop(0)
+                        if isinstance(message_one['vic_msg'], dict):
+                            idx = message_one['vic_msg'].get('route_to')
+
+                    elif buffers['atm_prompt']:
+                        message_one['atm_prompt'] = buffers['atm_prompt'].pop(0)
                         idx = _human_index_for("p_atmconfirm_", assignments)
-                    if idx is None and message_one.get('surv_prompt') is not None:
+
+                    elif buffers['surv_prompt']:
+                        message_one['surv_prompt'] = buffers['surv_prompt'].pop(0)
                         idx = _human_index_for("p_triage_", assignments)
-                    if idx is None and message_one.get('fire_prompt') is not None:
+
+                    elif buffers['fire_prompt']:
+                        message_one['fire_prompt'] = buffers['fire_prompt'].pop(0)
                         idx = _human_index_for("p_priority_", assignments)
 
-                    # fallback if mapping is not found
-                    if idx is None or idx >= len(clients):
+                    else:
+                        break  # nothing else to send
+
+                    # normalize idx and bounds-check
+                    try:
+                        idx = int(idx) if idx is not None else None
+                    except Exception:
+                        idx = None
+                    if idx is None or idx < 0 or idx >= len(clients):
                         idx = 0
 
-                    conn, addr = clients[idx]
-                    conn.sendall((json.dumps(message_one) + '\n').encode())
+                    # strip server-only bits
+                    if isinstance(message_one.get('vic_msg'), dict):
+                        message_one['vic_msg'] = message_one['vic_msg'].get('text', '')
+                    if isinstance(message_one.get('idx_image'), dict) and 'route_to' in message_one['idx_image']:
+                        del message_one['idx_image']['route_to']
+
+                    # send
+                    try:
+                        conn, addr = clients[idx]
+                        conn.sendall((json.dumps(message_one) + '\n').encode())
+                    except Exception as e:
+                        print(f"[TX one] send failed to client {idx}: {e}")
 
             # === Draw GUI: simple ===
             # draw_workspace(screen, ws, screensize=screen_size)
