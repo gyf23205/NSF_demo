@@ -69,7 +69,8 @@ class Simulation:
         # Reallocate on (a) new completion OR (b) newly imposed priority
         if (completed != self.prev_completed) or priority_changed:
             # self.prev_actions = self.allocator.choose(unlocked, completed, current_aps)
-            self.prev_actions = self.allocator.choose_priority(unlocked, completed, current_aps)
+            # self.prev_actions = self.allocator.choose_priority(unlocked, completed, current_aps)
+            self.prev_actions = self.allocator.choose_priority_util(unlocked, completed, current_aps)
             self.prev_completed = completed
             self.prev_priority_version = prio_version_now
         actions = self.prev_actions

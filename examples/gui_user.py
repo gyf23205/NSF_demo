@@ -8,7 +8,7 @@ from constants import *
 
 # for estimator
 import csv
-from TF_raw import TransformerRawClassifier
+from TF_raw_regression import TransformerRawRegressor
 import torch
 # import hydra
 import json
@@ -379,8 +379,8 @@ class UserGUI:
         with open('config_ecg_gaze.yaml', 'r') as yf:
             cfg = yaml.safe_load(yf)
 
-        model = TransformerRawClassifier(
-            config=cfg["config_tf"],
+        model = TransformerRawRegressor(
+            config=cfg["config_tf_gauge"],
             optim_cfg=cfg["optim"],
             pre_process=cfg.get("pre_process", None)
         )
@@ -399,9 +399,10 @@ class UserGUI:
                 print("NaN or Inf detected in t2 (gaze input)")
 
             with torch.no_grad():
-                out = model(t1, t2)
-                self.pred_label = torch.argmax(out).item()
+                # out = model(t1, t2)
+                # self.pred_label = torch.argmax(out).item()
                 # print(out, pred_label)
+                self.pred_label = model(t1, t2)
         except:
             self.pred_label = 0.0
 
