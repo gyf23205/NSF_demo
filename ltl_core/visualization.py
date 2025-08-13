@@ -276,6 +276,256 @@ def draw_atomic_pairwise(G: nx.DiGraph, figsize=(8,6)):
     plt.tight_layout()
     plt.show()
 
+    # ==== Multi-episode aggregation & box plots ===================================
+def find_unified_csvs(log_dir, pattern="hat_episode_*_unified.csv", limit=None):
+    """
+    Return a list of unified CSV paths in log_dir (newest first).
+    """
+    from pathlib import Path
+    paths = sorted(Path(log_dir).glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+    if limit is not None:
+        paths = paths[:int(limit)]
+    return [str(p) for p in paths]
+
+
+def _infer_humans_from_steps(df_steps):
+    """Infer human labels from columns like H0_SA/H0_util."""
+    labels = set()
+    for c in df_steps.columns:
+        if c.endswith("_SA"):
+            labels.add(c[:-3])
+        if c.endswith("_util"):
+            labels.add(c[:-5])
+    return sorted(labels)
+
+
+def compute_episode_stats_from_csv(csv_path):
+    """
+    Returns a DataFrame with one row per human for this episode:
+    cols: ['episode_id','csv_path','human','sa_mean','util_mean','idle_ratio_pct','overload_ratio_pct',
+           'switches','distance']
+    - sa_mean: mean of H*_SA over step table (as-is scale from CSV)
+    - util_mean: mean of H*_util over step table (kept in % if CSV is 0–100)
+    - idle/overload ratios: taken from agent table (converted to %)
+    - switches, distance: taken from agent table if present (NaN if missing)
+    """
+    import pandas as pd
+    from pathlib import Path
+
+    df = pd.read_csv(csv_path)
+    steps  = df[df["table"] == "step"].copy()
+    agents = df[df["table"] == "agent"].copy()
+
+    humans = _infer_humans_from_steps(steps) if not steps.empty else sorted(agents["agent"].dropna().unique())
+    rows = []
+
+    for h in humans:
+        sa_mean = None
+        util_mean = None
+        if not steps.empty:
+            sa_col   = f"{h}_SA"
+            util_col = f"{h}_util"
+            if sa_col in steps.columns:
+                sa_mean = float(steps[sa_col].dropna().mean())
+            if util_col in steps.columns:
+                util_mean = float(steps[util_col].dropna().mean())
+
+        # agent-level aggregates
+        idle_pct = None
+        ovl_pct  = None
+        switches = None
+        dist     = None
+        if not agents.empty:
+            arow = agents[agents["agent"] == h]
+            if not arow.empty:
+                if "idle_ratio" in arow.columns and pd.notna(arow["idle_ratio"].iloc[0]):
+                    idle_pct = float(arow["idle_ratio"].iloc[0]) * 100.0
+                if "overload_ratio" in arow.columns and pd.notna(arow["overload_ratio"].iloc[0]):
+                    ovl_pct = float(arow["overload_ratio"].iloc[0]) * 100.0
+                if "switches" in arow.columns and pd.notna(arow["switches"].iloc[0]):
+                    switches = float(arow["switches"].iloc[0])
+                if "distance" in arow.columns and pd.notna(arow["distance"].iloc[0]):
+                    dist = float(arow["distance"].iloc[0])
+
+        rows.append({
+            "episode_id": Path(csv_path).stem,
+            "csv_path": str(csv_path),
+            "human": h,
+            "sa_mean": sa_mean,
+            "util_mean": util_mean,
+            "idle_ratio_pct": idle_pct,
+            "overload_ratio_pct": ovl_pct,
+            "switches": switches,
+            "distance": dist,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def build_multi_episode_table(csv_paths):
+    """
+    Concatenate per-episode stats for all given CSVs.
+    """
+    import pandas as pd
+    frames = []
+    for p in csv_paths:
+        try:
+            frames.append(compute_episode_stats_from_csv(p))
+        except Exception as e:
+            print(f"[viz] Skipped {p}: {e}")
+    if not frames:
+        return pd.DataFrame(columns=["episode_id","csv_path","human","sa_mean","util_mean",
+                                     "idle_ratio_pct","overload_ratio_pct","switches","distance"])
+    return pd.concat(frames, ignore_index=True)
+
+
+def _box(ax, data_by_label, title, ylabel):
+    """
+    Helper to draw a single boxplot for dict {label: list_of_values}.
+    """
+    import matplotlib.pyplot as plt
+    labels = list(data_by_label.keys())
+    series = [data_by_label[k] for k in labels]
+    bp = ax.boxplot(series, labels=labels, showmeans=True)
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    ax.grid(True, axis="y", alpha=0.3)
+
+
+def plot_boxplots_across_episodes(csv_paths=None, log_dir=None, limit=None, show=True, save_dir=None):
+    """
+    Box plots across episodes for:
+      - Average SA score (per human)
+      - Average utilization (per human)
+      - Idle ratio (per human, %)
+      - Overload ratio (per human, %)
+
+    You can pass either csv_paths OR a log_dir (it will scan *_unified.csv).
+    If save_dir is provided, figures are saved as PNGs there.
+    """
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    if csv_paths is None:
+        if log_dir is None:
+            print("[viz] Provide csv_paths or log_dir.")
+            return
+        csv_paths = find_unified_csvs(log_dir, limit=limit)
+
+    stats = build_multi_episode_table(csv_paths)
+    if stats.empty:
+        print("[viz] No episode stats available.")
+        return
+
+    # Group by human
+    humans = sorted(stats["human"].dropna().unique())
+
+    def collect(metric):
+        d = {}
+        for h in humans:
+            vals = stats.loc[stats["human"] == h, metric].dropna().tolist()
+            if vals:
+                d[h] = vals
+        return d
+
+    plots = [
+        ("sa_mean", "Average Situation Awareness by Human", "SA (avg)"),
+        ("util_mean", "Average Utilization by Human", "Utilization [%]"),
+        ("idle_ratio_pct", "Idle Ratio by Human", "Idle ratio [%]"),
+        ("overload_ratio_pct", "Overload Ratio by Human", "Overload ratio [%]"),
+    ]
+
+    figs = []
+    for metric, title, ylabel in plots:
+        data = collect(metric)
+        if not data:
+            print(f"[viz] Skipping {metric}: no data.")
+            continue
+        fig, ax = plt.subplots(figsize=(8.4, 4.8))
+        _box(ax, data, title + f"  (N={len(csv_paths)} episodes)", ylabel)
+        figs.append((metric, fig))
+
+    # Optional extras you might find interesting: switches & distance
+    # Uncomment if you want these as well.
+    #
+    # for metric, title, ylabel in [
+    #     ("switches", "Task Switches by Human", "Switch count"),
+    #     ("distance", "Distance Traveled by Human", "Distance [grid units]"),
+    # ]:
+    #     data = collect(metric)
+    #     if data:
+    #         fig, ax = plt.subplots(figsize=(8.4, 4.8))
+    #         _box(ax, data, title + f"  (N={len(csv_paths)} episodes)", ylabel)
+    #         figs.append((metric, fig))
+
+    # Save if requested
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        for metric, fig in figs:
+            fig.savefig(os.path.join(save_dir, f"box_{metric}.png"), dpi=150, bbox_inches="tight")
+
+    if show:
+        import matplotlib.pyplot as plt
+        plt.show()
+
+
+def plot_ap_latency_boxplots(csv_paths=None, log_dir=None, limit=None, show=True, save_dir=None):
+    """
+    Optional: Box plots for AP latencies pooled across episodes:
+      - assign→complete
+      - unlock→assign
+    Useful to understand scheduling/coordination delays.
+    """
+    import os
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    if csv_paths is None:
+        if log_dir is None:
+            print("[viz] Provide csv_paths or log_dir.")
+            return
+        csv_paths = find_unified_csvs(log_dir, limit=limit)
+
+    vals_assign_complete = []
+    vals_unlock_assign = []
+
+    for p in csv_paths:
+        try:
+            df = pd.read_csv(p)
+            ap = df[df["table"] == "ap_event"].copy()
+            if not ap.empty:
+                if "lat_assign_to_complete" in ap.columns:
+                    vals_assign_complete += ap["lat_assign_to_complete"].dropna().tolist()
+                if "lat_unlock_to_assign" in ap.columns:
+                    vals_unlock_assign += ap["lat_unlock_to_assign"].dropna().tolist()
+        except Exception as e:
+            print(f"[viz] Skipped {p}: {e}")
+
+    data = {
+        "Assign→Complete [s]": vals_assign_complete,
+        "Unlock→Assign [s]": vals_unlock_assign,
+    }
+    data = {k: v for k, v in data.items() if v}
+
+    if not data:
+        print("[viz] No latency data found.")
+        return
+
+    fig, ax = plt.subplots(figsize=(8.4, 4.8))
+    _box(ax, data, f"AP Latencies (pooled)  (N={len(csv_paths)} episodes)", "Seconds")
+
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        fig.savefig(os.path.join(save_dir, "box_ap_latencies.png"), dpi=150, bbox_inches="tight")
+
+    if show:
+        import matplotlib.pyplot as plt
+        plt.show()
+# ==============================================================================
+
+
 # ---- Metrics dashboard helpers ------------------------------------------------
 def find_latest_metrics_csv(log_dir, pattern="hat_episode_*_unified.csv"):
     """

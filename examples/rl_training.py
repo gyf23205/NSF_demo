@@ -259,7 +259,30 @@ class MetricsRecorder:
         return {"unified_csv": str(unified_path)}
     
 
-if __name__ == '__main__':
+def run_one_episode(seed=None,
+                    log_dir=LOG_DIR,
+                    sliding_window=SLIDING_WINDOW,
+                    time_out=TIME_OUT,
+                    grid=grid_size,
+                    fire_times=FIREMSG_TIMES,
+                    surv_times=SURVIVORMSG_TIMES,
+                    atm_times=ATMMSG_TIMES,
+                    show_episode_plots=True,
+                    animate_episode=True,
+                    enable_manual_pick=False):
+    """
+    Runs one episode and returns a dict with {'unified_csv': <path>}.
+
+    Behavior matches your current main when:
+      - show_episode_plots=True
+      - animate_episode=True
+      - enable_manual_pick=False
+    """
+    # --- Seeding (optional for reproducibility across episodes) ---------------
+    if seed is not None:
+        np.random.seed(int(seed))
+        random.seed(int(seed))
+
     # Event variables
     firemsg_idx = 0
     survivormsg_idx = 0
@@ -279,7 +302,7 @@ if __name__ == '__main__':
     spec.get_task_specification("Case2", s=s_mask, binding_manager=binding_mgr)
 
     # Setup workspace
-    ws = Workspace(size=grid_size, target_mask=s_mask, num_drones=3, num_gvs=4, num_humans=2, margin=4)
+    ws = Workspace(size=grid, target_mask=s_mask, num_drones=3, num_gvs=4, num_humans=2, margin=4)
 
     # Agents
     agents_by_type = {
@@ -292,21 +315,18 @@ if __name__ == '__main__':
     # Setup labeler
     labeler = Labeler(spec)
 
-    # Draw: Hierarchical structure
-    # draw_composite_hierarchy(spec)
-
-    # Setup random allocator (place holder)
+    # Setup allocator (placeholder)
     allocator = RandomAllocator(spec, agents_by_type, binding_mgr, labeler, ws)
 
     # Simulation
     sim = Simulation(spec, ws, allocator, labeler)
 
-    # Target locations for re-allocation
+    # Target locations for re-allocation (GUI-like mirror)
     tasks = [[i+1, ws.target_locations[i], ws.get_target_priority(i)] for i in range(len(ws.target_locations))]
     firemsg_idx = 0
 
     # Metric recorder
-    rec = MetricsRecorder(out_dir=LOG_DIR, window=SLIDING_WINDOW)
+    rec = MetricsRecorder(out_dir=log_dir, window=sliding_window)
     rec.start_episode(t0=0.0, agents=ws.get_all_agents())
 
     # Human agents: new fields
@@ -317,26 +337,24 @@ if __name__ == '__main__':
     # Previous assignment
     prev_assignments = []
 
-    # Flag(s)
+    # Flags
     running = True
-
-    # Print
     verbose = False
     last_print_time = 0
 
-    # Animation
+    # Animation traces
     for a in ws.get_all_agents():
         a.traj = []
         a.progress_traj = []
         a.current_symbolic_task_traj = []
 
-    # Initialize simulation time
+    # Initialize time
     prev_time = 0.0
     init_time = 0.0
     running_time = 0.0
     dt = 1.0    # Discrete time (main)
 
-    # Main loop
+    # ------------------------------- Main loop --------------------------------
     while running:
         # Compute time
         current_time = prev_time + dt
@@ -345,10 +363,9 @@ if __name__ == '__main__':
 
         # Step the simulation
         sim_outputs = sim.step(dt=dt, mode="sim", verbose=False)
-        # Atomic propositions
-        unlocked = sim_outputs["unlocked"]
-        assignments = sim_outputs["assignments"]
-        completed = sim_outputs["completed"] 
+        unlocked   = sim_outputs["unlocked"]
+        assignments= sim_outputs["assignments"]
+        completed  = sim_outputs["completed"] 
 
         # Metrics: per-step updates
         rec.note_unlocks(unlocked, running_time)
@@ -368,11 +385,9 @@ if __name__ == '__main__':
             agents_by_type=agents_by_type
         )
 
-        # Animation
+        # Animation traces
         for a in ws.get_all_agents():
             a.traj.append(tuple(a.pos))  # record position each step
-
-            # record progress for the current symbolic task
             task = getattr(a, "current_symbolic_task", None)
             prog = float(a.get_progress(task)) if task else 0.0
             a.progress_traj.append(prog)
@@ -391,7 +406,7 @@ if __name__ == '__main__':
                 human.util_history = [(0.0, 'idle')]
                 human.last_state = 'idle'
 
-            # 1) Detect busy vs idle (busy if they have an assignment)
+            # 1) Busy vs idle (busy if they have an assignment)
             assigned = assignments.get(human)
             new_state = 'busy' if assigned is not None else 'idle'
 
@@ -401,7 +416,7 @@ if __name__ == '__main__':
                 human.last_state = new_state
 
             # 3) Prune old events, but keep the last before t0
-            t0 = running_time - SLIDING_WINDOW
+            t0 = running_time - sliding_window
             ev = human.util_history
             older = [e for e in ev if e[0] < t0]
             newer = [e for e in ev if e[0] >= t0]
@@ -409,55 +424,39 @@ if __name__ == '__main__':
             human.util_history = keep
 
             # 4) Compute % utilization over the last window
-            human.utilization = compute_utilization(human, running_time, SLIDING_WINDOW)
+            human.utilization = compute_utilization(human, running_time, sliding_window)
 
-            # Monitor APs triggers
-            # 1. possible new emergency events (FIRE → ask human to set priority)
-            if (firemsg_idx < len(FIREMSG_TIMES)) and (running_time >= FIREMSG_TIMES[firemsg_idx]):
-                # Choose a target that still “exists” (not removed) and is not already at required priority
-                # Example: prefer targets near any moving agent to make preemptions visible
+            # --- Event triggers -------------------------------------------------
+            # 1. FIRE → set priority
+            if (firemsg_idx < len(fire_times)) and (running_time >= fire_times[firemsg_idx]):
                 all_agents = ws.agents["drones"] + ws.agents["gvs"]
                 if all_agents:
-                    # pick the agent farthest from its goal or any agent; then choose a nearby target
                     a = random.choice(all_agents)
                     dists = [np.linalg.norm(np.array(loc) - a.pos[:2]) for loc in ws.target_locations]
-                    candidates = np.argsort(dists)[:max(1, len(dists)//3)]  # closest third
+                    candidates = np.argsort(dists)[:max(1, len(dists)//3)]
                 else:
                     candidates = range(len(ws.target_locations))
 
-                # pick one candidate not already max priority
                 choices = [tid for tid in candidates if ws.get_target_priority(tid) < 2]
                 if not choices:
                     choices = list(range(len(ws.target_locations)))
                 tid = int(random.choice(choices))
-
-                # Choose required priority (favor 2); or sample {1,2}
                 required = int(np.random.choice([2, 2, 1]))
-
-                # Apply to workspace (0-based tid)
                 ws.set_target_priority(tid, required)
-
-                # (Optional) advance LTL monitors you used in GUI, if your specs listen to them
                 labeler.advance({"p_firemsg_0_0_0_0"})
-                # labeler.advance({"p_priority_0_3_1_0"})
-
-                # Keep a 1-based mirror for logs (like GUI)
                 for row in tasks:
                     if row[0] == tid + 1:
                         row[2] = required
                         break
-
                 firemsg_idx += 1
 
-            # 2. possible new survivor messages
-            if (survivormsg_idx < len(SURVIVORMSG_TIMES)
-                    and running_time >= SURVIVORMSG_TIMES[survivormsg_idx]):
+            # 2. Survivor messages
+            if (survivormsg_idx < len(surv_times)) and (running_time >= surv_times[survivormsg_idx]):
                 labeler.advance({"p_survivormsg_0_0_0_0"})
                 survivormsg_idx += 1
 
-            # 3. ATM scheduler (prompt + env broadcast)
-            if (atmmsg_idx < len(ATMMSG_TIMES)
-                     and running_time >= ATMMSG_TIMES[atmmsg_idx]):
+            # 3. ATM scheduler
+            if (atmmsg_idx < len(atm_times)) and (running_time >= atm_times[atmmsg_idx]):
                 labeler.advance({"p_atmmsg_0_0_0_0"})
                 atmmsg_idx += 1
 
@@ -465,18 +464,14 @@ if __name__ == '__main__':
             for ap in completed:
                 if ap.startswith("p_verify") and ap not in survivor_scanned:
                     target_id = ap.split("_")[2]
-
-                    # Chose gate
                     if random.random() < 0.8:
                         labeler.chosen_gate_per_group[target_id] = f"p_foundgate_{target_id}"
                     else:
                         labeler.chosen_gate_per_group[target_id] = f"p_notfoundgate_{target_id}"
-
-                    # Advance
                     chosen_gate = labeler.chosen_gate_per_group.get(target_id)
                     labeler.advance({chosen_gate})
 
-        # Print
+        # Periodic debug
         if verbose and running_time - last_print_time >= 20.0:
             last_print_time = running_time
             print(f"\n[DEBUG:{running_time:.2f}] -------------------------")
@@ -484,14 +479,14 @@ if __name__ == '__main__':
             print(f"[DEBUG:{running_time:.2f}] Assigned: {[f'{a.label}→{ap}' for a, ap in assignments.items()]}")
             print(f"[DEBUG:{running_time:.2f}] Completed: {sorted(completed)}")
 
-        # Check if simulation is done
+        # Check termination
         if labeler.all_completed() and ws.all_mobile_agents_at_base():
             print(f"[t={running_time:.2f}] Mission completed!")
             rec.set_mission_completed(running_time)
             running = False
 
         # Time out
-        if running_time > TIME_OUT:
+        if running_time > time_out:
             print(f"[t={running_time:.2f}] Time out!")
             running = False
     
@@ -501,46 +496,116 @@ if __name__ == '__main__':
     paths = rec.dump(tag="hat_episode")
     print("Saved metrics:", paths)
 
-    # === Metrics Visualization (uses the just-written CSV; falls back to newest) ===
-    try:
-        from ltl_core.visualization import plot_episode_metrics, find_latest_metrics_csv
+    # --- Per-episode figures (SA/Util with MCT) -------------------------------
+    if show_episode_plots:
+        try:
+            from ltl_core.visualization import plot_episode_metrics, find_latest_metrics_csv
+            latest_csv = paths.get("unified_csv") if isinstance(paths, dict) else None
+            if not latest_csv:
+                latest_csv = find_latest_metrics_csv(log_dir)
+            human_labels = [h.label for h in ws.agents["humans"]]
+            plot_episode_metrics(csv_path=latest_csv, human_labels=human_labels, show=False)
+            print(f"[viz] Plotted metrics from {latest_csv}")
+        except Exception as e:
+            print(f"[viz] metrics plotting failed: {e}")
 
-        latest_csv = None
-        if isinstance(paths, dict):
-            latest_csv = paths.get("unified_csv")
-        if not latest_csv:
-            latest_csv = find_latest_metrics_csv(LOG_DIR)
+    # --- Animation (replay) ----------------------------------------------------
+    if animate_episode:
+        max_len = max(len(a.traj) for a in ws.get_all_agents())
+        ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=False)
+        import matplotlib.pyplot as plt  # ensure plt is in scope
+        plt.show()
+        print("Animation Closed.")
 
-        human_labels = [h.label for h in ws.agents["humans"]]  # e.g., ["H0","H1"]
-        plot_episode_metrics(csv_path=latest_csv, human_labels=human_labels, show=False)
-        print(f"[viz] Plotted metrics from {latest_csv}")
-    except Exception as e:
-        print(f"[viz] metrics plotting failed: {e}")
-
-    # Episode finished – replay from the recorded traces
-    max_len = max(len(a.traj) for a in ws.get_all_agents())
-    ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=False)
-    plt.show()
-
-    print("Animation Closed.")
-
-    # === OPTIONAL: manually pick any CSV to plot (from any folder) ===============
-    ENABLE_MANUAL_CSV_PICK = False  # set True when you want to pick a file
-
-    if ENABLE_MANUAL_CSV_PICK:
+    # --- Optional manual CSV picker -------------------------------------------
+    if enable_manual_pick:
         try:
             from ltl_core.visualization import choose_metrics_csv, plot_episode_metrics
-
-            # Use your logs folder as a convenient starting directory
-            start_dir = str(LOG_DIR)
-
+            start_dir = str(log_dir)
             picked_csv = choose_metrics_csv(start_dir=start_dir)
             if picked_csv:
-                human_labels = [h.label for h in ws.agents["humans"]]  # e.g., ["H0", "H1"]
+                human_labels = [h.label for h in ws.agents["humans"]]
                 plot_episode_metrics(csv_path=picked_csv, human_labels=human_labels, show=False)
+                import matplotlib.pyplot as plt
+                plt.show()
                 print(f"[viz] Plotted metrics from manually selected file: {picked_csv}")
             else:
                 print("[viz] Manual CSV selection canceled.")
         except Exception as e:
             print(f"[viz] manual CSV picking failed: {e}")
-    # =============================================================================
+
+    return paths
+
+
+
+if __name__ == '__main__':
+    # ===================== Batch controller ===================================
+    # Exactly the behavior you asked:
+    #  - BATCH_EPISODES == 1  -> behave exactly like current single-episode run
+    #  - BATCH_EPISODES >  2  -> run multiple episodes and show box plots
+    #  - otherwise            -> fall back to single-episode run
+    BATCH_EPISODES  = 1       # <--- set this as you like
+    SAVE_BOX_PLOTS  = False   # save multi-episode figures to LOG_DIR/figs_multi
+    PLOT_LATENCIES  = False   # also plot AP latency box plots across episodes
+
+    if BATCH_EPISODES == 1:
+        # Single episode: keep identical behavior
+        run_one_episode(
+            seed=None,
+            log_dir=LOG_DIR,
+            show_episode_plots=True,
+            animate_episode=True,
+            enable_manual_pick=False  # set True if you want the picker at the end
+        )
+
+    elif BATCH_EPISODES > 2:
+        # Multi-episode batch
+        from pathlib import Path
+        from ltl_core.visualization import (
+            plot_boxplots_across_episodes,
+            plot_ap_latency_boxplots,
+        )
+
+        all_csvs = []
+        for k in range(BATCH_EPISODES):
+            print(f"\n===== Running episode {k+1}/{BATCH_EPISODES} =====")
+            paths = run_one_episode(
+                seed=1000 + k,           # vary seeds per episode
+                log_dir=LOG_DIR,
+                show_episode_plots=False,  # suppress per-episode figures
+                animate_episode=False,     # no animation in batch
+                enable_manual_pick=False
+            )
+            csv_path = paths.get("unified_csv") if isinstance(paths, dict) else None
+            if csv_path:
+                all_csvs.append(csv_path)
+                print(f"[batch] Collected CSV: {csv_path}")
+            else:
+                print("[batch] WARNING: No unified CSV for this episode.")
+
+        # After all episodes, draw the box plots you requested
+        save_dir = str(Path(LOG_DIR) / "figs_multi") if SAVE_BOX_PLOTS else None
+        if all_csvs:
+            plot_boxplots_across_episodes(
+                csv_paths=all_csvs,
+                show=True,
+                save_dir=save_dir
+            )
+            if PLOT_LATENCIES:
+                plot_ap_latency_boxplots(
+                    csv_paths=all_csvs,
+                    show=True,
+                    save_dir=save_dir
+                )
+        else:
+            print("[batch] No CSVs collected; nothing to plot.")
+
+    else:
+        # Fallback (e.g., BATCH_EPISODES == 2) -> single run
+        run_one_episode(
+            seed=None,
+            log_dir=LOG_DIR,
+            show_episode_plots=True,
+            animate_episode=True,
+            enable_manual_pick=False
+        )
