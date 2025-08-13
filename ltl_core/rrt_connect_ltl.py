@@ -55,11 +55,14 @@ class RrtConnect:
         self.obs_rectangle = self.env.obs_rectangle
         self.obs_boundary = self.env.obs_boundary
 
-        # 0.28 * 3 = 0.84
-        base = 0.84
-        # clamp dt into [0.05, 0.10] seconds so path resolution stays within [0.042, 0.084]
-        dt_eff = max(0.05, min(dt, 0.10))
-        self.dist = base * dt_eff
+        if dt <= 0.2:
+            # 0.28 * 3 = 0.84 for GUI
+            base = 0.84
+            # clamp dt into [0.05, 0.10] seconds so path resolution stays within [0.042, 0.084]
+            dt_eff = max(0.05, min(dt, 0.10))
+            self.dist = base * dt_eff
+        else:
+            self.dist = 0.28 * 3 * dt
 
     def planning(self):
         # Drone vs GVs
