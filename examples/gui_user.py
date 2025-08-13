@@ -14,6 +14,7 @@ import torch
 import json
 import numpy as np
 import yaml
+import pandas as pd
 
 # For workload estimation
 csv_path = 'dummy_log/aggregated_output.csv'
@@ -390,10 +391,11 @@ class UserGUI:
 
         try:
             ecg = last_row[:130]
-            gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
+            # gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
+            gaze_au_matrix = last_row[130:]
 
             t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-            t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32)  # [10, 30]
+            t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32).unsqueeze(0) # [10, 30]
 
             if torch.isnan(t2).any() or torch.isinf(t2).any():
                 print("NaN or Inf detected in t2 (gaze input)")
@@ -404,6 +406,7 @@ class UserGUI:
                 # print(out, pred_label)
                 self.pred_label = model(t1, t2)
         except:
+            print("Error occurred while predicting workload")
             self.pred_label = 0.0
 
         # 3. update workload
