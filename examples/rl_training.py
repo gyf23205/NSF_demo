@@ -501,9 +501,46 @@ if __name__ == '__main__':
     paths = rec.dump(tag="hat_episode")
     print("Saved metrics:", paths)
 
+    # === Metrics Visualization (uses the just-written CSV; falls back to newest) ===
+    try:
+        from ltl_core.visualization import plot_episode_metrics, find_latest_metrics_csv
+
+        latest_csv = None
+        if isinstance(paths, dict):
+            latest_csv = paths.get("unified_csv")
+        if not latest_csv:
+            latest_csv = find_latest_metrics_csv(LOG_DIR)
+
+        human_labels = [h.label for h in ws.agents["humans"]]  # e.g., ["H0","H1"]
+        plot_episode_metrics(csv_path=latest_csv, human_labels=human_labels, show=False)
+        print(f"[viz] Plotted metrics from {latest_csv}")
+    except Exception as e:
+        print(f"[viz] metrics plotting failed: {e}")
+
     # Episode finished – replay from the recorded traces
     max_len = max(len(a.traj) for a in ws.get_all_agents())
     ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=False)
     plt.show()
 
     print("Animation Closed.")
+
+    # === OPTIONAL: manually pick any CSV to plot (from any folder) ===============
+    ENABLE_MANUAL_CSV_PICK = False  # set True when you want to pick a file
+
+    if ENABLE_MANUAL_CSV_PICK:
+        try:
+            from ltl_core.visualization import choose_metrics_csv, plot_episode_metrics
+
+            # Use your logs folder as a convenient starting directory
+            start_dir = str(LOG_DIR)
+
+            picked_csv = choose_metrics_csv(start_dir=start_dir)
+            if picked_csv:
+                human_labels = [h.label for h in ws.agents["humans"]]  # e.g., ["H0", "H1"]
+                plot_episode_metrics(csv_path=picked_csv, human_labels=human_labels, show=False)
+                print(f"[viz] Plotted metrics from manually selected file: {picked_csv}")
+            else:
+                print("[viz] Manual CSV selection canceled.")
+        except Exception as e:
+            print(f"[viz] manual CSV picking failed: {e}")
+    # =============================================================================

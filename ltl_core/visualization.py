@@ -276,6 +276,226 @@ def draw_atomic_pairwise(G: nx.DiGraph, figsize=(8,6)):
     plt.tight_layout()
     plt.show()
 
+# ---- Metrics dashboard helpers ------------------------------------------------
+def find_latest_metrics_csv(log_dir, pattern="hat_episode_*_unified.csv"):
+    """
+    Return the newest unified-metrics CSV path in log_dir, or None if not found.
+    """
+    from pathlib import Path
+    paths = sorted(Path(log_dir).glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+    return str(paths[0]) if paths else None
+
+
+def plot_episode_metrics(csv_path=None, log_dir=None, human_labels=None, show=True):
+    """
+    Create three figures from the unified metrics CSV:
+      1) Time vs H*_SA
+      2) Time vs H*_util   (0–100%)
+      3) Bar chart: Idle vs Overload ratios per human (episode aggregates)
+
+    Notes:
+    - If csv_path is None, will search log_dir for the newest *_unified.csv
+    - 'show' controls plt.show(); leave False if the caller will show later.
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import PercentFormatter
+
+    # Resolve CSV path
+    if csv_path is None:
+        if log_dir is None:
+            print("[viz] No csv_path or log_dir provided.")
+            return
+        csv_path = find_latest_metrics_csv(log_dir)
+    if not csv_path:
+        print("[viz] No metrics CSV found.")
+        return
+
+    df = pd.read_csv(csv_path)
+    if "table" not in df.columns:
+        print(f"[viz] CSV missing 'table' column: {csv_path}")
+        return
+
+    steps  = df[df["table"] == "step"].copy()
+    agents = df[df["table"] == "agent"].copy()
+    ep     = df[df["table"] == "episode"].copy()
+
+    # Determine humans if not explicitly provided
+    if human_labels is None:
+        # infer labels from *_SA columns (e.g., H0_SA -> H0)
+        human_labels = sorted({c[:-3] for c in steps.columns if c.endswith("_SA")})
+
+    # Column lists
+    sa_cols   = [f"{h}_SA"   for h in human_labels if f"{h}_SA"   in steps.columns]
+    util_cols = [f"{h}_util" for h in human_labels if f"{h}_util" in steps.columns]
+
+    # --- Mission completion time (MCT) inference ------------------------------
+    def _infer_mct():
+        mct_val = None
+        try:
+            if not ep.empty:
+                # prefer mission_completion_time
+                if "mission_completion_time" in ep.columns and pd.notna(ep["mission_completion_time"].iloc[-1]):
+                    mct_val = float(ep["mission_completion_time"].iloc[-1])
+                # fallback: episode_duration
+                elif "episode_duration" in ep.columns and pd.notna(ep["episode_duration"].iloc[-1]):
+                    mct_val = float(ep["episode_duration"].iloc[-1])
+            # last resort: max time in step table
+            if mct_val is None and not steps.empty and "t" in steps.columns:
+                mct_val = float(steps["t"].max())
+        except Exception as e:
+            print(f"[viz] could not infer mission completion time: {e}")
+        return mct_val
+
+    mct = _infer_mct()
+
+    def _annotate_mct(ax, mct_val):
+        """Add a dashed vertical line at MCT and a right-middle label box."""
+        if mct_val is None:
+            return
+        # ensure x-axis covers MCT
+        x0, x1 = ax.get_xlim()
+        if not np.isfinite(x0): x0 = 0.0
+        if not np.isfinite(x1): x1 = mct_val
+        if mct_val > x1:
+            ax.set_xlim(x0, mct_val * 1.02)
+        # vertical line + label box at right-middle
+        ax.axvline(mct_val, linestyle="--", linewidth=1.6, alpha=0.6)
+        ax.text(
+            0.78, 0.5, f"MCT = {mct_val:.1f} s",
+            transform=ax.transAxes,
+            bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="0.7", alpha=0.9),
+            ha="left", va="center", fontsize=10
+        )
+
+    # 1) SA over time -----------------------------------------------------------
+    if not steps.empty and sa_cols:
+        fig1, ax1 = plt.subplots(figsize=(9, 4.6))
+        for col in sa_cols:
+            ax1.plot(steps["t"], steps[col], label=col[:-3], linewidth=2.0)
+        ax1.set_title("Situation Awareness Score over Time")
+        ax1.set_xlabel("Time [s]")
+        ax1.set_ylabel("SA Score")
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(loc="best", ncol=min(3, len(sa_cols)))
+        _annotate_mct(ax1, mct)
+        fig1.tight_layout()
+
+    # 2) Utilization over time --------------------------------------------------
+    if not steps.empty and util_cols:
+        fig2, ax2 = plt.subplots(figsize=(9, 4.6))
+        for col in util_cols:
+            ax2.plot(steps["t"], steps[col], label=col[:-5], linewidth=2.0)
+        ax2.set_title("Human Utilization over Time (Sliding Window)")
+        ax2.set_xlabel("Time [s]")
+        ax2.set_ylabel("Utilization [%]")
+        ax2.set_ylim(0, 100)
+        ax2.yaxis.set_major_formatter(PercentFormatter(xmax=100))
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc="best", ncol=min(3, len(util_cols)))
+        _annotate_mct(ax2, mct)
+        fig2.tight_layout()
+
+    # 3) Idle vs Overload ratios (episode aggregates) --------------------------
+    if not agents.empty:
+        names, idle_vals, ovl_vals = [], [], []
+        for h in human_labels:
+            row = agents[agents["agent"] == h]
+            if not row.empty:
+                idle = row["idle_ratio"].iloc[0]
+                ovl  = row["overload_ratio"].iloc[0]
+                idle = float(idle) * 100.0 if pd.notna(idle) else 0.0
+                ovl  = float(ovl)  * 100.0 if pd.notna(ovl)  else 0.0
+                names.append(h); idle_vals.append(idle); ovl_vals.append(ovl)
+
+        if names:
+            x = np.arange(len(names))
+            width = 0.38
+            fig3, ax3 = plt.subplots(figsize=(8.4, 4.8))
+            bars1 = ax3.bar(x - width/2, idle_vals, width, label="Idle ratio")
+            bars2 = ax3.bar(x + width/2, ovl_vals,  width, label="Overload ratio")
+            ax3.set_title("Idle vs Overload Ratios (Episode)")
+            ax3.set_ylabel("Ratio [%]")
+            ax3.set_xticks(x, names)
+            ax3.set_ylim(0, 100)
+            ax3.yaxis.set_major_formatter(PercentFormatter(xmax=100))
+            ax3.grid(axis="y", alpha=0.3)
+            ax3.legend(loc="best")
+
+            # annotate bars
+            for bars in (bars1, bars2):
+                for b in bars:
+                    val = b.get_height()
+                    ax3.annotate(f"{val:.1f}%", xy=(b.get_x() + b.get_width()/2, val),
+                                 xytext=(0, 3), textcoords="offset points",
+                                 ha="center", va="bottom", fontsize=9)
+            fig3.tight_layout()
+
+    if show:
+        plt.show()
+
+
+    def choose_metrics_csv(start_dir=None, title="Select unified metrics CSV"):
+        """
+        Open a native file picker to choose a CSV; returns the path or None.
+        Falls back to a console selector if Tkinter is unavailable.
+        """
+        from pathlib import Path
+
+        # Try a GUI file picker first
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            path = filedialog.askopenfilename(
+                initialdir=str(start_dir) if start_dir else None,
+                title=title,
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+            try:
+                root.update()
+            except Exception:
+                pass
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+            if path:
+                return path
+        except Exception as e:
+            print(f"[viz] File dialog unavailable ({e}). Falling back to console selection.")
+
+        # Fallback: list CSVs in a directory and ask for index in console
+        if not start_dir:
+            print("[viz] No start_dir provided and file dialog unavailable.")
+            return None
+
+        try:
+            csvs = sorted(
+                Path(start_dir).glob("*.csv"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            if not csvs:
+                print(f"[viz] No CSV files found in: {start_dir}")
+                return None
+
+            print("\n[viz] Select a CSV by index:")
+            for i, p in enumerate(csvs[:50]):
+                print(f"  [{i:2d}] {p.name}")
+            sel = input("Index (ENTER to cancel): ").strip()
+            if sel == "":
+                return None
+            idx = int(sel)
+            return str(csvs[idx])
+        except Exception as e:
+            print(f"[viz] Console selection failed: {e}")
+            return None
+# ------------------------------------------------------------------------------
 
 def animate_workspace(
     ws,
