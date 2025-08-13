@@ -503,7 +503,7 @@ if __name__ == '__main__':
 
     # Episode finished – replay from the recorded traces
     max_len = max(len(a.traj) for a in ws.get_all_agents())
-    ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=True)
+    ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=False)
     plt.show()
 
     print("Animation Closed.")
