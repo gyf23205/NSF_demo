@@ -249,7 +249,7 @@ class RandomAllocator:
         assigned = set()
         claimed_tasks = set()  # avoid double-assigning within this call
 
-        UTIL_THRESH = 80  # percent
+        UTIL_THRESH = 60  # percent
 
         def human_util(a) -> float:
             # Missing attr -> treat as not overloaded

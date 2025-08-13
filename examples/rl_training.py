@@ -103,19 +103,14 @@ class MetricsRecorder:
     def note_completions(self, completed, t, agents_by_type):
         completed_set = set(completed)
 
-        # Credit SA by recorded assignee (robust to name/level differences)
+        # Credit +1.0 to the recorded human assignee for each completed AP
         human_labels = {h.label for h in agents_by_type.get("humans", [])}
         for ap in completed_set:
             assignee = self.ap_assigned_to.get(ap)
             if assignee in human_labels:
-                self.human_SA[assignee] += self.SA_credit
+                self.human_SA[assignee] += 1.0  # add exactly 1.0
 
-        # Optionally also credit if current task string matches exactly
-        for h in agents_by_type.get("humans", []):
-            cur = getattr(h, "current_symbolic_task", None)
-            if cur and cur in completed_set:
-                self.human_SA[h.label] += self.SA_credit
-
+        # Mark completion time (first time only)
         for ap in completed_set:
             if ap not in self.ap_complete_t:
                 self.ap_complete_t[ap] = t
@@ -145,14 +140,13 @@ class MetricsRecorder:
         # allocations string
         alloc_str = ";".join(f"{a.label}->{ap}" for a, ap in assignments.items())
 
-        # per-human util + SA snapshot (SA in [0,1] via 1 - exp(-score))
+        # per-human util + SA snapshot (raw score; add 1.0 on completion; decay each tick)
         human_cols = {}
         for h in agents_by_type.get("humans", []):
             util = getattr(h, "utilization", 0)
-            score = self.human_SA[h.label]
-            sa_norm = 1.0 - math.exp(-score) if score > 0 else 0.0
+            score = max(0.0, float(self.human_SA[h.label]))  # clamp at 0 just in case
             human_cols[f"{h.label}_util"] = util
-            human_cols[f"{h.label}_SA"] = sa_norm
+            human_cols[f"{h.label}_SA"] = score
 
         row = {
             "t": float(t),
