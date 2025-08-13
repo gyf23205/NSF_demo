@@ -28,12 +28,12 @@ grid_size = (50, 40)
 # FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0]
 # SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0]
 # ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0]
-FIREMSG_TIMES = [80.0]
-SURVIVORMSG_TIMES = [100.0]
-ATMMSG_TIMES = [120.0]
-# FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0, 135.0, 150.0, 200.0, 250.0, 300.0]
-# SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0, 140.0, 156.0, 169.3, 205.0, 264.5]
-# ATMMSG_TIMES = [35.0, 65.0, 90.0, 105.0, 120.0, 154.2, 185.3, 210.4, 250.4, 290.0]
+# FIREMSG_TIMES = [80.0]
+# SURVIVORMSG_TIMES = [100.0]
+# ATMMSG_TIMES = [120.0]
+FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0, 135.0, 150.0, 200.0, 250.0, 300.0]
+SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0, 140.0, 156.0, 169.3, 205.0, 264.5]
+ATMMSG_TIMES = [35.0, 65.0, 90.0, 105.0, 120.0, 154.2, 185.3, 210.4, 250.4, 290.0]
 
 # Drone latency
 L_MIN, L_MAX = 40.0, 500.0      # realistic latency bounds (ms)
@@ -46,28 +46,69 @@ atmmsg_idx = 0
 
 # --- ATM message runtime ---
 atm_prompt_id = 0
-current_atm_prompt = None          # {"id", "coord": (x,y), "token", "text", "time"}
-atm_sent_for_prompt = set()        # {prompt_id} already enqueued via buffers
-atm_results = []                   # [True/False] per prompt in time 
+atm_prompts = {}                  # id -> {"id","coord":(x,y),"token","text","time","region_id"?}
+atm_sent_for_prompt = set()       # prompt ids already enqueued via buffers
+atm_results = []                  # [True/False] history
 
 # --- Survivor message runtime ---
 surv_prompt_id = 0
-current_surv_prompt = None      # {"id","text","correct"}; correct in {"Emergency","Serious","Minor"}
-surv_sent_for_prompt = set()
-surv_results = []               # True/False history
-surv_credit = 0                # how many “p_verify … completed” since last triage
-credited_verifies = set()      # which verify APs we've already counted
+surv_prompts = {}                # id -> {"id","text","symptoms","correct","time"}
+surv_sent_for_prompt = set()     # ids already enqueued to a client
+surv_results = []
+surv_credit = 0
+credited_verifies = set()
 
 # --- Fire→Priority runtime ---
 fire_prompt_id = 0
-current_fire_prompt = None     # {"id","task_id","required","text","time"}
+fire_prompts = {}                # id -> {"id","task_id","required","text","time"}
 fire_sent_for_prompt = set()
-fire_results = []              # True/False history
+fire_results = []
 fire_time_credit = 0
 
 # --- Task removal after pickup gating ---
 pickup_cleared = set()
 
+
+def clear_atm_prompt_by_id(pid, *, result=None):
+    """Remove a single ATM prompt, optionally record a True/False result."""
+    prompt = atm_prompts.pop(pid, None)
+    if not prompt:
+        return False
+    try:
+        rid = prompt.get("region_id")
+        if rid:
+            game_mgr.special_regions.remove_region(rid)
+    except Exception as e:
+        print(f"[ATM] Warning: failed to remove SEE circle for id={pid}: {e}")
+    atm_sent_for_prompt.discard(pid)
+    if result is not None:
+        atm_results.append(bool(result))
+    return True
+
+def clear_surv_prompt_by_id(pid, *, result=None):
+    p = surv_prompts.pop(pid, None)
+    if not p:
+        return False
+    surv_sent_for_prompt.discard(pid)
+    if result is not None:
+        surv_results.append(bool(result))
+    return True
+
+def clear_fire_prompt_by_id(pid, *, result=None):
+    p = fire_prompts.pop(pid, None)
+    if not p:
+        return False
+    try:
+        # your Fire region uses task_id as the region id
+        rid = p.get("task_id")
+        if rid is not None:
+            game_mgr.special_regions.remove_region(rid)
+    except Exception as e:
+        print(f"[FIRE] Warning: failed to remove region for pid={pid}: {e}")
+    fire_sent_for_prompt.discard(pid)
+    if result is not None:
+        fire_results.append(bool(result))
+    return True
 
 def _human_index_for(prefix, assignments):
     for agent, ap in assignments.items():
@@ -253,7 +294,7 @@ if __name__ == "__main__":
         s.listen()
         clients = []  # Track all client addresses
         print("Server waiting for connection...")
-        while len(clients) < 2:  # !!! Wait for all client to connect
+        while len(clients) < 1:  # !!! Wait for all client to connect
             conn, addr = s.accept()
             print("Connected by", addr)
             clients.append((conn, addr))  # Store the address
@@ -457,32 +498,24 @@ if __name__ == "__main__":
                             ta[2] = task['priority']
                             print(f'reset task {task["task_id"]} priority to {task["priority"]}')
 
-                            # Complete the fire-priority prompt only if this edit satisfies it
-                            if current_fire_prompt and task['task_id'] == current_fire_prompt.get('task_id'):
-                                def _as_int(v):
-                                    try:
-                                        # handles int, str like "2", and numpy ints
-                                        return int(str(v).strip())
-                                    except Exception:
-                                        return None
+                            # check against ALL active fire prompts
+                            def _as_int(v):
+                                try:
+                                    return int(str(v).strip())
+                                except Exception:
+                                    return None
 
-                                new_pr = _as_int(task['priority'])
-                                req_pr = _as_int(current_fire_prompt.get('required'))
-
-                                if new_pr is not None and req_pr is not None and new_pr == req_pr:
-                                    fire_results.append(True)
-                                    labeler.advance({"p_priority_0_3_1_0"})
-                                    # only clear the highlight when the requirement is met
-                                    game_mgr.special_regions.remove_region(ta[0])
-                                    current_fire_prompt = None
-                                    fire_sent_for_prompt.clear()
-                                # else: leave the region and prompt active
-
+                            new_pr = _as_int(task['priority'])
+                            for pid, p in list(fire_prompts.items()):
+                                if p['task_id'] == task['task_id']:
+                                    req_pr = _as_int(p.get('required'))
+                                    if new_pr is not None and req_pr is not None and new_pr == req_pr:
+                                        fire_results.append(True)
+                                        labeler.advance({"p_priority_0_3_1_0"})
+                                        clear_fire_prompt_by_id(pid)
                             break
-                
+
                 buffers['tasks'].append(tasks)
-                # message['tasks'] = tasks
-                # message_changed = True
 
             # === Compute timestep ===
             current_time = time()
@@ -684,96 +717,85 @@ if __name__ == "__main__":
                     firemsg_idx += 1
 
                 # 1-2. If we have a credit and at least one remaining task, create a prompt now
-                if (fire_time_credit > 0) and (current_fire_prompt is None) and (len(tasks) > 0):
-                    # available_task = [t for t in tasks]  # 1-based ids still on table
-                    if tasks:
-                        chosen_task = int(np.random.choice(len(tasks)))
-                        chosen_task_id = int(tasks[chosen_task][0])
-                        chosen_task_pos = tasks[chosen_task][1]
+                if (fire_time_credit > 0) and (len(tasks) > 0):
+                    # choose a task that doesn't already have a fire prompt
+                    existing_task_ids = {p["task_id"] for p in fire_prompts.values()}
+                    candidate_rows = [t for t in tasks if t[0] not in existing_task_ids]
+                    if candidate_rows:
+                        chosen = random.choice(candidate_rows)
+                        chosen_task_id = int(chosen[0])
+                        chosen_task_pos = chosen[1]
                         required = int(np.random.choice([1, 2]))
-                        current_priority = tasks[chosen_task][2]
+                        current_priority = chosen[2]
 
-                        if int(current_priority) == required:
-                            pass
-                        else:
+                        if int(current_priority) != required:
                             fire_prompt_id += 1
                             game_mgr.special_regions.add_region(chosen_task_id, chosen_task_pos, 50, required)
-                            # text = f"Region {chosen_task_id} is in danger. Set its priority to HIGH (2)."
-                            text = "Fire is approaching to one of rescue regions. Set priority!"
-                            current_fire_prompt = {
-                                "id": int(fire_prompt_id),
+                            text = "Fire is approaching one rescue region. Set priority!"
+
+                            fire_prompts[fire_prompt_id] = {
+                                "id": fire_prompt_id,
                                 "task_id": chosen_task_id,
                                 "required": required,
                                 "text": text,
                                 "time": float(running_time),
                             }
-                            fire_sent_for_prompt.clear()
+
                             fire_time_credit -= 1
-                            # environment AP broadcast at the moment we actually create the prompt
                             labeler.advance({"p_firemsg_0_0_0_0"})
 
                 # 2. possible new survivor messages (symptom-based triage)
                 if (survivormsg_idx < len(SURVIVORMSG_TIMES)
                         and running_time >= SURVIVORMSG_TIMES[survivormsg_idx]):
-                    # Only allow if at least one survivor scan credit exists
-                    if surv_credit > 0 and current_surv_prompt is None and len(tasks) > 0:
-                        sev = random.choice([1, 2, 3])  # 1=Minor,2=Serious,3=Emergency
+                    if surv_credit > 0 and len(tasks) > 0:
+                        sev = random.choice([1, 2, 3])
                         picks = random.sample(triage_symptoms[sev], k=3)
                         correct = {1:"Minor", 2:"Serious", 3:"Emergency"}[sev]
 
                         surv_prompt_id += 1
-                        current_surv_prompt = {
+                        surv_prompts[surv_prompt_id] = {
                             "id": surv_prompt_id,
                             "text": "Assess the patient based on these symptoms:",
-                            "symptoms": picks,    # <<< send the 3 symptoms
-                            "correct": correct
+                            "symptoms": picks,
+                            "correct": correct,
+                            "time": running_time
                         }
-                        surv_sent_for_prompt.clear()
 
                         labeler.advance({"p_survivormsg_0_0_0_0"})
                         surv_credit -= 1
-                    # Regardless of whether we used it, move to the next scheduled time
+
                     survivormsg_idx += 1
 
                 # 3. ATM scheduler (prompt + env broadcast)
                 if (atmmsg_idx < len(ATMMSG_TIMES)) and (running_time >= ATMMSG_TIMES[atmmsg_idx]):
-                    # If a previous prompt is still pending, mark it failed
-                    if current_atm_prompt is not None:
-                        atm_results.append(False)
-                        # also remove its SEE circle if it existed
-                        try:
-                            old_id = current_atm_prompt.get("region_id")
-                            if old_id:
-                                game_mgr.special_regions.remove_region(old_id)
-                        except Exception as e:
-                            print(f"[ATM] remove previous SEE circle failed: {e}")
-
-                    # Pick coord, build token/text (existing code) ...
+                    # Pick coord, build token/text
                     x, y = _pick_coord_avoiding_targets(ws, grid_size=grid_size)
                     token_tmpl, text_tmpl = random.choice(atm_rows)
                     token = token_tmpl.format(x=x, y=y)
                     text  = text_tmpl.format(x=x, y=y, token=token)
 
                     atm_prompt_id += 1
-                    current_atm_prompt = {
+                    prompt = {
                         "id": atm_prompt_id,
                         "coord": (x, y),
                         "token": token,
                         "text": text,
                         "time": running_time
                     }
-                    atm_sent_for_prompt.clear()
-                    # Circle
+
+                    # SEE circle
                     try:
                         gui_xy = ws.grid_to_pixel((x, y), grid_size=grid_size, screen_size=(1125, 900))
                         region_id = _atm_region_id(atm_prompt_id)
-                        # pass code 3 → SpecialRegions maps to SEE color
-                        game_mgr.special_regions.add_region(region_id, gui_xy, 50, 3)
-                        current_atm_prompt["region_id"] = region_id
+                        game_mgr.special_regions.add_region(region_id, gui_xy, 50, 3)  # 3 => SEE color in your mapping
+                        prompt["region_id"] = region_id
                     except Exception as e:
                         print(f"[ATM] Warning: failed to add SEE circle: {e}")
 
-                    # Broadcast AP & bump index (existing)
+                    # Store (do NOT clear the whole sent set)
+                    atm_prompts[atm_prompt_id] = prompt
+
+                    # Broadcast env AP & bump index
                     labeler.advance({"p_atmmsg_0_0_0_0"})
                     atmmsg_idx += 1
 
@@ -810,41 +832,45 @@ if __name__ == "__main__":
                             # (optional) keep active_target_for_user as a fallback, but no longer relied on
                             active_target_for_user = tid
 
-                # === If a human is assigned p_atmconfirm_*, send the ATM prompt now ===
+                # === If a human is assigned p_atmconfirm_*, send any unsent ATM prompts ===
                 for agent, ap in assignments.items():
                     if isinstance(ap, str) and ap.startswith("p_atmconfirm_") and str(getattr(agent, "role", "")).startswith("humans"):
-                        if current_atm_prompt and (current_atm_prompt["id"] not in atm_sent_for_prompt):
-                            buffers['atm_prompt'].append({
-                                "id": current_atm_prompt["id"],
-                                "text": current_atm_prompt["text"],     # client renders red+bold
-                                "token": current_atm_prompt["token"],
-                                "coord": list(current_atm_prompt["coord"]),
-                            })
-                            atm_sent_for_prompt.add(current_atm_prompt["id"])
+                        # enqueue each unsent prompt (buffers will drip them out one per tick)
+                        for pid, prompt in list(atm_prompts.items()):
+                            if pid not in atm_sent_for_prompt:
+                                buffers['atm_prompt'].append({
+                                    "id": prompt["id"],
+                                    "text": prompt["text"],
+                                    "token": prompt["token"],
+                                    "coord": list(prompt["coord"]),
+                                })
+                                atm_sent_for_prompt.add(pid)
 
                 # === If a human is assigned p_triage_*, send the survivor prompt now ===
                 for agent, ap in assignments.items():
                     if isinstance(ap, str) and ap.startswith("p_triage_") and str(getattr(agent, "role", "")).startswith("humans"):
-                        if current_surv_prompt and (current_surv_prompt["id"] not in surv_sent_for_prompt):
-                            buffers['surv_prompt'].append({
-                                "id": current_surv_prompt["id"],
-                                "text": current_surv_prompt["text"],
-                                "symptoms": current_surv_prompt.get("symptoms", []),   # <<< include symptoms
-                                "choices": ["Emergency", "Serious", "Minor"]
-                            })
-                            surv_sent_for_prompt.add(current_surv_prompt["id"])
+                        for pid, p in list(surv_prompts.items()):
+                            if pid not in surv_sent_for_prompt:
+                                buffers['surv_prompt'].append({
+                                    "id": p["id"],
+                                    "text": p["text"],
+                                    "symptoms": p.get("symptoms", []),
+                                    "choices": ["Emergency", "Serious", "Minor"]
+                                })
+                                surv_sent_for_prompt.add(pid)
 
                 # === If a human is assigned p_priority_*, send the fire/priority prompt now ===
                 for agent, ap in assignments.items():
                     if isinstance(ap, str) and ap.startswith("p_priority_") and str(getattr(agent, "role", "")).startswith("humans"):
-                        if current_fire_prompt and (current_fire_prompt["id"] not in fire_sent_for_prompt):
-                            buffers['fire_prompt'].append({
-                                "id": current_fire_prompt["id"],
-                                "task_id": current_fire_prompt["task_id"],
-                                "text": current_fire_prompt["text"],
-                                "required": current_fire_prompt["required"],
-                            })
-                            fire_sent_for_prompt.add(current_fire_prompt["id"])
+                        for pid, p in list(fire_prompts.items()):
+                            if pid not in fire_sent_for_prompt:
+                                buffers['fire_prompt'].append({
+                                    "id": p["id"],
+                                    "task_id": p["task_id"],
+                                    "text": p["text"],
+                                    "required": p["required"],
+                                })
+                                fire_sent_for_prompt.add(pid)
 
             # === GUI response handling ===
             if isinstance(data, dict) and data.get('victim') is not None:
@@ -898,61 +924,44 @@ if __name__ == "__main__":
                 data['victim'] = None
             
             # === Auto-fail if the chosen task disappears while prompt is active ===
-            if current_fire_prompt:
-                current_ids = [t[0] for t in tasks]
-                if current_fire_prompt["task_id"] not in current_ids:
-                    fire_results.append(False)
-                    labeler.advance({"p_priority_0_3_1_0"})
-                    try:
-                        game_mgr.special_regions.remove_region(current_fire_prompt["task_id"])
-                    except Exception as e:
-                        print("[FIRE AUTOCLEAR] remove_region failed:", e)
-                    current_fire_prompt = None
-                    fire_sent_for_prompt.clear()
+            if fire_prompts:
+                current_ids = {t[0] for t in tasks}
+                for pid, p in list(fire_prompts.items()):
+                    if p["task_id"] not in current_ids:
+                        fire_results.append(False)
+                        labeler.advance({"p_priority_0_3_1_0"})
+                        clear_fire_prompt_by_id(pid)
 
             # === ATM reply handling ===
             if isinstance(data, dict) and data.get('atm_reply') is not None:
-                payload = data['atm_reply']
-                if current_atm_prompt and payload.get("id") == current_atm_prompt["id"]:
+                payload = data['atm_reply']  # {"id":..., "typed":"..."}
+                pid = payload.get("id")
+                prompt = atm_prompts.get(pid)
+                if prompt:
                     typed = payload.get("typed", "")
-                    token = current_atm_prompt["token"]
-
-                    if isinstance(typed, str) and typed.startswith(token):
-                        atm_results.append(True)
-                        print(f"[t={running_time:.1f}] ATM confirmation accepted: {token}")
-                    else:
-                        atm_results.append(False)
-                        print(f"[t={running_time:.1f}] ATM confirmation FAIL (expected '{token}', got '{typed}')")
+                    token = prompt["token"]
+                    ok = isinstance(typed, str) and typed.startswith(token)
+                    atm_results.append(ok)
+                    print(f"[t={running_time:.1f}] ATM confirmation {'accepted' if ok else 'FAIL'} for id={pid}: expected '{token}', got '{typed}'")
 
                     # Advance regardless of correctness
                     labeler.advance({"p_atmconfirm_0_3_1_0"})
 
-                    # NEW: remove SEE circle for this prompt
-                    try:
-                        rid = current_atm_prompt.get("region_id")
-                        if rid:
-                            game_mgr.special_regions.remove_region(rid)
-                    except Exception as e:
-                        print(f"[ATM] Warning: failed to remove SEE circle: {e}")
-
-                    # Clear prompt
-                    current_atm_prompt = None
-                    atm_sent_for_prompt.clear()
+                    # Remove ONLY this prompt + SEE circle
+                    clear_atm_prompt_by_id(pid)
 
             # === Survivor reply handling (top-right buttons) ===
             if isinstance(data, dict) and data.get('surv_reply') is not None:
                 payload = data['surv_reply']   # {"id":..., "choice":"Emergency|Serious|Minor"}
-                if current_surv_prompt and payload.get("id") == current_surv_prompt["id"]:
+                pid = payload.get("id")
+                p = surv_prompts.get(pid)
+                if p:
                     choice = payload.get("choice")
-                    ok = (choice == current_surv_prompt["correct"])
+                    ok = (choice == p["correct"])
                     surv_results.append(ok)
 
-                    # Advance regardless of correctness
                     labeler.advance({"p_triage_0_3_1_0"})
-
-                    # Clear the prompt, but report correctness in the message
-                    current_surv_prompt = None
-                    surv_sent_for_prompt.clear()
+                    clear_surv_prompt_by_id(pid)
             
             # === Drone/GV positions ===
             for agent, visual in agent_to_visual.items():
