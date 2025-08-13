@@ -6,6 +6,7 @@ LOG_DIR = Path(my_path) / "examples" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)  # ensure it exists
 
 import random
+import numpy as np
 import csv, json
 import math
 from collections import defaultdict, deque
@@ -301,10 +302,14 @@ if __name__ == '__main__':
     # draw_composite_hierarchy(spec)
 
     # Setup random allocator (place holder)
-    allocator = RandomAllocator(spec, agents_by_type, binding_mgr, labeler)
+    allocator = RandomAllocator(spec, agents_by_type, binding_mgr, labeler, ws)
 
     # Simulation
     sim = Simulation(spec, ws, allocator, labeler)
+
+    # Target locations for re-allocation
+    tasks = [[i+1, ws.target_locations[i], ws.get_target_priority(i)] for i in range(len(ws.target_locations))]
+    firemsg_idx = 0
 
     # Metric recorder
     rec = MetricsRecorder(out_dir=LOG_DIR, window=SLIDING_WINDOW)
@@ -414,9 +419,40 @@ if __name__ == '__main__':
 
             # Monitor APs triggers
             # 1. possible new emergency events (FIRE → ask human to set priority)
-            if (firemsg_idx < len(FIREMSG_TIMES)
-                    and running_time >= FIREMSG_TIMES[firemsg_idx]):
+            if (firemsg_idx < len(FIREMSG_TIMES)) and (running_time >= FIREMSG_TIMES[firemsg_idx]):
+                # Choose a target that still “exists” (not removed) and is not already at required priority
+                # Example: prefer targets near any moving agent to make preemptions visible
+                all_agents = ws.agents["drones"] + ws.agents["gvs"]
+                if all_agents:
+                    # pick the agent farthest from its goal or any agent; then choose a nearby target
+                    a = random.choice(all_agents)
+                    dists = [np.linalg.norm(np.array(loc) - a.pos[:2]) for loc in ws.target_locations]
+                    candidates = np.argsort(dists)[:max(1, len(dists)//3)]  # closest third
+                else:
+                    candidates = range(len(ws.target_locations))
+
+                # pick one candidate not already max priority
+                choices = [tid for tid in candidates if ws.get_target_priority(tid) < 2]
+                if not choices:
+                    choices = list(range(len(ws.target_locations)))
+                tid = int(random.choice(choices))
+
+                # Choose required priority (favor 2); or sample {1,2}
+                required = int(np.random.choice([2, 2, 1]))
+
+                # Apply to workspace (0-based tid)
+                ws.set_target_priority(tid, required)
+
+                # (Optional) advance LTL monitors you used in GUI, if your specs listen to them
                 labeler.advance({"p_firemsg_0_0_0_0"})
+                # labeler.advance({"p_priority_0_3_1_0"})
+
+                # Keep a 1-based mirror for logs (like GUI)
+                for row in tasks:
+                    if row[0] == tid + 1:
+                        row[2] = required
+                        break
+
                 firemsg_idx += 1
 
             # 2. possible new survivor messages
