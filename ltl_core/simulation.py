@@ -26,6 +26,9 @@ class Simulation:
         self.prev_completed = set()
         self.prev_actions = {}
 
+        # Remember last seen priority-version from Workspace
+        self.prev_priority_version = getattr(self.workspace, "get_priority_version", lambda: 0)()
+
     @staticmethod
     def parse_ap_target_index(ap: str) -> int:
         return int(ap.split("_")[2])
@@ -53,17 +56,22 @@ class Simulation:
         completed = self.labeler.get_completed()
         current_aps = self.labeler.current_aps
 
+        # Detect priority changes coming from GUI -> Workspace
+        prio_version_now = getattr(self.workspace, "get_priority_version", lambda: 0)()
+        priority_changed = (prio_version_now != self.prev_priority_version)
+
         # Mark symbolic task complete
         for agent in self.workspace.get_all_agents():
             task = agent.current_symbolic_task
             if task and task in completed:
                 agent.reset_symbolic()
 
-        # New function allocation only when completed APs changed
-        if completed != self.prev_completed:
-            self.prev_actions = self.allocator.choose(unlocked, completed, current_aps)
+        # Reallocate on (a) new completion OR (b) newly imposed priority
+        if (completed != self.prev_completed) or priority_changed:
+            # self.prev_actions = self.allocator.choose(unlocked, completed, current_aps)
+            self.prev_actions = self.allocator.choose_priority(unlocked, completed, current_aps)
             self.prev_completed = completed
-            # print(f"[GUI-STEP] Assigned: {[f'{a.label}→{ap}' for a, ap in self.prev_actions.items()]}")
+            self.prev_priority_version = prio_version_now
         actions = self.prev_actions
 
         if verbose:
@@ -77,7 +85,7 @@ class Simulation:
             ap_type = AP_TYPE_PREFIX_MAP.get(prefix)
 
             if ap_type == "physical":
-                if agent.goal is None or agent.return_base:
+                if priority_changed or agent.goal is None or agent.return_base:
                     agent.return_base = False
                     idx = self.parse_ap_target_index(ap)
                     if prefix == "p_dropoff":

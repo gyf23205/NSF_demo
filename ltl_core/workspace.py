@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import random
+from collections import defaultdict
 from .agent import Agent
 from .specification import get_ap_prefix, AP_TYPE_PREFIX_MAP
 from .env_ltl import Env
@@ -38,6 +39,21 @@ class Workspace:
 
         self._active_aps = set()    # Holds currently true atomic propositions
         self.true_aps = set()
+
+        self.target_priority = defaultdict(int)   # tid -> {0,1,2}
+        self._priority_version = 0
+
+    def get_target_priority(self, tid: int) -> int:
+        return int(self.target_priority.get(int(tid), 0))
+
+    def set_target_priority(self, tid: int, prio: int) -> None:
+        tid = int(tid); prio = int(prio)
+        if self.target_priority.get(tid, 0) != prio:
+            self.target_priority[tid] = prio
+            self._priority_version += 1  # used to trigger reallocation
+
+    def get_priority_version(self) -> int:
+        return int(self._priority_version)
 
     @staticmethod
     def _place_humans_deterministically(num):

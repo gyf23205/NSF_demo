@@ -419,7 +419,7 @@ if __name__ == "__main__":
         labeler = Labeler(spec)
 
         # === Allocator ===
-        allocator = RandomAllocator(spec, agents_by_type, binding_manager, labeler)
+        allocator = RandomAllocator(spec, agents_by_type, binding_manager, labeler, ws)
 
         # === Simulation ===
         sim = Simulation(spec, ws, allocator, labeler)
@@ -513,6 +513,11 @@ if __name__ == "__main__":
                         if ta[0] == task['task_id'] and ta[2] != task['priority']:
                             ta[2] = task['priority']
                             print(f'reset task {task["task_id"]} priority to {task["priority"]}')
+
+                            try:
+                                ws.set_target_priority(int(task['task_id']) - 1, int(task['priority']))
+                            except Exception:
+                                pass
 
                             # check against ALL active fire prompts
                             def _as_int(v):
