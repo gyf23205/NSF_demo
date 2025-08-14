@@ -2,10 +2,12 @@ import sys
 sys.path.append('C:/Users/sooyung/Research/NSF_demo')
 import pygame
 import csv, random
+import math
 from time import time, sleep, strftime
 from gui_panel_ltl import GameMgr
 from vehicles import VirtualDrone, VirtualGV
 from scipy.spatial import Voronoi
+from pathlib import Path
 import numpy as np
 import socket
 import json
@@ -18,7 +20,10 @@ from ltl_core.automaton_generator import compile_automata
 from ltl_core.labeler import Labeler
 from ltl_core.allocator import RandomAllocator
 from ltl_core.simulation import Simulation
-from ltl_core.visualization import draw_workspace
+from ltl_core.visualization import draw_workspace, GuiEpisodeLogger
+
+LOG_DIR = Path("examples") / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 SLIDING_WINDOW = 60.0
 grid_size = (50, 40)
@@ -67,6 +72,23 @@ fire_time_credit = 0
 
 # --- Task removal after pickup gating ---
 pickup_cleared = set()
+
+# --- SA model (GUI-side; simple & fast) ---
+SA_MAX = 100.0           # cap
+SA_DECAY_RATE = 0.15     # per-second exponential decay
+SA_GAIN_BASE = 1.0       # base gain per completion
+
+SA_WEIGHTS = {           # per-AP-prefix multipliers
+    "p_nav": 0.0,
+    "p_scan": 0.0,
+    "p_verify": 1.0,
+    "p_pickup": 0.0,
+    "p_dropoff": 0.0,
+    "p_priority": 1.0,   # ATM/fire/priority-like
+    "p_triage": 1.0,
+    "p_atmconfirm": 1.0,
+    # unknown task prefixes fall back to 0.5 (see code below)
+}
 
 
 def human_index_for_verify_tid(assignments, tid_str):
@@ -344,6 +366,17 @@ if __name__ == "__main__":
         centroids = ws.target_locations
         vor = Voronoi(np.array(centroids))
 
+        # Map labels to humans once
+        label2human = {h.label: h for h in ws.agents["humans"]}
+
+        # Initialize SA fields (if not already there)
+        for h in ws.agents["humans"]:
+            h.sa_score = 0.0
+
+        # Track who owns which AP (so we can attribute completions)
+        ap_owner = {}            # ap_name -> agent_label
+        _prev_rt_for_sa = None   # last time SA was updated
+
         # === Load symptoms ===
         triage_symptoms = {1:[], 2:[], 3:[]}
         with open('examples/data/triage_symptoms.csv', 'r', newline='') as f:  # put the file next to your script or adjust path
@@ -423,6 +456,10 @@ if __name__ == "__main__":
 
         # === Simulation ===
         sim = Simulation(spec, ws, allocator, labeler)
+
+        # === Create logger ===
+        gui_logger = GuiEpisodeLogger(log_dir=LOG_DIR, agents=ws.get_all_agents())
+        mission_completed_time = None
 
         # === Human agents: new fields ===
         for human in ws.agents["humans"]:
@@ -555,6 +592,7 @@ if __name__ == "__main__":
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
                 print(f"[t={running_time:.2f}] Escape by keyboard.")
+                mission_completed_time = float(running_time)    # Just in case
                 running = False
                 landing = True
             elif keys[pygame.K_s]:
@@ -563,6 +601,7 @@ if __name__ == "__main__":
             # === Check if simulation is done ===
             if labeler.all_completed() and ws.all_mobile_agents_at_base():
                 print(f"[t={running_time:.2f}] Mission completed!")
+                mission_completed_time = float(running_time)
                 running = False
                 landing = True
 
@@ -719,17 +758,48 @@ if __name__ == "__main__":
                     else:
                         human.overload_streak_s = max(0.0, human.overload_streak_s - 2.0 * dt_util)
 
-                    # light SA decay every tick
-                    human.sa_score *= 0.98
-
-                # === SA credit on symbolic completions ===
+                # === SA update ===
+                # 1) Decay everyone’s SA based on elapsed time
+                dt_sa = 0.0 if _prev_rt_for_sa is None else max(0.0, running_time - _prev_rt_for_sa)
                 for h in ws.agents["humans"]:
+                    # exponential decay: SA(t+dt) = SA(t) * exp(-k*dt)
+                    h.sa_score = float(getattr(h, "sa_score", 0.0)) * math.exp(-SA_DECAY_RATE * dt_sa)
+                    if h.sa_score < 1e-6:
+                        h.sa_score = 0.0  # clean tiny noise
+
+                # 2) Remember current owners of APs (so completions can be attributed)
+                #    Note: do NOT clear old owners here; we want last known owner if sim clears assignment same tick.
+                if isinstance(assignments, dict):
+                    for agent_obj, ap in assignments.items():
+                        if ap:
+                            lab = getattr(agent_obj, "label", None)
+                            if lab:
+                                ap_owner[ap] = lab
+
+                # 3) Award SA to the human who completed an AP (if a human owned it)
+                if completed:
                     for ap in completed:
-                        try:
-                            if h.has_completed(ap):
-                                h.sa_score = getattr(h, "sa_score", 0.0) + 1.0
-                        except Exception:
-                            pass
+                        owner_lab = ap_owner.get(ap)
+                        if not owner_lab:
+                            continue
+                        # Only credit humans
+                        human = label2human.get(owner_lab)
+                        if not human:
+                            continue
+                        pref = get_ap_prefix(ap) if isinstance(ap, str) else ""
+                        w = SA_WEIGHTS.get(pref, 0.5)  # default weight for unknown prefixes
+                        human.sa_score = min(SA_MAX, human.sa_score + SA_GAIN_BASE * w)
+
+                # 4) Bookkeeping for next tick
+                _prev_rt_for_sa = running_time
+
+                # Log each step
+                gui_logger.note_step(
+                    t=running_time,
+                    assignments=assignments,       # dict {Agent -> AP or None}
+                    completed=completed,           # iterable of completed APs this tick
+                    humans=ws.agents["humans"],    # list of human agents
+                )
 
                 # === Monitor APs tiggers
                 # 1-1. possible new emergency events (FIRE → ask human to set priority)
@@ -1145,5 +1215,10 @@ if __name__ == "__main__":
                 pass
         s.close()
         pygame.quit()
+
         # Collect data
+        csv_path, png_path = gui_logger.save_all(mct=mission_completed_time, show=True)
+        print(f"[GUI] Saved CSV: {csv_path}")
+        print(f"[GUI] Saved figure: {png_path}")
+
         print('Clean exit')

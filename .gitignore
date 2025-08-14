@@ -278,3 +278,4 @@ venv/
 
 # Produced data
 *.csv
+*.png

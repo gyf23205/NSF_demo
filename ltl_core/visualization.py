@@ -7,6 +7,31 @@ import networkx as nx
 import numpy as np
 from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
 from ltl_core import env_ltl as env
+from pathlib import Path
+from ltl_core.specification import get_ap_prefix
+import csv
+import matplotlib.gridspec as gridspec
+
+
+# Colors for timeline by AP prefix (extend as needed)
+AP_COLORS = {
+    "idle":       "#bdbdbd",
+    "p_nav":      "#1f77b4",
+    "p_scan":     "#2ca02c",
+    "p_verify":   "#9467bd",
+    "p_pickup":   "#ff7f0e",
+    "p_dropoff":  "#d62728",
+    "p_priority": "#8c564b",
+    "p_triage":   "#e377c2",
+    "p_atmconfirm":"#17becf",
+    "env":        "#7f7f7f",
+}
+
+AP_ABBR = {
+    "idle": "IDLE", "p_nav": "NAV", "p_scan": "SCAN", "p_verify": "VER",
+    "p_pickup": "PICK", "p_dropoff": "DROP", "p_priority": "PRIO",
+    "p_triage": "TRI", "p_atmconfirm": "ATM", "env": "ENV",
+}
 
 
 def draw_workspace(screen, ws, font=None, screensize=(1200, 900), cell_size=30):
@@ -935,3 +960,221 @@ def animate_workspace(
         ani.save(output_path, writer="pillow")
 
     return ani
+
+
+def _ap_prefix(ap: str) -> str:
+    if not isinstance(ap, str) or not ap:
+        return "idle"
+    try:
+        pref = get_ap_prefix(ap)  # e.g., "p_scan"
+        if pref.startswith("p_"):
+            return pref if pref in AP_COLORS else pref  # keep unknown tasks explicit
+        return "env"
+    except Exception:
+        return "env"
+
+
+class GuiEpisodeLogger:
+    """
+    Collects GUI-side time series and builds:
+      - gui_episode_<timestamp>_unified.csv
+      - gui_episode_<timestamp>_1080p.png (1920x1080)
+
+    Minimal API:
+      logger = GuiEpisodeLogger(log_dir, agents, human_labels=None)
+      logger.note_step(t, assignments, completed, humans)
+      csv_path, png_path = logger.save_all(mct=mission_completed_time)
+    """
+    def __init__(self, log_dir: Path, agents, human_labels=None,
+                 fig_size_inch=(19.2, 10.8), csv_prefix="gui_episode"):
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        # agent order (labels)
+        self.agent_labels = []
+        for a in list(agents):
+            lab = getattr(a, "label", None)
+            if lab:
+                self.agent_labels.append(lab)
+        # humans
+        if human_labels is None:
+            self.human_labels = [lab for lab in self.agent_labels if lab.startswith("H")]
+        else:
+            self.human_labels = list(human_labels)
+
+        # time series
+        self.times = []
+        self.assigned_cnt = []
+        self.completed_cnt = []
+        self.sa_by_h = {h: [] for h in self.human_labels}
+        self.util_by_h = {h: [] for h in self.human_labels}
+
+        # timeline segments
+        self._cur_seg = {}                 # lab -> (t0, prefix)
+        self.segments_by_agent = {}        # lab -> [(t0, t1, prefix), ...]
+
+        # fig config
+        self.fig_size_inch = fig_size_inch
+        self.csv_prefix = csv_prefix
+
+    def note_step(self, t, assignments: dict, completed, humans):
+        """
+        assignments: dict {AgentObj -> ap_str}  (None if idle)
+        completed  : list/iterable of APs completed this tick (for count only)
+        humans     : iterable of Human Agent objects (with .label, .sa_score, .utilization)
+        """
+        self.times.append(float(t))
+        # counts
+        if isinstance(assignments, dict):
+            self.assigned_cnt.append(sum(1 for ap in assignments.values() if ap))
+        else:
+            self.assigned_cnt.append(0)
+        self.completed_cnt.append(len(completed) if completed is not None else 0)
+        # human metrics
+        for h in humans:
+            lab = getattr(h, "label", None)
+            if lab in self.sa_by_h:
+                self.sa_by_h[lab].append(float(getattr(h, "sa_score", 0.0)))
+                self.util_by_h[lab].append(float(getattr(h, "utilization", 0.0)))
+
+        # timeline: map label -> ap
+        label2ap = {}
+        if isinstance(assignments, dict):
+            for agent_obj, ap in assignments.items():
+                lab = getattr(agent_obj, "label", None)
+                if lab:
+                    label2ap[lab] = ap
+
+        for lab in self.agent_labels:
+            pref = _ap_prefix(label2ap.get(lab))
+            tseg = self._cur_seg.get(lab)
+            if tseg is None:
+                self._cur_seg[lab] = (float(t), pref)
+            else:
+                t0, prev_pref = tseg
+                if pref != prev_pref:
+                    self.segments_by_agent.setdefault(lab, []).append((t0, float(t), prev_pref))
+                    self._cur_seg[lab] = (float(t), pref)
+
+    def _close_segments(self):
+        final_t = self.times[-1] if self.times else 0.0
+        for lab, (t0, pref) in list(self._cur_seg.items()):
+            self.segments_by_agent.setdefault(lab, []).append((t0, final_t, pref))
+
+    def _write_unified_csv(self, csv_path: Path, mct=None):
+        step_cols = ["table", "t"] \
+                    + [f"{h}_SA" for h in self.human_labels] \
+                    + [f"{h}_util" for h in self.human_labels] \
+                    + ["assigned_cnt", "completed_cnt"]
+        seg_cols  = ["table", "agent", "role", "prefix", "t_start", "t_end"]
+        epi_cols  = ["table", "mission_completion_time"]
+
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            # step header
+            w.writerow(step_cols)
+            for i, t in enumerate(self.times):
+                row = ["step", t]
+                for h in self.human_labels:
+                    row.append(self.sa_by_h[h][i] if i < len(self.sa_by_h[h]) else "")
+                for h in self.human_labels:
+                    row.append(self.util_by_h[h][i] if i < len(self.util_by_h[h]) else "")
+                row += [self.assigned_cnt[i], self.completed_cnt[i]]
+                w.writerow(row)
+
+            # segment header + rows
+            w.writerow(seg_cols)
+            for lab in sorted(self.segments_by_agent.keys()):
+                role = "drone" if lab.startswith("D") else ("gv" if lab.startswith("G") else ("human" if lab.startswith("H") else ""))
+                for (t0, t1, pref) in self.segments_by_agent[lab]:
+                    w.writerow(["segment", lab, role, pref, t0, t1])
+
+            # episode row
+            w.writerow(epi_cols)
+            w.writerow(["episode", mct if mct is not None else ""])
+
+    def _plot_1080p(self, png_path, mct=None, show=False):
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+        from matplotlib.ticker import PercentFormatter
+        times = self.times
+
+        fig = plt.figure(figsize=self.fig_size_inch, dpi=100)
+        gs = gridspec.GridSpec(nrows=3, ncols=2, height_ratios=[1, 1, 2], hspace=0.28, wspace=0.2)
+
+        # 1) SA
+        ax1 = fig.add_subplot(gs[0, 0])
+        for h in self.human_labels:
+            if self.sa_by_h[h]:
+                ax1.plot(times, self.sa_by_h[h], linewidth=2, label=h)
+        ax1.set_title("Situation Awareness over Time"); ax1.set_xlabel("Time [s]"); ax1.set_ylabel("SA")
+        ax1.grid(True, alpha=0.3); 
+        if self.human_labels: ax1.legend(loc="best")
+        if mct is not None:
+            ax1.axvline(mct, linestyle="--", linewidth=1.6, alpha=0.6)
+            ax1.text(0.78, 0.5, f"MCT = {mct:.1f} s", transform=ax1.transAxes,
+                     bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="0.7", alpha=0.9),
+                     ha="left", va="center", fontsize=10)
+
+        # 2) Util
+        ax2 = fig.add_subplot(gs[0, 1])
+        for h in self.human_labels:
+            if self.util_by_h[h]:
+                ax2.plot(times, self.util_by_h[h], linewidth=2, label=h)
+        ax2.set_title("Human Utilization over Time (Sliding Window)")
+        ax2.set_xlabel("Time [s]"); ax2.set_ylabel("Utilization [%]")
+        ax2.set_ylim(0, 100); ax2.yaxis.set_major_formatter(PercentFormatter(xmax=100))
+        ax2.grid(True, alpha=0.3); 
+        if self.human_labels: ax2.legend(loc="best")
+        if mct is not None:
+            ax2.axvline(mct, linestyle="--", linewidth=1.6, alpha=0.6)
+            ax2.text(0.78, 0.5, f"MCT = {mct:.1f} s", transform=ax2.transAxes,
+                     bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="0.7", alpha=0.9),
+                     ha="left", va="center", fontsize=10)
+
+        # 3) Counts
+        ax3 = fig.add_subplot(gs[1, :])
+        ax3.plot(times, self.assigned_cnt, linewidth=2, label="assigned_cnt")
+        ax3.plot(times, self.completed_cnt, linewidth=2, label="completed_cnt")
+        ax3.set_title("Assignments and Completions per Tick")
+        ax3.set_xlabel("Time [s]"); ax3.set_ylabel("Count"); ax3.grid(True, alpha=0.3); ax3.legend(loc="best")
+        if mct is not None:
+            ax3.axvline(mct, linestyle="--", linewidth=1.6, alpha=0.6)
+
+        # 4) Timeline
+        ax4 = fig.add_subplot(gs[2, :])
+        # order D*, G*, H* top→bottom
+        ordered = sorted([l for l in self.agent_labels if l.startswith("D")]) \
+                + sorted([l for l in self.agent_labels if l.startswith("G")]) \
+                + sorted([l for l in self.agent_labels if l.startswith("H")])
+        y_pos = {lab: (len(ordered)-1-idx) for idx, lab in enumerate(ordered)}
+        for lab in ordered:
+            for (t0, t1, pref) in self.segments_by_agent.get(lab, []):
+                if t1 is None or t1 < t0: 
+                    continue
+                color = AP_COLORS.get(pref, "#5a5a5a")
+                ax4.hlines(y=y_pos[lab], xmin=t0, xmax=t1, colors=color, linewidth=8, alpha=0.9)
+                if (t1 - t0) >= 3.0:
+                    xc = 0.5*(t0 + t1)
+                    ax4.text(xc, y_pos[lab]+0.18, AP_ABBR.get(pref, pref[2:].upper()),
+                             ha="center", va="bottom", fontsize=8)
+        ax4.set_title("Agent Task Timeline"); ax4.set_xlabel("Time [s]")
+        ax4.set_yticks([y_pos[l] for l in ordered]); ax4.set_yticklabels(ordered)
+        ax4.grid(True, axis="x", alpha=0.25); ax4.set_ylim(-1, len(ordered))
+        if mct is not None:
+            ax4.axvline(mct, linestyle="--", linewidth=1.6, alpha=0.6)
+
+        fig.suptitle("GUI Episode Summary", fontsize=16, y=0.98)
+        fig.tight_layout(rect=[0, 0, 1, 0.97])
+        fig.savefig(png_path, dpi=100)
+        if show:
+            plt.show()
+
+    def save_all(self, mct=None, show=False):
+        from time import strftime
+        self._close_segments()
+        stamp = strftime("%Y%m%d_%H%M%S")
+        csv_path = self.log_dir / f"{self.csv_prefix}_{stamp}_unified.csv"
+        png_path = self.log_dir / f"{self.csv_prefix}_{stamp}_1080p.png"
+        self._write_unified_csv(csv_path, mct=mct)
+        self._plot_1080p(png_path, mct=mct, show=show)
+        return str(csv_path), str(png_path)
