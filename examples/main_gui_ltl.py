@@ -812,8 +812,9 @@ if __name__ == "__main__":
                     # choose a task that doesn't already have a fire prompt
                     existing_task_ids = {p["task_id"] for p in fire_prompts.values()}
                     candidate_rows = [t for t in tasks if t[0] not in existing_task_ids]
+                    cand_len = min(len(candidate_rows),15)
                     if candidate_rows:
-                        chosen = random.choice(candidate_rows)
+                        chosen = random.choice(candidate_rows[:cand_len])
                         chosen_task_id = int(chosen[0])
                         chosen_task_pos = chosen[1]
                         required = int(np.random.choice([1, 2]))

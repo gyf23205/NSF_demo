@@ -2,8 +2,9 @@ import os
 import csv
 from datetime import datetime
 import matplotlib.pyplot as plt
+import numpy as np
 
-folder = "workload_history"
+folder = "C:\\Users\\JW Choi\\Desktop\\NSF_demo-main\\NSF_demo\\examples\\workload_history"
 
 # Find the most recent CSV in workload_history/ with wl_history_*.csv pattern
 files = [f for f in os.listdir(folder) if f.startswith("wl_history_") and f.endswith(".csv")]
@@ -25,28 +26,27 @@ with open(latest_path, newline="") as csvfile:
             continue
         try:
             timestamps.append(datetime.fromisoformat(row[0]))
-            values.append(float(row[1]))
+            if float(row[1]) > 1:
+                values.append(1.0)
+            elif float(row[1]) < 0:
+                values.append(0.0)
+            else:
+                values.append(float(row[1]))
         except ValueError:
             continue
 
 if not values:
     raise ValueError("No valid data found in file.")
 
-# Compute running average
-running_avg = []
-total = 0.0
-for i, val in enumerate(values, start=1):
-    total += val
-    running_avg.append(total / i)
+# Convert timestamps to seconds relative to the first timestamp
+start_time = timestamps[0]
+times_sec = [(t - start_time).total_seconds() for t in timestamps]
 
-overall_avg = total / len(values)
-print(f"Overall average: {overall_avg:.6f}")
-
-# Plot running average over time
-plt.plot(timestamps, running_avg, label="Running average")
-plt.xlabel("Time")
-plt.ylabel("Average value")
-plt.title("Running Average Over Time")
+# Plot values over time in seconds
+plt.plot(times_sec, values, label="Value")
+plt.xlabel("Time [s]")
+plt.ylabel("Estimated workload")
+plt.title("Workload Over Time (1: High, 0: Low)")
 plt.legend()
 plt.tight_layout()
 plt.show()

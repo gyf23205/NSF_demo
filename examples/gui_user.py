@@ -18,8 +18,14 @@ import yaml
 from datetime import datetime
 
 # For workload estimation
-csv_path = 'dummy_log/aggregated_output.csv'
-# csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
+# csv_path = 'dummy_log/aggregated_output.csv'
+csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
+wl_path = 'C:/Users/JW Choi/Desktop/NSF_demo-main/NSF_demo/examples/workload_history/'
+model_to_use = 'last_gauge.pt'
+model_to_ensemble1 = 'ensemble1.pt' 
+model_to_ensemble2 = 'ensemble2.pt' 
+model_to_ensemble3 = 'ensemble3.pt' 
+ensemble = False
 from realtime_heart_plot import RealtimeHeartPlot
 from workload_speedometer import WorkloadSpeedometer
 
@@ -381,53 +387,95 @@ class UserGUI:
         with open('config_ecg_gaze.yaml', 'r') as yf:
             cfg = yaml.safe_load(yf)
 
-        model = TransformerRawRegressor(
-            config=cfg["config_tf_gauge"],
-            optim_cfg=cfg["optim"],
-            pre_process=cfg.get("pre_process", None)
-        )
-        state_dict = torch.load('last_gauge.pt', map_location='cpu')
-        model.load_state_dict(state_dict, strict=False)
-        model.eval()
+        if ensemble:
+            model1 = TransformerRawRegressor(
+                    config=cfg["config_tf_gauge"],
+                    optim_cfg=cfg["optim"],
+                    pre_process=cfg.get("pre_process", None)
+                )
+            state_dict = torch.load(model_to_ensemble1, map_location='cpu')
+            model1.load_state_dict(state_dict, strict=False)
+            model1.eval()
 
-        try:
-            ecg = last_row[:130]
-            # gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
-            gaze_au_matrix = last_row[130:]
+            model2 = TransformerRawRegressor(
+                    config=cfg["config_tf_gauge"],
+                    optim_cfg=cfg["optim"],
+                    pre_process=cfg.get("pre_process", None)
+                )
+            state_dict = torch.load(model_to_ensemble2, map_location='cpu')
+            model2.load_state_dict(state_dict, strict=False)
+            model2.eval()
 
-            t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-            t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32).unsqueeze(0) # [10, 30]
+            model3 = TransformerRawRegressor(
+                    config=cfg["config_tf_gauge"],
+                    optim_cfg=cfg["optim"],
+                    pre_process=cfg.get("pre_process", None)
+                )
+            state_dict = torch.load(model_to_ensemble3, map_location='cpu')
+            model3.load_state_dict(state_dict, strict=False)
+            model3.eval()
 
-            if torch.isnan(t2).any() or torch.isinf(t2).any():
-                print("NaN or Inf detected in t2 (gaze input)")
+            try:
+                ecg = last_row[:130]
+                # gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
+                gaze_au_matrix = last_row[130:]
 
-            with torch.no_grad():
-                # out = model(t1, t2)
-                # self.pred_label = torch.argmax(out).item()
-                # print(out, pred_label)
-                self.pred_label = model(t1, t2)
-        except:
-            print("Error occurred while predicting workload")
-            self.pred_label = 0.0
+                t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
+                t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32).unsqueeze(0) # [10, 30]
+
+                if torch.isnan(t2).any() or torch.isinf(t2).any():
+                    print("NaN or Inf detected in t2 (gaze input)")
+
+                with torch.no_grad():
+                    pred_ensemble1 = model1(t1, t2)
+                    pred_ensemble2 = model2(t1, t2)
+                    pred_ensemble3 = model3(t1, t2)
+                    self.pred_label = (pred_ensemble1 + pred_ensemble2 + pred_ensemble3) / 3
+            except:
+                print("Error occurred while predicting workload")
+                self.pred_label = 0.0
+
+        else:
+            model = TransformerRawRegressor(
+                config=cfg["config_tf_gauge"],
+                optim_cfg=cfg["optim"],
+                pre_process=cfg.get("pre_process", None)
+            )
+            state_dict = torch.load(model_to_use, map_location='cpu')
+            model.load_state_dict(state_dict, strict=False)
+            model.eval()
+
+            try:
+                ecg = last_row[:130]
+                # gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
+                gaze_au_matrix = last_row[130:]
+
+                t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
+                t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32).unsqueeze(0) # [10, 30]
+
+                if torch.isnan(t2).any() or torch.isinf(t2).any():
+                    print("NaN or Inf detected in t2 (gaze input)")
+
+                with torch.no_grad():
+                    # out = model(t1, t2)
+                    # self.pred_label = torch.argmax(out).item()
+                    # print(out, pred_label)
+                    self.pred_label = model(t1, t2)
+            except:
+                print("Error occurred while predicting workload")
+                self.pred_label = 0.0
         
         date_str = datetime.now().strftime("%Y%m%d")
-        base_filename = f"workload_history/wl_history_{date_str}.csv"
-
-        # Ensure unique filename if file already exists
-        wl_history_path = base_filename
-        counter = 1
-        while os.path.exists(wl_history_path):
-            wl_history_path = f"workload_history/wl_history_{date_str}_{counter}.csv"
-            counter += 1
+        wl_history_path = wl_path + f"wl_history_{date_str}.csv"
 
         # Create a new CSV file with a header
         # with open(wl_history_path, "w", newline="") as f:
         #     writer = csv.writer(f)
         #     writer.writerow(["timestamp", "output_value"])
 
-        # with open(wl_history_path, "a", newline="") as f:
-        #     writer = csv.writer(f)
-        #     writer.writerow([datetime.now().isoformat(), self.pred_label])
+        with open(wl_history_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([datetime.now().isoformat(), float(self.pred_label)])
 
 
         # 3. update workload
@@ -638,7 +686,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server (localhost)
+    host = '192.168.123.225'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
