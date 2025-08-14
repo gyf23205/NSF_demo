@@ -564,7 +564,7 @@ class GameMgr:
         self.drone_icon.draw(self.c_drone_icon)
         for i, h in enumerate(self.health):
             h.draw()
-            if i >= 3:
+            if i >= 2:
                 break
         ##################### Drone health ends ##################
 
@@ -574,7 +574,7 @@ class GameMgr:
         self.gv_icon.draw(self.c_gv_icon)
         for i, h in enumerate(self.gv_health):
             h.draw()
-            if i >= 4:
+            if i >= 3:
                 break
         ##################### GV health ends ####################
 
