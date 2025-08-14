@@ -540,8 +540,10 @@ class UserGUI:
                 self.n_previous_tasks = len(self.task_list)
 
             # Now draw the updated task list
-            for task in self.task_list:
+            for i, task in enumerate(self.task_list):
                 task.draw()
+                if i >= 15:
+                    break
         ########################## Task block ends ######################
 
         ###################### Survivor Triage (top-right) ######################
