@@ -15,6 +15,7 @@ import json
 import numpy as np
 import yaml
 # import pandas as pd
+from datetime import datetime
 
 # For workload estimation
 csv_path = 'dummy_log/aggregated_output.csv'
@@ -408,6 +409,26 @@ class UserGUI:
         except:
             print("Error occurred while predicting workload")
             self.pred_label = 0.0
+        
+        date_str = datetime.now().strftime("%Y%m%d")
+        base_filename = f"workload_history/wl_history_{date_str}.csv"
+
+        # Ensure unique filename if file already exists
+        wl_history_path = base_filename
+        counter = 1
+        while os.path.exists(wl_history_path):
+            wl_history_path = f"workload_history/wl_history_{date_str}_{counter}.csv"
+            counter += 1
+
+        # Create a new CSV file with a header
+        with open(wl_history_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["timestamp", "output_value"])
+
+        with open(wl_history_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([datetime.now().isoformat(), self.pred_label])
+
 
         # 3. update workload
         # if self.pred_label > 0.5:
