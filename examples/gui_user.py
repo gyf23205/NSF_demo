@@ -21,6 +21,11 @@ from datetime import datetime
 # csv_path = 'dummy_log/aggregated_output.csv'
 csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
 wl_path = 'C:/Users/JW Choi/Desktop/NSF_demo-main/NSF_demo/examples/workload_history/'
+model_to_use = 'last_gauge.pt'
+model_to_ensemble1 = 'ensemble1.pt' 
+model_to_ensemble2 = 'ensemble2.pt' 
+model_to_ensemble3 = 'ensemble3.pt' 
+ensemble = False
 from realtime_heart_plot import RealtimeHeartPlot
 from workload_speedometer import WorkloadSpeedometer
 
@@ -382,34 +387,83 @@ class UserGUI:
         with open('config_ecg_gaze.yaml', 'r') as yf:
             cfg = yaml.safe_load(yf)
 
-        model = TransformerRawRegressor(
-            config=cfg["config_tf_gauge"],
-            optim_cfg=cfg["optim"],
-            pre_process=cfg.get("pre_process", None)
-        )
-        state_dict = torch.load('last_gauge.pt', map_location='cpu')
-        model.load_state_dict(state_dict, strict=False)
-        model.eval()
+        if ensemble:
+            model1 = TransformerRawRegressor(
+                    config=cfg["config_tf_gauge"],
+                    optim_cfg=cfg["optim"],
+                    pre_process=cfg.get("pre_process", None)
+                )
+            state_dict = torch.load(model_to_ensemble1, map_location='cpu')
+            model1.load_state_dict(state_dict, strict=False)
+            model1.eval()
 
-        try:
-            ecg = last_row[:130]
-            # gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
-            gaze_au_matrix = last_row[130:]
+            model2 = TransformerRawRegressor(
+                    config=cfg["config_tf_gauge"],
+                    optim_cfg=cfg["optim"],
+                    pre_process=cfg.get("pre_process", None)
+                )
+            state_dict = torch.load(model_to_ensemble2, map_location='cpu')
+            model2.load_state_dict(state_dict, strict=False)
+            model2.eval()
 
-            t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
-            t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32).unsqueeze(0) # [10, 30]
+            model3 = TransformerRawRegressor(
+                    config=cfg["config_tf_gauge"],
+                    optim_cfg=cfg["optim"],
+                    pre_process=cfg.get("pre_process", None)
+                )
+            state_dict = torch.load(model_to_ensemble3, map_location='cpu')
+            model3.load_state_dict(state_dict, strict=False)
+            model3.eval()
 
-            if torch.isnan(t2).any() or torch.isinf(t2).any():
-                print("NaN or Inf detected in t2 (gaze input)")
+            try:
+                ecg = last_row[:130]
+                # gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
+                gaze_au_matrix = last_row[130:]
 
-            with torch.no_grad():
-                # out = model(t1, t2)
-                # self.pred_label = torch.argmax(out).item()
-                # print(out, pred_label)
-                self.pred_label = model(t1, t2)
-        except:
-            print("Error occurred while predicting workload")
-            self.pred_label = 0.0
+                t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
+                t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32).unsqueeze(0) # [10, 30]
+
+                if torch.isnan(t2).any() or torch.isinf(t2).any():
+                    print("NaN or Inf detected in t2 (gaze input)")
+
+                with torch.no_grad():
+                    pred_ensemble1 = model1(t1, t2)
+                    pred_ensemble2 = model2(t1, t2)
+                    pred_ensemble3 = model3(t1, t2)
+                    self.pred_label = (pred_ensemble1 + pred_ensemble2 + pred_ensemble3) / 3
+            except:
+                print("Error occurred while predicting workload")
+                self.pred_label = 0.0
+
+        else:
+            model = TransformerRawRegressor(
+                config=cfg["config_tf_gauge"],
+                optim_cfg=cfg["optim"],
+                pre_process=cfg.get("pre_process", None)
+            )
+            state_dict = torch.load(model_to_use, map_location='cpu')
+            model.load_state_dict(state_dict, strict=False)
+            model.eval()
+
+            try:
+                ecg = last_row[:130]
+                # gaze_au_matrix = np.array(last_row[130:]).reshape(10, 30)
+                gaze_au_matrix = last_row[130:]
+
+                t1 = torch.tensor(ecg, dtype=torch.float32).unsqueeze(0) # raw ECG
+                t2 = torch.tensor(gaze_au_matrix, dtype=torch.float32).unsqueeze(0) # [10, 30]
+
+                if torch.isnan(t2).any() or torch.isinf(t2).any():
+                    print("NaN or Inf detected in t2 (gaze input)")
+
+                with torch.no_grad():
+                    # out = model(t1, t2)
+                    # self.pred_label = torch.argmax(out).item()
+                    # print(out, pred_label)
+                    self.pred_label = model(t1, t2)
+            except:
+                print("Error occurred while predicting workload")
+                self.pred_label = 0.0
         
         date_str = datetime.now().strftime("%Y%m%d")
         wl_history_path = wl_path + f"wl_history_{date_str}.csv"
