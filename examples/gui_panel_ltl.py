@@ -562,16 +562,20 @@ class GameMgr:
         for text, pos in self.title_drone_health.texts:
             self.screen.blit(text, pos)
         self.drone_icon.draw(self.c_drone_icon)
-        for h in self.health:
+        for i, h in enumerate(self.health):
             h.draw()
+            if i >= 3:
+                break
         ##################### Drone health ends ##################
 
         ####################### GV health #####################
         for text, pos in self.title_gv_health.texts:
             self.screen.blit(text, pos)
         self.gv_icon.draw(self.c_gv_icon)
-        for h in self.gv_health:
+        for i, h in enumerate(self.gv_health):
             h.draw()
+            if i >= 4:
+                break
         ##################### GV health ends ####################
 
         ################## Human Workload #########################
