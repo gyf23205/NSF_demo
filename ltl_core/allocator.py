@@ -522,7 +522,7 @@ class RandomAllocator:
 
         UTIL_THRESH = 60  # percent
 
-        # --------- helpers (lightweight, stored on self for persistence) ----------
+        # --------- helpers ----------
         def human_util(a) -> float:
             u = getattr(a, "utilization", 0)
             try:
@@ -555,6 +555,50 @@ class RandomAllocator:
             dist = math.hypot(dx, dy)
             vmax = getattr(agent, "max_speed", None)
             return dist / max(float(vmax or 1.0), 1e-6)
+        
+        def _eta_from_pos(agent, tid: int) -> float:
+            """ETA proxy from agent.pos to target tid (ignores current goal)."""
+            if not getattr(self, "workspace", None):
+                return 1e9
+            try:
+                px, py = agent.pos[:2]
+                tx, ty = self.workspace.target_locations[int(tid)]
+            except Exception:
+                return 1e9
+            dx = float(tx) - float(px)
+            dy = float(ty) - float(py)
+            dist = math.hypot(dx, dy)
+            vmax = getattr(agent, "max_speed", None)
+            return dist / max(float(vmax or 1.0), 1e-6)
+        
+        def _gv_bound_group(agent):
+            """Return the group this GV is currently bound to (if any)."""
+            bm = self.binding_manager
+            try:
+                for g in self.binding_manager.group_to_tasks:
+                    try:
+                        if bm.get_bound_agent_for_group(g, agent_type="gvs") is agent:
+                            return g
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            return None
+
+        def _gv_idle_tier(gv) -> int:
+            """
+            0 = truly idle: not carrying, no current task, unbound (best)
+            1 = quasi-idle: not carrying, no current task, but bound (e.g., returning/base)
+            2 = busy: carrying or has a current task (worst)
+            """
+            carrying = bool(getattr(gv, "is_carrying", False))
+            cur = getattr(gv, "current_symbolic_task", None)
+            bound = _gv_bound_group(gv)
+            if (not carrying) and (cur is None) and (bound is None):
+                return 0
+            if (not carrying) and (cur is None):
+                return 1
+            return 2
 
         def _get_sticky(map_name: str, group: str):
             if getattr(self, map_name, None) is None:
@@ -566,11 +610,39 @@ class RandomAllocator:
                 setattr(self, map_name, {})
             getattr(self, map_name)[group] = agent
 
+        # Robust binding override for preemptible tasks (nav/pickup).
+        def _force_rebind(group: str, role: str, agent) -> bool:
+            """Try to make `agent` the bound agent for `group` and `role`."""
+            bm = self.binding_manager
+            ok = False
+            try:
+                # best known API names
+                if hasattr(bm, "bind_agent_to_group"):
+                    bm.bind_agent_to_group(group, agent, role)
+                    ok = True
+                elif hasattr(bm, "set_binding"):
+                    bm.set_binding(group, role, agent)
+                    ok = True
+                else:
+                    # try coarse unbind+assign patterns
+                    if hasattr(bm, "unbind_group"):
+                        try: bm.unbind_group(group, role)
+                        except Exception: pass
+                    if hasattr(bm, "clear_binding"):
+                        try: bm.clear_binding(group, role)
+                        except Exception: pass
+                    if hasattr(bm, "set_binding"):
+                        bm.set_binding(group, role, agent)
+                        ok = True
+            except Exception:
+                ok = False
+            return ok
+
         # alias names for clarity
         DRONE_STICKY = "_drone_sticky"
         GV_STICKY    = "_gv_sticky"
 
-        # 0) Keep any in-progress human symbolic tasks that are still valid (binding-respecting)
+        # 0) Keep in-progress human symbolic tasks (binding-respecting)
         for agent in self.agents_by_type.get("humans", []):
             task = getattr(agent, "current_symbolic_task", None)
             if task and (task in unlocked) and (task not in completed) and (task not in aps):
@@ -584,8 +656,6 @@ class RandomAllocator:
                         agent.reset_symbolic()
 
         # === 1) CONTINUATION PASS (finish non-preemptible steps first) ===
-        # - Drones: do NOT continue p_nav_* (preemptible); DO continue p_scan_* (non-preemptible)
-        # - GVs:    do NOT continue p_pickup_* (preemptible); DO continue p_dropoff_* (non-preemptible)
         def _assign_group_continuation(agent_type: str):
             for group in self.binding_manager.group_to_tasks:
                 try:
@@ -613,7 +683,7 @@ class RandomAllocator:
                     if agent_type == "gvs" and pref == "p_pickup":
                         break  # let global priority handle pickup (preemptible)
 
-                    # Non-preemptible (e.g., p_scan_* for drones, p_dropoff_* for GVs) -> continue with bound agent
+                    # Non-preemptible (e.g., p_scan_* for drones, p_dropoff_* for GVs) -> continue
                     if self.binding_manager.record_assignment(t, bound_agent, agent_type):
                         actions[bound_agent] = t
                         assigned.add(bound_agent)
@@ -623,9 +693,9 @@ class RandomAllocator:
         _assign_group_continuation("drones")
         _assign_group_continuation("gvs")
 
-        # 2) Collect remaining pending tasks across ALL groups (skip any already claimed)
-        pending_phys = []   # tuples: (prio, pref, group, task, tid, agent_type)
-        pending_symb = []   # symbolic tasks we may attempt after physicals
+        # 2) Collect remaining pending tasks
+        pending_phys = []   # (prio, pref, group, task, tid, agent_type)
+        pending_symb = []   # (group, task)
         for group in self.binding_manager.group_to_tasks:
             tasks = self.labeler.get_group_ordered_tasks(group) or []
             for t in tasks:
@@ -639,7 +709,6 @@ class RandomAllocator:
                 agent_type = self.spec.get_required_role_by_ap(t)
 
                 if ap_kind == "physical":
-                    # target index assumed at position 2 in AP string: p_xxx_<tid>_...
                     try:
                         tid = int(t.split("_")[2])
                     except Exception:
@@ -649,11 +718,11 @@ class RandomAllocator:
                 else:
                     pending_symb.append((group, t))
 
-        # 3) Split physical tasks into buckets
-        drone_nav   = []    # p_nav_* (preemptible) → auction
-        drone_other = []    # non-preemptible drone physical (e.g., p_scan_*) → sticky/nearest
-        gv_pickups  = []    # p_pickup_* (preemptible) → auction
-        gv_dropoffs = []    # p_dropoff_* (non-preemptible) → continuation / fallback
+        # 3) Split physical tasks
+        drone_nav   = []    # p_nav_* (preemptible)
+        drone_other = []    # non-preemptible drone physical
+        gv_pickups  = []    # p_pickup_* (preemptible)
+        gv_dropoffs = []    # p_dropoff_* (non-preemptible)
 
         for pr, pref, group, t, tid, agent_type in pending_phys:
             if agent_type == "drones":
@@ -667,73 +736,77 @@ class RandomAllocator:
                 else:
                     gv_pickups.append((pr, pref, group, t, tid, agent_type))
 
-        # Sort preemptible buckets by priority desc (high → low)
+        # Sort preemptible buckets by priority desc (high → low; tie by tid for determinism)
         drone_nav.sort(key=lambda x: (-x[0], x[4]))
         gv_pickups.sort(key=lambda x: (-x[0], x[4]))
-        # gv_dropoffs / drone_other order is less critical
 
-        # 4-A) DRONE NAV: priority-aware auction with stickiness
+        # 4-A) DRONE NAV auction — NO sticky bias; force-rebind on failure
         free_drones = [d for d in self.agents_by_type.get("drones", []) if d not in assigned]
         for pr, pref, group, task, tid, agent_type in drone_nav:
             if task in claimed_tasks or not free_drones:
                 continue
 
-            sticky = _get_sticky(DRONE_STICKY, group)
-            best = None
-            best_cost = float("inf")
-            for d in list(free_drones):
-                cost = _eta_to_tid(d, tid)
-                if sticky is not None and d is sticky:
-                    cost *= 0.5  # hysteresis (keep same drone on group)
-                # mild penalty if switching away from current bound group
-                if getattr(d, "bound_group", None) not in (None, group):
-                    cost *= 1.15
-                if cost < best_cost:
-                    best_cost = cost
-                    best = d
+            # ETA-only cost (no sticky for nav → allows two nearby targets to grab two different drones)
+            candidates = sorted(list(free_drones), key=lambda d: _eta_to_tid(d, tid))
 
-            if best is not None and self.binding_manager.record_assignment(task, best, "drones"):
-                actions[best] = task
-                assigned.add(best)
+            picked = None
+            for d in candidates:
+                ok = self.binding_manager.record_assignment(task, d, "drones")
+                if not ok:
+                    # Preemptible -> force rebind and retry
+                    if _force_rebind(group, "drones", d):
+                        ok = self.binding_manager.record_assignment(task, d, "drones")
+                if ok:
+                    picked = d
+                    break
+
+            if picked is not None:
+                actions[picked] = task
+                assigned.add(picked)
                 claimed_tasks.add(task)
                 try:
-                    free_drones.remove(best)
+                    free_drones.remove(picked)
                 except ValueError:
                     pass
-                _set_sticky(DRONE_STICKY, group, best)
-                setattr(best, "bound_group", group)
+                # keep sticky only for non-preemptible flow; do not set for nav
 
-        # 4-B) GV PICKUPS: priority-aware auction with stickiness
-        free_gvs = [g for g in self.agents_by_type.get("gvs", []) if g not in assigned]
+        # 4-B) GV PICKUPS — idle-first, then ETA; force-rebind on failure
         for pr, pref, group, task, tid, agent_type in gv_pickups:
-            if task in claimed_tasks or not free_gvs:
+            if task in claimed_tasks:
                 continue
 
-            sticky = _get_sticky(GV_STICKY, group)
-            best = None
-            best_cost = float("inf")
-            for gv in list(free_gvs):
-                cost = _eta_to_tid(gv, tid)
-                if sticky is not None and gv is sticky:
-                    cost *= 0.5  # hysteresis (keep same GV on group)
-                if getattr(gv, "bound_group", None) not in (None, group):
-                    cost *= 1.15
-                if cost < best_cost:
-                    best_cost = cost
-                    best = gv
+            # recompute at each task to always see truly idle candidates
+            free_gvs = [g for g in self.agents_by_type.get("gvs", [])
+                        if (g not in assigned) and (not bool(getattr(g, "is_carrying", False)))]
 
-            if best is not None and self.binding_manager.record_assignment(task, best, "gvs"):
-                actions[best] = task
-                assigned.add(best)
+            if not free_gvs:
+                continue
+
+            def gv_rank_key(gv):
+                # Strongly prefer truly idle (tier 0), then quasi-idle (1), then busy (2),
+                # and break ties by ETA-from-position.
+                return (_gv_idle_tier(gv), _eta_from_pos(gv, tid))
+
+            candidates = sorted(free_gvs, key=gv_rank_key)
+
+            picked = None
+            for gv in candidates:
+                ok = self.binding_manager.record_assignment(task, gv, "gvs")
+                if not ok:
+                    # Only try to forcibly rebind if the GV isn't truly idle (tier > 0).
+                    if _gv_idle_tier(gv) > 0 and _force_rebind(group, "gvs", gv):
+                        ok = self.binding_manager.record_assignment(task, gv, "gvs")
+                if ok:
+                    picked = gv
+                    break
+
+            if picked is not None:
+                actions[picked] = task
+                assigned.add(picked)
                 claimed_tasks.add(task)
-                try:
-                    free_gvs.remove(best)
-                except ValueError:
-                    pass
-                _set_sticky(GV_STICKY, group, best)
-                setattr(best, "bound_group", group)
+                # do NOT remove a shared free_gvs list; it is per-task now
 
-        # 4-C) DRONE other physical (non-preemptible): prefer sticky drone, else nearest free
+        # 4-C) DRONE other physical (non-preemptible): prefer sticky, else nearest
         free_drones = [d for d in self.agents_by_type.get("drones", []) if d not in assigned]
         for pr, pref, group, task, tid, agent_type in drone_other:
             if task in claimed_tasks:
@@ -743,11 +816,9 @@ class RandomAllocator:
 
             picked = None
             sticky = _get_sticky(DRONE_STICKY, group)
-            # 1) sticky drone available?
             if sticky is not None and sticky in free_drones:
                 picked = sticky
             else:
-                # 2) nearest free drone to the target
                 try:
                     tx, ty = self.workspace.target_locations[int(tid)]
                     free_drones.sort(key=lambda d: math.hypot((d.pos[0]-tx), (d.pos[1]-ty)))
@@ -767,18 +838,12 @@ class RandomAllocator:
                 _set_sticky(DRONE_STICKY, group, picked)
                 setattr(picked, "bound_group", group)
 
-        # 4-D) GV DROPOFFS (non-preemptible): let continuation handle most; simple fallback if any left
+        # 4-D) GV DROPOFFS (non-preemptible): fallback if anything left
         free_gvs = [g for g in self.agents_by_type.get("gvs", []) if g not in assigned]
         for pr, pref, group, task, tid, agent_type in gv_dropoffs:
             if task in claimed_tasks or not free_gvs:
                 continue
-            # Prefer sticky GV if available, else any free GV (dropoffs should be rare here)
-            picked = None
-            sticky = _get_sticky(GV_STICKY, group)
-            if sticky is not None and sticky in free_gvs:
-                picked = sticky
-            else:
-                picked = free_gvs[0]
+            picked = free_gvs[0]
             if picked is not None and self.binding_manager.record_assignment(task, picked, "gvs"):
                 actions[picked] = task
                 assigned.add(picked)
@@ -801,27 +866,21 @@ class RandomAllocator:
             if role is None:
                 continue
 
-            # Humans: apply utilization-aware selection and OR-branch offload
             if role == "humans":
-                # 1) usable bound human?
                 try:
                     bound_h = self.binding_manager.get_bound_agent_for_group(group, agent_type="humans")
                 except Exception:
                     bound_h = None
 
-                # build human pool sorted by utilization (low → high)
                 free_humans = [h for h in self.agents_by_type.get("humans", []) if h not in assigned]
                 free_humans.sort(key=human_util)
 
-                # split by overload
                 ok_humans = [h for h in free_humans if human_util(h) < UTIL_THRESH]
                 overloaded = [h for h in free_humans if h not in ok_humans]
 
-                # case A: bound human and not overloaded → take it
                 if (bound_h is not None) and (bound_h not in assigned) and (human_util(bound_h) < UTIL_THRESH):
                     cand = [bound_h]
                 else:
-                    # case B: any non-overloaded human?
                     cand = ok_humans if ok_humans else []
 
                 picked = False
@@ -834,9 +893,8 @@ class RandomAllocator:
                         break
 
                 if picked:
-                    continue  # next symbolic
+                    continue
 
-                # case C: try to offload to drone via OR-branch (priority/triage only)
                 alt = _autonomy_alt(t)
                 if alt and (alt in pending_symb_set) and (alt in unlocked) and (alt not in completed) and (alt not in aps):
                     free_drs = [d for d in self.agents_by_type.get("drones", []) if d not in assigned]
@@ -845,15 +903,13 @@ class RandomAllocator:
                             actions[d] = alt
                             assigned.add(d)
                             claimed_tasks.add(alt)
-                            claimed_tasks.add(t)  # suppress human variant this tick
+                            claimed_tasks.add(t)
                             picked = True
                             break
                     if picked:
                         continue
 
-                # case D: last resort — assign least-overloaded human if exists (avoid deadlock)
                 fallback_pool = ([bound_h] if (bound_h is not None and bound_h not in assigned) else []) + overloaded
-                # de-dup while preserving order
                 seen = set()
                 fallback_pool = [h for h in fallback_pool if (h not in seen and not seen.add(h))]
                 for agent in fallback_pool:
@@ -863,9 +919,9 @@ class RandomAllocator:
                         claimed_tasks.add(t)
                         picked = True
                         break
-                continue  # done with human-required symbolic
+                continue
 
-            # Non-human symbolic (rare) — keep previous behavior
+            # Non-human symbolic (rare)
             try:
                 bound_agent = self.binding_manager.get_bound_agent_for_group(group, agent_type=role)
             except Exception:

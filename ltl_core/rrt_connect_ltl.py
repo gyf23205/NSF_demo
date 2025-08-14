@@ -55,7 +55,7 @@ class RrtConnect:
         self.obs_rectangle = self.env.obs_rectangle
         self.obs_boundary = self.env.obs_boundary
 
-        if dt <= 0.2:
+        if dt <= 0.9:
             # 0.28 * 3 = 0.84 for GUI
             base = 0.84
             # clamp dt into [0.05, 0.10] seconds so path resolution stays within [0.042, 0.084]

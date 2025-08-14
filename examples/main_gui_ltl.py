@@ -76,7 +76,7 @@ pickup_cleared = set()
 # --- SA model (GUI-side; simple & fast) ---
 SA_MAX = 600.0           # cap
 SA_DECAY_RATE = 0.015     # per-second exponential decay
-SA_GAIN_BASE = 1.0       # base gain per completion
+SA_GAIN_BASE = 0.1       # base gain per completion
 
 SA_WEIGHTS = {           # per-AP-prefix multipliers
     "p_nav": 0.0,
