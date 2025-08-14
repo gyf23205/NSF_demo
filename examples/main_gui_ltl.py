@@ -74,19 +74,19 @@ fire_time_credit = 0
 pickup_cleared = set()
 
 # --- SA model (GUI-side; simple & fast) ---
-SA_MAX = 100.0           # cap
-SA_DECAY_RATE = 0.15     # per-second exponential decay
+SA_MAX = 600.0           # cap
+SA_DECAY_RATE = 0.015     # per-second exponential decay
 SA_GAIN_BASE = 1.0       # base gain per completion
 
 SA_WEIGHTS = {           # per-AP-prefix multipliers
     "p_nav": 0.0,
     "p_scan": 0.0,
-    "p_verify": 1.0,
+    "p_verify": 0.4,
     "p_pickup": 0.0,
     "p_dropoff": 0.0,
-    "p_priority": 1.0,   # ATM/fire/priority-like
-    "p_triage": 1.0,
-    "p_atmconfirm": 1.0,
+    "p_priority": 0.3,   # ATM/fire/priority-like
+    "p_triage": 0.3,
+    "p_atmconfirm": 0.3,
     # unknown task prefixes fall back to 0.5 (see code below)
 }
 

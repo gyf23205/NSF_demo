@@ -421,13 +421,13 @@ class UserGUI:
             counter += 1
 
         # Create a new CSV file with a header
-        with open(wl_history_path, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["timestamp", "output_value"])
+        # with open(wl_history_path, "w", newline="") as f:
+        #     writer = csv.writer(f)
+        #     writer.writerow(["timestamp", "output_value"])
 
-        with open(wl_history_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([datetime.now().isoformat(), self.pred_label])
+        # with open(wl_history_path, "a", newline="") as f:
+        #     writer = csv.writer(f)
+        #     writer.writerow([datetime.now().isoformat(), self.pred_label])
 
 
         # 3. update workload
