@@ -1106,7 +1106,7 @@ class GuiEpisodeLogger:
         for h in self.human_labels:
             if self.sa_by_h[h]:
                 ax1.plot(times, self.sa_by_h[h], linewidth=2, label=h)
-        ax1.set_title("Situation Awareness over Time"); ax1.set_xlabel("Time [s]"); ax1.set_ylabel("SA")
+        ax1.set_title("Task Complete Score over Time"); ax1.set_xlabel("Time [s]"); ax1.set_ylabel("Score")
         ax1.grid(True, alpha=0.3); 
         if self.human_labels: ax1.legend(loc="best")
         if mct is not None:
@@ -1157,7 +1157,7 @@ class GuiEpisodeLogger:
                     xc = 0.5*(t0 + t1)
                     ax4.text(xc, y_pos[lab]+0.18, AP_ABBR.get(pref, pref[2:].upper()),
                              ha="center", va="bottom", fontsize=8)
-        ax4.set_title("Agent Task Timeline"); ax4.set_xlabel("Time [s]")
+        ax4.set_title("Agent Task Timeline"); ax4.set_xlabel("Time [s]"); ax4.set_ylabel("Agent")
         ax4.set_yticks([y_pos[l] for l in ordered]); ax4.set_yticklabels(ordered)
         ax4.grid(True, axis="x", alpha=0.25); ax4.set_ylim(-1, len(ordered))
         if mct is not None:
