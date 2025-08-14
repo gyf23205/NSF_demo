@@ -18,8 +18,9 @@ import yaml
 from datetime import datetime
 
 # For workload estimation
-csv_path = 'dummy_log/aggregated_output.csv'
-# csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
+# csv_path = 'dummy_log/aggregated_output.csv'
+csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
+wl_path = 'C:/Users/JW Choi/Desktop/NSF_demo-main/NSF_demo/examples/workload_history/'
 from realtime_heart_plot import RealtimeHeartPlot
 from workload_speedometer import WorkloadSpeedometer
 
@@ -411,23 +412,16 @@ class UserGUI:
             self.pred_label = 0.0
         
         date_str = datetime.now().strftime("%Y%m%d")
-        base_filename = f"workload_history/wl_history_{date_str}.csv"
-
-        # Ensure unique filename if file already exists
-        wl_history_path = base_filename
-        counter = 1
-        while os.path.exists(wl_history_path):
-            wl_history_path = f"workload_history/wl_history_{date_str}_{counter}.csv"
-            counter += 1
+        wl_history_path = wl_path + f"wl_history_{date_str}.csv"
 
         # Create a new CSV file with a header
         # with open(wl_history_path, "w", newline="") as f:
         #     writer = csv.writer(f)
         #     writer.writerow(["timestamp", "output_value"])
 
-        # with open(wl_history_path, "a", newline="") as f:
-        #     writer = csv.writer(f)
-        #     writer.writerow([datetime.now().isoformat(), self.pred_label])
+        with open(wl_history_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([datetime.now().isoformat(), float(self.pred_label)])
 
 
         # 3. update workload
@@ -540,8 +534,10 @@ class UserGUI:
                 self.n_previous_tasks = len(self.task_list)
 
             # Now draw the updated task list
-            for task in self.task_list:
+            for i, task in enumerate(self.task_list):
                 task.draw()
+                if i >= 15:
+                    break
         ########################## Task block ends ######################
 
         ###################### Survivor Triage (top-right) ######################
@@ -636,7 +632,7 @@ class UserGUI:
 if __name__ == '__main__':
     import os
     os.environ['SDL_VIDEO_WINDOW_POS'] = "600,100"
-    host = '127.0.0.1'  # IP of the server (localhost)
+    host = '192.168.123.225'  # IP of the server (localhost)
     port = 8888
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
