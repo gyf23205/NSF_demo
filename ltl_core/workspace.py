@@ -18,7 +18,7 @@ class Workspace:
         self.target_mask = target_mask or []
         self.margin = margin
 
-        self.base_area = [(x, y) for x in range(3, 6) for y in range(2, 5)]
+        self.base_area = [(x, y) for x in range(3, 8) for y in range(2, 7)]
         self.hospital_area = [(x, y) for x in range(size[0] - 4, size[0] - 1)
                               for y in range(2, 5)]
         
