@@ -556,8 +556,8 @@ if __name__ == '__main__':
         run_one_episode(
             seed=None,
             log_dir=LOG_DIR,
-            show_episode_plots=False,
-            animate_episode=False,
+            show_episode_plots=True,
+            animate_episode=True,
             enable_manual_pick=False  # set True if you want the picker at the end
         )
         # Time measurement out
