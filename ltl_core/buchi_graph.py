@@ -11,20 +11,17 @@ from pathlib import Path
 # Updated for Linux
 def run_ltl2ba(ltl_formula: str, ltl2ba_path: str | None = None) -> str:
     """
-    Invoke an LTL->BA translator.
+    Cross-platform LTL->BA translation.
 
-    Preference order:
-      1) Local Linux binary:  <repo>/ltl_core/ltl2ba
-      2) Explicit path or PATH 'ltl2ba' (Linux/Windows)
-      3) Local Windows binary: <repo>/ltl_core/ltl2ba.exe (Windows)
-      4) Spot's ltl2tgba (via PATH), emitting a Büchi automaton in SPIN format (--spin)
+    Linux/mac priority: Spot's ltl2tgba -> local 'ltl2ba' (ELF) -> PATH 'ltl2ba'
+    Windows priority:   local 'ltl2ba.exe' -> PATH 'ltl2ba.exe'/'ltl2ba' -> (optional) ltl2tgba
 
-    Raises FileNotFoundError if no translator is available.
+    Returns translator stdout (e.g., SPIN never-claim). Raises FileNotFoundError if nothing works.
     """
-
     here = Path(__file__).parent
+    is_windows = os.name == "nt" or sys.platform.startswith("win")
 
-    # Normalize formula for ltl2ba-style parsers
+    # Normalize common unicode operators for ltl2ba/ltl2tgba
     cleaned = (
         ltl_formula
         .replace("∧", "&&")
@@ -33,73 +30,62 @@ def run_ltl2ba(ltl_formula: str, ltl2ba_path: str | None = None) -> str:
         .replace("¬", "!")
     )
 
-    # Build candidate commands in order of preference
-    candidates: list[str] = []
+    candidates: list[list[str]] = []
 
-    # 1) Local Linux build placed next to this file
-    local_linux = here / "ltl2ba"
-    if local_linux.exists():
-        # ensure it's executable
-        try:
-            local_linux.chmod(local_linux.stat().st_mode | 0o111)
-        except Exception:
-            pass
-        candidates.append(str(local_linux))
+    if is_windows:
+        # 1) Local Windows binary
+        local_win = here / "ltl2ba.exe"
+        if local_win.exists():
+            candidates.append([str(local_win), "-f", cleaned])
+        # 2) PATH
+        for name in ("ltl2ba.exe", "ltl2ba"):
+            w = shutil.which(name)
+            if w:
+                candidates.append([w, "-f", cleaned])
+        # 3) Optional Spot fallback on Windows
+        spot = shutil.which("ltl2tgba")
+        if spot:
+            candidates.append([spot, "-B", "--spin", "-f", cleaned])
+    else:
+        # 1) Prefer Spot on Unix (produces BA + SPIN-format never-claim)
+        spot = shutil.which("ltl2tgba")
+        if spot:
+            candidates.append([spot, "-B", "--spin", "-f", cleaned])
+        # 2) Local Linux ltl2ba (ELF)
+        local_linux = here / "ltl2ba"
+        if local_linux.exists():
+            try:
+                local_linux.chmod(local_linux.stat().st_mode | 0o111)
+            except Exception:
+                pass
+            candidates.append([str(local_linux), "-f", cleaned])
+        # 3) PATH ltl2ba
+        w = shutil.which("ltl2ba")
+        if w:
+            candidates.append([w, "-f", cleaned])
+        # Note: we DO NOT try 'ltl2ba.exe' on non-Windows
 
-    # 2) Explicit path / PATH-provided ltl2ba (if user passed one)
+    # If user provided an explicit path, try it first
     if ltl2ba_path:
         if os.path.isfile(ltl2ba_path):
-            candidates.append(ltl2ba_path)
+            candidates.insert(0, [ltl2ba_path, "-f", cleaned])
         else:
             w = shutil.which(ltl2ba_path)
             if w:
-                candidates.append(w)
-
-    # Also try common names from PATH
-    for name in ("ltl2ba", "ltl2ba.exe"):
-        w = shutil.which(name)
-        if w:
-            candidates.append(w)
-
-    # 3) Local Windows binary (kept for Windows users)
-    local_win = here / "ltl2ba.exe"
-    if local_win.exists():
-        candidates.append(str(local_win))
-
-    # 4) Spot fallback (prints BA; --spin gives ltl2ba-like never-claim)
-    spot = shutil.which("ltl2tgba")
-    if spot:
-        candidates.append(spot + " --via-spot")  # marker to detect below
+                candidates.insert(0, [w, "-f", cleaned])
 
     last_err = None
-    for cmd in candidates:
+    for args in candidates:
         try:
-            if cmd.endswith("--via-spot"):
-                real = cmd.replace(" --via-spot", "")
-                args = [real, "-B", "--spin", "-f", cleaned]  # BA + SPIN format
-            else:
-                args = [cmd, "-f", cleaned]
-
             res = subprocess.run(args, capture_output=True, text=True, check=True)
             return res.stdout
-        except subprocess.CalledProcessError as e:
+        except (subprocess.CalledProcessError, PermissionError, OSError) as e:
+            # OSError covers "Exec format error" when accidentally hitting a .exe on Unix
             last_err = e
             continue
-        except PermissionError as e:
-            # Try to make local file executable once, then retry
-            try:
-                Path(cmd).chmod(Path(cmd).stat().st_mode | 0o111)
-                res = subprocess.run(args, capture_output=True, text=True, check=True)
-                return res.stdout
-            except Exception as ee:
-                last_err = ee
-                continue
 
-    # If we’re here, nothing worked
     raise FileNotFoundError(
-        "No usable LTL translator found. "
-        "Expected a Linux 'ltl2ba' beside this file, 'ltl2ba' in PATH, "
-        "a Windows 'ltl2ba.exe' on Windows, or Spot's 'ltl2tgba' in PATH.\n"
+        "No usable LTL translator found (ltl2tgba or ltl2ba). "
         f"Last error: {last_err}"
     )
 
