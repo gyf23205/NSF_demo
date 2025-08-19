@@ -8,21 +8,21 @@ import matplotlib.pyplot as plt
 from typing import Union
 from pathlib import Path
 
+TRANSLATOR_USED = None  # optional: for debugging/verification
 
 # Updated for Linux
 def run_ltl2ba(ltl_formula: str, ltl2ba_path: str | None = None) -> str:
     """
-    Cross-platform LTL->BA translation.
-
-    Linux/mac priority: Spot's ltl2tgba -> local 'ltl2ba' (ELF) -> PATH 'ltl2ba'
-    Windows priority:   local 'ltl2ba.exe' -> PATH 'ltl2ba.exe'/'ltl2ba' -> (optional) ltl2tgba
-
-    Returns translator stdout (e.g., SPIN never-claim). Raises FileNotFoundError if nothing works.
+    Use *ltl2ba* only (no Spot fallback).
+    Preference:
+      Windows:   <repo>/ltl_core/ltl2ba.exe -> PATH ltl2ba.exe/ltl2ba -> explicit arg -> $LTL2BA
+      Linux/mac: <repo>/ltl_core/ltl2ba     -> PATH ltl2ba           -> explicit arg -> $LTL2BA
+    On non-Windows, we NEVER try a .exe.
     """
     here = Path(__file__).parent
-    is_windows = os.name == "nt" or sys.platform.startswith("win")
+    is_windows = (os.name == "nt") or sys.platform.startswith("win")
 
-    # Normalize common unicode operators for ltl2ba/ltl2tgba
+    # Normalize a few unicode operators to ltl2ba syntax
     cleaned = (
         ltl_formula
         .replace("∧", "&&")
@@ -31,62 +31,82 @@ def run_ltl2ba(ltl_formula: str, ltl2ba_path: str | None = None) -> str:
         .replace("¬", "!")
     )
 
-    candidates: list[list[str]] = []
+    candidates: list[str] = []
 
+    # 1) Repo-local binary first (your working Linux binary lives here)
     if is_windows:
-        # 1) Local Windows binary
         local_win = here / "ltl2ba.exe"
         if local_win.exists():
-            candidates.append([str(local_win), "-f", cleaned])
-        # 2) PATH
+            candidates.append(str(local_win))
+    else:
+        local_lin = here / "ltl2ba"
+        if local_lin.exists():
+            # ensure it's executable
+            try:
+                local_lin.chmod(local_lin.stat().st_mode | 0o111)
+            except Exception:
+                pass
+            candidates.append(str(local_lin))
+
+    # 2) PATH
+    if is_windows:
         for name in ("ltl2ba.exe", "ltl2ba"):
             w = shutil.which(name)
             if w:
-                candidates.append([w, "-f", cleaned])
-        # 3) Optional Spot fallback on Windows
-        spot = shutil.which("ltl2tgba")
-        if spot:
-            candidates.append([spot, "-B", "--spin", "-f", cleaned])
+                candidates.append(w)
     else:
-        # 1) Prefer Spot on Unix (produces BA + SPIN-format never-claim)
-        spot = shutil.which("ltl2tgba")
-        if spot:
-            candidates.append([spot, "-B", "--spin", "-f", cleaned])
-        # 2) Local Linux ltl2ba (ELF)
-        local_linux = here / "ltl2ba"
-        if local_linux.exists():
-            try:
-                local_linux.chmod(local_linux.stat().st_mode | 0o111)
-            except Exception:
-                pass
-            candidates.append([str(local_linux), "-f", cleaned])
-        # 3) PATH ltl2ba
         w = shutil.which("ltl2ba")
         if w:
-            candidates.append([w, "-f", cleaned])
-        # Note: we DO NOT try 'ltl2ba.exe' on non-Windows
+            candidates.append(w)
 
-    # If user provided an explicit path, try it first
+    # 3) Explicit function argument
     if ltl2ba_path:
         if os.path.isfile(ltl2ba_path):
-            candidates.insert(0, [ltl2ba_path, "-f", cleaned])
+            candidates.append(ltl2ba_path)
         else:
             w = shutil.which(ltl2ba_path)
             if w:
-                candidates.insert(0, [w, "-f", cleaned])
+                candidates.append(w)
+
+    # 4) Environment override (last)
+    env_override = os.getenv("LTL2BA")
+    if env_override:
+        if os.path.isfile(env_override):
+            candidates.append(env_override)
+        else:
+            w = shutil.which(env_override)
+            if w:
+                candidates.append(w)
+
+    # De-dup while preserving order
+    seen, uniq = set(), []
+    for c in candidates:
+        if c and c not in seen:
+            uniq.append(c); seen.add(c)
 
     last_err = None
-    for args in candidates:
+    for cmd in uniq:
+        # never try a Windows .exe on non-Windows
+        if (not is_windows) and cmd.lower().endswith(".exe"):
+            continue
         try:
-            res = subprocess.run(args, capture_output=True, text=True, check=True)
+            res = subprocess.run([cmd, "-f", cleaned], capture_output=True, text=True, check=True)
+            globals()["TRANSLATOR_USED"] = cmd
             return res.stdout
         except (subprocess.CalledProcessError, PermissionError, OSError) as e:
-            # OSError covers "Exec format error" when accidentally hitting a .exe on Unix
+            # try to add +x if it's a file we control, then move on
+            try:
+                p = Path(cmd)
+                if p.exists():
+                    p.chmod(p.stat().st_mode | 0o111)
+            except Exception:
+                pass
             last_err = e
             continue
 
     raise FileNotFoundError(
-        "No usable LTL translator found (ltl2tgba or ltl2ba). "
+        "ltl2ba not found/usable. Provide a native ltl2ba for this OS.\n"
+        "Tried (in order): <repo>/ltl_core/ltl2ba(.exe), PATH, explicit arg, $LTL2BA.\n"
         f"Last error: {last_err}"
     )
 
