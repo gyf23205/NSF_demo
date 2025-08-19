@@ -9,6 +9,7 @@ import random
 import numpy as np
 import csv, json
 import math
+import time
 from collections import defaultdict, deque
 from time import strftime
 from main_gui_ltl import compute_utilization
@@ -512,7 +513,7 @@ def run_one_episode(seed=None,
     # --- Animation (replay) ----------------------------------------------------
     if animate_episode:
         max_len = max(len(a.traj) for a in ws.get_all_agents())
-        ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=True)
+        ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=False)
         import matplotlib.pyplot as plt  # ensure plt is in scope
         plt.show()
         print("Animation Closed.")
@@ -549,14 +550,19 @@ if __name__ == '__main__':
     PLOT_LATENCIES  = False   # also plot AP latency box plots across episodes
 
     if BATCH_EPISODES == 1:
+        # Measure time
+        cpu0, wall0 = time.process_time(), time.perf_counter()
         # Single episode: keep identical behavior
         run_one_episode(
             seed=None,
             log_dir=LOG_DIR,
-            show_episode_plots=True,
-            animate_episode=True,
+            show_episode_plots=False,
+            animate_episode=False,
             enable_manual_pick=False  # set True if you want the picker at the end
         )
+        # Time measurement out
+        cpu1, wall1 = time.process_time(), time.perf_counter()
+        print(f"Single episode run time: CPU={cpu1-cpu0:.2f}s, Wall={wall1-wall0:.2f}s")
 
     elif BATCH_EPISODES >= 2:
         # Multi-episode batch
