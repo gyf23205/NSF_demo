@@ -1,7 +1,7 @@
 import sys
-my_path = 'C:/Users/sooyung/Research/NSF_demo'
-sys.path.append(my_path)
 from pathlib import Path
+my_path = str(Path(__file__).resolve().parent.parent)
+sys.path.append(my_path)
 LOG_DIR = Path(my_path) / "examples" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)  # ensure it exists
 
