@@ -29,16 +29,25 @@ SLIDING_WINDOW = 60.0
 grid_size = (50, 40)
 # screen_size = (grid_size[0] * 30, grid_size[1] * 30)
 
-# Event setup: TO DO: They should be time + progress based triggers
-# FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0]
-# SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0]
-# ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0]
-# FIREMSG_TIMES = [80.0]
-# SURVIVORMSG_TIMES = [100.0]
-# ATMMSG_TIMES = [120.0]
-FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0, 135.0, 150.0, 200.0, 250.0, 300.0]
-SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0, 140.0, 156.0, 169.3, 205.0, 264.5]
-ATMMSG_TIMES = [35.0, 65.0, 90.0, 105.0, 120.0, 154.2, 185.3, 210.4, 250.4, 290.0]
+SIM_CASE = 2    # 1st run and 2nd run
+
+# Event setup
+if SIM_CASE == 1:
+    FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0]
+    SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0]
+    ATMMSG_TIMES = [35.0, 65.0, 90.0, 120.0]
+    N_DRONES = 2
+    N_GVS = 2
+    N_HUMANS = 1
+    N_TARGETS = 10
+elif SIM_CASE == 2:
+    FIREMSG_TIMES = [30.0, 45.0, 80.0, 110.0, 135.0, 150.0, 200.0, 250.0, 300.0]
+    SURVIVORMSG_TIMES = [25.0, 55.0, 70.0, 100.0, 140.0, 156.0, 169.3, 205.0, 264.5]
+    ATMMSG_TIMES = [35.0, 65.0, 90.0, 105.0, 120.0, 154.2, 185.3, 210.4, 250.4, 290.0]
+    N_DRONES = 5
+    N_GVS = 10
+    N_HUMANS = 2
+    N_TARGETS = 30
 
 # Drone latency
 L_MIN, L_MAX = 40.0, 500.0      # realistic latency bounds (ms)
@@ -327,7 +336,7 @@ if __name__ == "__main__":
         s.listen()
         clients = []  # Track all client addresses
         print("Server waiting for connection...")
-        while len(clients) < 1:  # !!! Wait for all client to connect
+        while len(clients) < N_HUMANS:  # !!! Wait for all client to connect
             conn, addr = s.accept()
             print("Connected by", addr)
             clients.append((conn, addr))  # Store the address
@@ -346,10 +355,10 @@ if __name__ == "__main__":
 
         # === Constants ===
         hover_duration = 10
-        n_targets = 30
-        n_drones = 5
-        n_gvs = 10
-        n_humans = 2
+        n_targets = N_TARGETS
+        n_drones = N_DRONES
+        n_gvs = N_GVS
+        n_humans = N_HUMANS    # Be carefule!
         n_wind = 3
 
         # === Mission Specification ===

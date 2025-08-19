@@ -512,7 +512,7 @@ def run_one_episode(seed=None,
     # --- Animation (replay) ----------------------------------------------------
     if animate_episode:
         max_len = max(len(a.traj) for a in ws.get_all_agents())
-        ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=False)
+        ani = animate_workspace(ws, sim=None, steps=max_len, interval=100, record=True)
         import matplotlib.pyplot as plt  # ensure plt is in scope
         plt.show()
         print("Animation Closed.")
@@ -544,7 +544,7 @@ if __name__ == '__main__':
     #  - BATCH_EPISODES == 1  -> behave exactly like current single-episode run
     #  - BATCH_EPISODES >= 2  -> run multiple episodes and show box plots
     #  - otherwise            -> fall back to single-episode run
-    BATCH_EPISODES  = 30       # <--- set this as you like
+    BATCH_EPISODES  = 1       # <--- set this as you like
     SAVE_BOX_PLOTS  = False   # save multi-episode figures to LOG_DIR/figs_multi
     PLOT_LATENCIES  = False   # also plot AP latency box plots across episodes
 

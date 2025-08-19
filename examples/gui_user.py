@@ -18,8 +18,8 @@ import yaml
 from datetime import datetime
 
 # For workload estimation
-# csv_path = 'dummy_log/aggregated_output.csv'
-csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
+csv_path = 'dummy_log/aggregated_output.csv'
+# csv_path = 'C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/aggregated_output.csv'
 wl_path = 'C:/Users/JW Choi/Desktop/NSF_demo-main/NSF_demo/examples/workload_history/'
 model_to_use = 'last_gauge.pt'
 model_to_ensemble1 = 'ensemble1.pt' 
@@ -473,9 +473,9 @@ class UserGUI:
         #     writer = csv.writer(f)
         #     writer.writerow(["timestamp", "output_value"])
 
-        with open(wl_history_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([datetime.now().isoformat(), float(self.pred_label)])
+        # with open(wl_history_path, "a", newline="") as f:
+        #     writer = csv.writer(f)
+        #     writer.writerow([datetime.now().isoformat(), float(self.pred_label)])
 
 
         # 3. update workload
