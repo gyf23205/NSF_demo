@@ -123,7 +123,7 @@ def run_train_test(
         ep_assigned = 0
 
         for step in range(steps_per_ep):
-            out = sim.step(DT)
+            out = sim.step(DT, mode="sim", verbose=False)
             unlocked, assignments, completed = out["unlocked"], out["assignments"], out["completed"]
 
             # Cache dispatch for newly assigned APs
@@ -172,7 +172,7 @@ def run_train_test(
     spec, ws, labeler, binding_mgr, allocator, sim = make_env(s_mask, V, eta_weight, dv_weight)
     dispatch.clear()
     for step in range(min(steps_per_ep, 2000)):
-        out = sim.step(DT)
+        out = sim.step(DT, mode="sim", verbose=False)
         unlocked, assignments, completed = out["unlocked"], out["assignments"], out["completed"]
         if getattr(sim, "done", False):
             break
