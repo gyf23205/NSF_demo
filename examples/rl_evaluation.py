@@ -77,6 +77,14 @@ def record_episode(sim: Simulation,
     return frames_recorded
 
 
+def _pad_ws_targets(ws, n_regions: int):
+    locs = list(getattr(ws, "target_locations", []))
+    if len(locs) < n_regions:
+        filler = locs[0] if locs else (0, 0)
+        locs.extend([filler] * (n_regions - len(locs)))
+        ws.target_locations = locs
+
+
 def make_env(s_mask, V: ValueBank, eta_weight: float = 1.0, dv_weight: float = 1.0):
     bm = BindingManager(verbose=False)
     spec = Specification()
@@ -84,6 +92,7 @@ def make_env(s_mask, V: ValueBank, eta_weight: float = 1.0, dv_weight: float = 1
 
     ws = Workspace(size=(50, 40), target_mask=s_mask,
                    num_drones=3, num_gvs=4, num_humans=2, margin=4)
+    _pad_ws_targets(ws, n_regions=len(s_mask))
     bm.agents_by_type = ws.agents
 
     labeler = Labeler(spec)
