@@ -29,6 +29,11 @@ class RLAllocator(RandomAllocator):
         self.eta_weight = float(eta_weight)
         self.dv_weight = float(dv_weight)
 
+    def _can_take(self, group: str, role: str, agent) -> bool:
+        bound = self.binding_manager.get_bound_agent_for_group(group, role)
+        # allow if nobody bound, or the same agent is already bound
+        return (bound is None) or (getattr(bound, "label", None) == getattr(agent, "label", None))
+
     # Simulator calls this entry point each replan tick.
     # Keep the signature to match Simulation.step(). :contentReference[oaicite:5]{index=5}
     def choose_eta(self, unlocked: Set[str], completed: List[str], aps: Set[str]) -> Dict[Agent, str]:
@@ -90,7 +95,7 @@ class RLAllocator(RandomAllocator):
                     if a in assigned:
                         continue
                     # respect binding; skip if this (group,role) is bound to someone else :contentReference[oaicite:8]{index=8}
-                    if not self.binding_manager.record_assignment(t, a, role):
+                    if not self._can_take(group, role, a):
                         continue
 
                     eta = self._eta_estimate(a, t, pref)

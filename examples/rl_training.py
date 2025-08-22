@@ -126,32 +126,32 @@ def run_train_test(
             out = sim.step(DT, mode="sim", verbose=False)
             unlocked, assignments, completed = out["unlocked"], out["assignments"], out["completed"]
 
-            # Cache dispatch for newly assigned APs
+            # when caching dispatch:
             for agent, ap in assignments.items():
                 if ap not in dispatch:
-                    q_before = labeler.states.get(ap)
+                    group = binding_mgr.task_to_group.get(ap, None)   # NEW
+                    q_before = labeler.states.get(group)              # NEW
                     s_vec = build_s_vector(ws, ap)
                     t_assign = getattr(sim, "time", step)
-                    who = getattr(agent, "label", None) or getattr(agent, "name", None) or f"agent_{getattr(agent, 'id', id(agent))}"
-                    dispatch[ap] = (q_before, s_vec, t_assign, who)
-                    ep_assigned += 1
+                    who = getattr(agent, "label", None) or getattr(agent, "name", None) or ...
+                    # store group so we can read q_after consistently
+                    dispatch[ap] = (group, q_before, s_vec, t_assign, who)
 
-            # On completion → push sample + online TD
-            for ap in completed:
-                info = dispatch.pop(ap, None)
-                if info is None:
-                    continue
-                q_before, s_vec, t_assign, who = info
-                t_done = getattr(sim, "time", step)
-                tau = float(t_done - t_assign)
-                if is_oversight_ap(ap):
-                    tau += oversight_delay_penalty(ap, t_assign, t_done, eta=oversight_eta)
-                q_after = labeler.states.get(ap)
+            # on completion:
+            info = dispatch.pop(ap, None)
+            if info is None:
+                continue
+            group, q_before, s_vec, t_assign, who = info
+            t_done = getattr(sim, "time", step)
+            tau = float(t_done - t_assign)
+            if is_oversight_ap(ap):
+                tau += oversight_delay_penalty(ap, t_assign, t_done, eta=oversight_eta)
 
-                replay.push(ap, q_before, q_after, s_vec, tau,
-                            meta={"ep": ep, "step": step, "agent": who, "tid": parse_target_id(ap)})
-                ep_completed += 1
-                trainer.update_online(n_recent=1)
+            q_after = labeler.states.get(group)  # NEW – group DFA node after completion
+
+            replay.push(ap, q_before, q_after, s_vec, tau,
+                        meta={"ep": ep, "step": step, "agent": who, "tid": parse_target_id(ap)})
+            trainer.update_online(n_recent=1)
 
             if step % 50 == 0 and len(replay) >= 64:
                 stats = trainer.update()
