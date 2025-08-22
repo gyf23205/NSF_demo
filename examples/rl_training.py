@@ -183,7 +183,7 @@ def run_train_test(
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--episodes", type=int, default=10)
+    p.add_argument("--episodes", type=int, default=100)
     p.add_argument("--steps", type=int, default=2000)
     p.add_argument("--s-dim", type=int, default=3)
     p.add_argument("--eta-weight", type=float, default=1.0)
