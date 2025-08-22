@@ -50,7 +50,7 @@ def record_episode(sim: Simulation,
     frames_recorded = 0
 
     for step in range(steps):
-        out = sim.step(dt)
+        out = sim.step(dt, mode="sim", verbose=False)
         assignments = out.get("assignments", {})
         completed   = out.get("completed", [])
 
