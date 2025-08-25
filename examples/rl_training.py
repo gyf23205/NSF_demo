@@ -232,6 +232,11 @@ def run_train_test(
 
             if getattr(sim, "done", False):
                 break
+            
+            # Check termination
+            if labeler.all_completed() and ws.all_mobile_agents_at_base():
+                print(f"[t={t_now:.2f}] Mission completed!")
+                running = False
 
         # Save critic each episode
         V.save(model_ckpt)  # value bank checkpoint                                           :contentReference[oaicite:12]{index=12}
