@@ -31,6 +31,7 @@ except Exception:
 
 def record_episode(sim: Simulation,
                    ws: Workspace,
+                   labeler: Labeler,
                    steps: int,
                    dt: float,
                    logger: GuiEpisodeLogger | None = None,
@@ -72,6 +73,11 @@ def record_episode(sim: Simulation,
             frames_recorded += 1
 
         if getattr(sim, "done", False):
+            break
+
+        # Check termination
+        if labeler.all_completed() and ws.all_mobile_agents_at_base():
+            print(f"[t={t_now:.2f}] Mission completed!")
             break
 
     return frames_recorded
@@ -141,10 +147,10 @@ def main():
     # 5) Run episode with gradients disabled (critical for speed)
     if torch is not None:
         with torch.no_grad():
-            frames = record_episode(sim, ws, steps=args.steps, dt=args.dt,
+            frames = record_episode(sim, ws, labeler, steps=args.steps, dt=args.dt,
                                     logger=logger, log_every=args.log_every, frame_skip=args.frame_skip)
     else:
-        frames = record_episode(sim, ws, steps=args.steps, dt=args.dt,
+        frames = record_episode(sim, ws, labeler, steps=args.steps, dt=args.dt,
                                 logger=logger, log_every=args.log_every, frame_skip=args.frame_skip)
 
     # 6) Optional GIF (playback). Each frame represents (dt * frame_skip) seconds.
