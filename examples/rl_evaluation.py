@@ -184,9 +184,12 @@ def make_env(s_mask, V: ValueBank, eta_weight: float = 1.0, dv_weight: float = 1
 # ---- Timed event scheduler (mirrors your dev loop) ---------------------------
 class EventScheduler:
     def __init__(self,
-                 fire_times=(30.0, 45.0, 80.0, 110.0, 150.0, 250.0, 300.0),
-                 surv_times=(25.0, 55.0, 70.0, 100.0, 156.0, 169.3, 264.5),
-                 atm_times =(35.0, 65.0, 90.0, 120.0, 154.2, 185.3, 210.4, 290.0),
+                #  fire_times=(30.0, 45.0, 80.0, 110.0, 150.0, 250.0, 300.0),
+                #  surv_times=(25.0, 55.0, 70.0, 100.0, 156.0, 169.3, 264.5),
+                #  atm_times =(35.0, 65.0, 90.0, 120.0, 154.2, 185.3, 210.4, 290.0),
+                 fire_times=(),
+                 surv_times=(),
+                 atm_times =(),
                  rng=None):
         self.fire_times = list(fire_times)
         self.surv_times = list(surv_times)
