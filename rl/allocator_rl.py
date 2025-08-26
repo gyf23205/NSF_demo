@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple, Any, Optional
+from typing import Dict, List, Set, Tuple, Optional
 import math
 import numpy as np
 
 from ltl_core.agent import Agent
-from ltl_core.specification import get_ap_prefix, is_environment_ap, Specification
+from ltl_core.specification import is_environment_ap, Specification
 from ltl_core.binding_manager import BindingManager
 from ltl_core.labeler import Labeler
 from ltl_core.workspace import Workspace
 from ltl_core.value_fn import ValueBank
 
 from rl.value_features import build_s_vector
-
-ROLE_TO_TYPE = {"drones": 1, "gvs": 2, "humans": 3}
 
 class RLAllocator:
     def __init__(
@@ -49,6 +47,7 @@ class RLAllocator:
         if tid < 0 or tid >= len(getattr(self.ws, "target_locations", [])):
             return 1e9
         try:
+            # use current goal position if set (reduces oscillation)
             ax, ay = (agent.goal[:2] if (use_goal and getattr(agent, "goal", None) is not None)
                       else agent.pos[:2])
             tx, ty = self.ws.target_locations[int(tid)]
@@ -59,26 +58,8 @@ class RLAllocator:
             return 1e9
 
     def _role_for_ap(self, ap: str) -> str:
-        return self.spec.get_required_role_by_ap(ap)  # 'drones'/'gvs'/'humans' or 'unknown'
-
-    # ---------- binding helpers (compatible with your BM variants) ------------
-    def _is_group_role_bound(self, group: str, role: str) -> bool:
-        bm = self.binding_manager
-        # try the explicit helpers if present
-        if hasattr(bm, "get_bound_agent_for_group_by_role"):
-            return bm.get_bound_agent_for_group_by_role(group, role) is not None
-        if hasattr(bm, "get_bound_agent_for_group"):
-            # some versions expect numeric type; try both
-            atype = ROLE_TO_TYPE.get(role, role)
-            try:
-                return bm.get_bound_agent_for_group(group, atype) is not None
-            except Exception:
-                return bm.get_bound_agent_for_group(group, role) is not None
-        # fallback to internal dicts if exposed
-        if hasattr(bm, "bindings"):
-            cur = bm.bindings.get(group, {})
-            return (role in cur) or (ROLE_TO_TYPE.get(role) in cur)
-        return False
+        # 'drones' | 'gvs' | 'humans' | 'unknown'
+        return self.spec.get_required_role_by_ap(ap)
 
     # ------------------------ candidate construction --------------------------
     def _grouped_candidates(
@@ -96,7 +77,12 @@ class RLAllocator:
             group = getattr(bm, "task_to_group", {}).get(ap)
             if not group:
                 continue
-            if self._is_group_role_bound(group, role):
+            # skip if this (group, role) is already bound
+            try:
+                is_bound = bm.get_bound_agent_for_group(group, agent_type=role) is not None
+            except Exception:
+                is_bound = False
+            if is_bound:
                 continue
             raw[role].append((ap, group))
 
@@ -141,7 +127,7 @@ class RLAllocator:
                     s_vec = build_s_vector(self.ws, ap)
                     v = float(self.value_bank.value_leaf(ap, q_node, s_vec))
                     eta = self._eta_pos(agent, tid, use_goal=True)
-                    score = v - self.eta_weight * eta  # dv term unused by default
+                    score = v - self.eta_weight * eta  # (ΔV term unused)
                     if (best is None) or (score > best[0]):
                         best = (score, agent, ap)
 
@@ -149,18 +135,16 @@ class RLAllocator:
                 return
 
             _, agent, ap = best
-            # ---- FIX: use (task_name, agent_id, agent_type) signature ----
-            agent_id = getattr(agent, "id", None)
-            agent_type = ROLE_TO_TYPE.get(role, role)
+            # CORRECT SIGNATURE: (task_name, agent: Agent, agent_type: str)
             ok = False
             try:
-                ok = self.binding_manager.record_assignment(ap, agent_id, agent_type)
+                ok = self.binding_manager.record_assignment(ap, agent, role)
             except TypeError:
-                # Fallback if BM uses named args but same signature
-                ok = self.binding_manager.record_assignment(task_name=ap, agent_id=agent_id, agent_type=agent_type)
+                # fallback to named args if BM uses them
+                ok = self.binding_manager.record_assignment(task_name=ap, agent=agent, agent_type=role)
             if ok:
                 actions[agent] = ap
-            # else: binding rejected; skip
+            # else: binding rejected (race/constraint); skip
 
         pick_for_role("drones")
         pick_for_role("gvs")
