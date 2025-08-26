@@ -115,7 +115,19 @@ def record_episode(sim: Simulation,
             h.utilization = 100.0 * (busy_time / SLIDING_WINDOW if SLIDING_WINDOW > 0 else 0.0)
 
         # sample logger sparsely
+        # if logger is not None and (step % log_every) == 0:
+        #     logger.note_step(t_now, assignments, completed, ws.agents.get("humans", []))
+
+        # sample logger sparsely: NEW
+        episode_score = { "H0": human_SA.get("H0", 0.0), "H1": human_SA.get("H1", 0.0) }
+
         if logger is not None and (step % log_every) == 0:
+            # pass score series if logger supports it; fall back to note_step otherwise
+            try:
+                # NOTE: logger may not have this method in older versions; hence try/except
+                logger.note_score(t_now, episode_score)   # <-- add this first (if available)
+            except Exception:
+                pass
             logger.note_step(t_now, assignments, completed, ws.agents.get("humans", []))
 
         # record positions/progress sparsely for GIF playback
