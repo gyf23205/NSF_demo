@@ -15,8 +15,8 @@ from rl.value_features import build_s_vector
 class RLAllocator:
     """
     Random-like allocator with a value-aware tie-break on preemptible physical tasks:
-      - One AP per group per tick.
-      - Humans (symbolic) are sticky; we re-record the same assignment each tick so progress accumulates.
+      - One AP per group per tick (physical).
+      - Humans (symbolic) are sticky; do not re-record assignment each tick.
       - Drones: NAV is preemptible, SCAN continues.
       - GVs   : PICKUP is preemptible, DROPOFF continues.
       - Among same-priority preemptible tasks, ValueBank ranks tasks; agent choice remains nearest-by-ETA.
@@ -98,33 +98,19 @@ class RLAllocator:
 
         assigned_agents: Set[Agent] = set()
         claimed_groups: Set[str] = set()
+        symb_running: Set[str] = set()  # symbolic APs currently being executed by humans
 
-        # ---- 0) Human symbolic continuation (sticky with re-record) ----
+        # ---- 0) Human symbolic continuation (sticky; do NOT re-record; do NOT claim group) ----
         for h in self.agents_by_type.get("humans", []):
             task = getattr(h, "current_symbolic_task", None)
             if not task:
                 continue
             if (task in unlocked) and (task not in completed_set) and (task not in aps):
-                role = self.spec.get_required_role_by_ap(task)
-                group = getattr(self.binding_manager, "task_to_group", {}).get(task)
-                if group in claimed_groups:
-                    # already satisfied by the group this tick; still add action for timeline
-                    actions[h] = task
-                    assigned_agents.add(h)
-                    continue
-                ok = False
-                try:
-                    ok = self.binding_manager.record_assignment(task, h, role)
-                except TypeError:
-                    ok = self.binding_manager.record_assignment(task_name=task, agent=h, agent_type=role)
-                if ok:
-                    actions[h] = task
-                    assigned_agents.add(h)
-                    if group:
-                        claimed_groups.add(group)
-                # Do not reset symbolic on failure; keep previous progress/state.
+                actions[h] = task           # emit the same task for the human
+                assigned_agents.add(h)
+                symb_running.add(task)      # remember to avoid re-recording in step-5
             else:
-                # task no longer eligible → allow reallocation from scratch
+                # task no longer eligible -> allow reallocation from scratch
                 if hasattr(h, "reset_symbolic"):
                     h.reset_symbolic()
 
@@ -269,11 +255,12 @@ class RLAllocator:
         _assign_physical(gv_pickups, "gvs")
         _assign_physical(gv_dropoffs, "gvs")
 
-        # ---- 5) Assign new symbolic tasks (start) ----
+        # ---- 5) Assign new symbolic tasks (start only; skip ones already running) ----
         free_humans: List[Agent] = [h for h in self.agents_by_type.get("humans", []) if h not in assigned_agents]
         for group, t in pending_symb:
-            if group in claimed_groups:
-                continue
+            if t in symb_running:
+                continue  # already being executed by a human this tick
+
             # prefer an already bound human, if free
             bound_h: Optional[Agent] = None
             try:
@@ -297,6 +284,6 @@ class RLAllocator:
             if ok:
                 actions[target_h] = t
                 assigned_agents.add(target_h)
-                claimed_groups.add(group)
+                # IMPORTANT: do not claim the group for symbolic; keep physical free
 
         return actions
