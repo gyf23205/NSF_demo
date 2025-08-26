@@ -1016,26 +1016,6 @@ class GuiEpisodeLogger:
         self.fig_size_inch = fig_size_inch
         self.csv_prefix = csv_prefix
 
-    def note_score(self, t, score_by_human: dict):
-        """Record per-human scalar 'score' at time t (e.g., SA-based score).
-
-        This function is optional; callers may ignore it if they only log steps.
-        If called, it appends score values into the same SA series so they show
-        up on the top-left plot (Task Complete Score over Time).
-        """
-        # ensure time is appended only once per tick for this call
-        if (not self.times) or (float(t) != float(self.times[-1])):
-            self.times.append(float(t))
-
-        for h, val in (score_by_human or {}).items():
-            if h not in self.sa_by_h:
-                # lazily create a new series if an unseen human label arrives
-                self.sa_by_h[h] = []
-                self.util_by_h[h] = []
-                if h not in self.human_labels:
-                    self.human_labels.append(h)
-            self.sa_by_h[h].append(float(val))
-
     def note_step(self, t, assignments: dict, completed, humans):
         """
         assignments: dict {AgentObj -> ap_str}  (None if idle)
