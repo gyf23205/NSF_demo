@@ -14,7 +14,16 @@ from ltl_core.value_fn import ValueBank
 
 from rl.value_features import build_s_vector
 
+
 class RLAllocator:
+    """
+    Value-aware allocator that:
+      - assigns greedily across *different* groups,
+      - enforces ONE AP PER GROUP PER TICK globally (all roles),
+      - keeps symbolic tasks sticky to the original human,
+      - allows physical reallocation (Simulation handles preemption on priority change).
+    """
+
     def __init__(
         self,
         spec: Specification,
@@ -32,6 +41,7 @@ class RLAllocator:
         self.binding_manager = binding_manager
         self.labeler = labeler
         self.ws = workspace
+
         self.value_bank = value_bank
         self.eta_weight = float(eta_weight)
         self.dv_weight = float(dv_weight)
@@ -44,13 +54,14 @@ class RLAllocator:
             return -1
 
     def _eta_pos(self, agent: Agent, tid: int, use_goal: bool = True) -> float:
-        if tid < 0 or tid >= len(getattr(self.ws, "target_locations", [])):
+        """Distance/speed ETA proxy."""
+        locs = getattr(self.ws, "target_locations", [])
+        if tid < 0 or tid >= len(locs):
             return 1e9
         try:
-            # use current goal position if set (reduces oscillation)
             ax, ay = (agent.goal[:2] if (use_goal and getattr(agent, "goal", None) is not None)
                       else agent.pos[:2])
-            tx, ty = self.ws.target_locations[int(tid)]
+            tx, ty = locs[int(tid)]
             dist = math.hypot(float(tx) - float(ax), float(ty) - float(ay))
             vmax = float(getattr(agent, "max_speed", 1.0)) or 1.0
             return dist / max(vmax, 1e-6)
@@ -65,6 +76,13 @@ class RLAllocator:
     def _grouped_candidates(
         self, unlocked: Set[str], completed: Set[str], aps_now: Set[str]
     ) -> Dict[str, List[Tuple[str, str]]]:
+        """
+        Returns {role: [(ap, group_key), ...]} with:
+         - unlocked & not completed & not already true now
+         - not environment APs
+         - (group, role) not already bound (sticky symbolic)
+         - within each group, only the NEXT task by labeler order
+        """
         bm, lbl = self.binding_manager, self.labeler
         raw: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
 
@@ -77,29 +95,32 @@ class RLAllocator:
             group = getattr(bm, "task_to_group", {}).get(ap)
             if not group:
                 continue
-            # skip if this (group, role) is already bound
+
+            # If (group,role) already bound → skip (symbolic stickiness; human keeps it)
             try:
-                is_bound = bm.get_bound_agent_for_group(group, agent_type=role) is not None
+                already = bm.get_bound_agent_for_group(group, agent_type=role)
+                if already is not None:
+                    continue
             except Exception:
-                is_bound = False
-            if is_bound:
-                continue
+                pass
+
             raw[role].append((ap, group))
 
+        # Reduce to next unfinished AP per group (step-by-step semantics)
         per_role: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
         for role, items in raw.items():
             by_group: Dict[str, List[str]] = defaultdict(list)
             for ap, g in items:
                 by_group[g].append(ap)
             for g, aps in by_group.items():
-                ordered = lbl.get_group_ordered_tasks(g) or []
-                next_task = None
+                ordered = self.labeler.get_group_ordered_tasks(g) or []
+                nxt = None
                 for t in ordered:
                     if (t in aps) and (t not in completed):
-                        next_task = t
+                        nxt = t
                         break
-                if next_task is not None:
-                    per_role[role].append((next_task, g))
+                if nxt is not None:
+                    per_role[role].append((nxt, g))
         return per_role
 
     # ------------------------------- API --------------------------------------
@@ -109,44 +130,68 @@ class RLAllocator:
         completed_set = set(completed)
         actions: Dict[Agent, str] = {}
 
+        # Build role->[(ap,group)] once
         cand = self._grouped_candidates(unlocked, completed_set, aps)
 
-        def pick_for_role(role: str) -> None:
-            items = cand.get(role, [])
-            if not items:
+        # GLOBAL guard: groups already claimed this tick (across *all* roles)
+        claimed_groups: Set[str] = set()
+
+        def greedy_pick_for_role(role: str) -> None:
+            """Assign as many free agents of `role` as there are viable (unclaimed) groups."""
+            pool: List[Tuple[str, str]] = [
+                (ap, g) for (ap, g) in cand.get(role, []) if g not in claimed_groups
+            ]
+            if not pool:
                 return
-            free_agents = [a for a in self.agents_by_type.get(role, []) if a not in actions]
+
+            free_agents: List[Agent] = [
+                a for a in self.agents_by_type.get(role, []) if a not in actions
+            ]
             if not free_agents:
                 return
 
-            best: Optional[Tuple[float, Agent, str]] = None
-            for agent in free_agents:
-                for ap, group in items:
+            while free_agents and pool:
+                # precompute features per candidate
+                feats: List[Tuple[str, int, float, str]] = []  # (ap, tid, v, group)
+                for ap, g in pool:
                     tid = self._parse_tid(ap)
-                    q_node = self.labeler.states.get(group)
+                    q_node = self.labeler.states.get(g)
                     s_vec = build_s_vector(self.ws, ap)
                     v = float(self.value_bank.value_leaf(ap, q_node, s_vec))
-                    eta = self._eta_pos(agent, tid, use_goal=True)
-                    score = v - self.eta_weight * eta  # (ΔV term unused)
-                    if (best is None) or (score > best[0]):
-                        best = (score, agent, ap)
+                    feats.append((ap, tid, v, g))
 
-            if best is None:
-                return
+                best: Optional[Tuple[float, int, int]] = None  # (score, ai, pi)
+                for ai, agent in enumerate(free_agents):
+                    for pi, (ap, tid, v, _g) in enumerate(feats):
+                        eta = self._eta_pos(agent, tid, use_goal=True)
+                        score = v - self.eta_weight * eta  # (ΔV term currently unused)
+                        if (best is None) or (score > best[0]):
+                            best = (score, ai, pi)
 
-            _, agent, ap = best
-            # CORRECT SIGNATURE: (task_name, agent: Agent, agent_type: str)
-            ok = False
-            try:
-                ok = self.binding_manager.record_assignment(ap, agent, role)
-            except TypeError:
-                # fallback to named args if BM uses them
-                ok = self.binding_manager.record_assignment(task_name=ap, agent=agent, agent_type=role)
-            if ok:
-                actions[agent] = ap
-            # else: binding rejected (race/constraint); skip
+                if best is None:
+                    break
 
-        pick_for_role("drones")
-        pick_for_role("gvs")
-        pick_for_role("humans")
+                _, ai, pi = best
+                agent = free_agents.pop(ai)
+                ap, _tid, _v, g = feats[pi]
+
+                # Record binding using expected signature (task_name, agent_obj, agent_type_str)
+                ok = False
+                try:
+                    ok = self.binding_manager.record_assignment(ap, agent, role)
+                except TypeError:
+                    ok = self.binding_manager.record_assignment(
+                        task_name=ap, agent=agent, agent_type=role
+                    )
+                if ok:
+                    actions[agent] = ap
+                    claimed_groups.add(g)  # forbid any more APs from this group this tick
+                    # prune any candidate from claimed groups for future picks
+                    pool = [(t, gg) for (t, gg) in pool if gg not in claimed_groups]
+                # else: rejected (race/constraint); continue
+
+        # Order doesn’t change semantics; keeping D→G→H like before
+        greedy_pick_for_role("drones")
+        greedy_pick_for_role("gvs")
+        greedy_pick_for_role("humans")
         return actions
