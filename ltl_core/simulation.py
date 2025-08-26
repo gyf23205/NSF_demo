@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 from ltl_core.dag_builder import build_dag
 from ltl_core.automaton_generator import compile_automata
@@ -29,6 +31,9 @@ class Simulation:
         # Remember last seen priority-version from Workspace
         self.prev_priority_version = getattr(self.workspace, "get_priority_version", lambda: 0)()
 
+        # NEW: canonical simulation clock (seconds)
+        self.time = 0.0
+
     @staticmethod
     def parse_ap_target_index(ap: str) -> int:
         return int(ap.split("_")[2])
@@ -40,6 +45,12 @@ class Simulation:
         return None
     
     def step(self, dt, mode="gui", verbose=False):
+        # CHANGED: advance canonical clock first
+        try:
+            self.time = float(self.time) + float(dt)
+        except Exception:
+            self.time = 0.0
+
         # Advance agent dynamics
         self.workspace.step_dynamics(dt=dt)
 
@@ -144,12 +155,10 @@ class Simulation:
             "completed": completed
         })
 
-        # print("[Labeling] APs = ", sorted(aps))
-        # print(sorted(list(completed)))
-
         return {
             "unlocked": unlocked,
             "completed": completed,
             "assignments": actions,
-            "label": aps
-        } 
+            "label": aps,
+            "time": self.time,        # NEW: expose canonical time
+        }

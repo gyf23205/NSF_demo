@@ -76,11 +76,14 @@ def run_train_test(
     oversight_eta: float = 0.0,  # >0 to activate oversight penalty in tau
     model_ckpt: str = "checkpoints/value_bank.pt",
     seed: int = 0,
+    n_regions: int = 15,
+    active_k: int = 12,
 ):
     """
     Patched training loop:
-      - Adds timed world events (FIRE/SURVIVOR/ATM) and verify-gate selection.
+      - Trains on the same *distribution* of active-region masks used by eval.
       - Pads workspace indices so tid lookups are always safe (no core edits).
+      - Adds timed world events (FIRE/SURVIVOR/ATM) and verify-gate selection.
       - Records TD transitions using GROUP DFAs (q_before/q_after).
     """
 
@@ -90,7 +93,7 @@ def run_train_test(
 
     # ---- helpers (script-side, no core changes) -------------------------------
 
-    # Events like your old loop
+    # Events like your dev/eval loops
     class EventScheduler:
         def __init__(self,
                      fire_times=(30.0, 45.0, 80.0, 110.0, 150.0, 250.0, 300.0),
@@ -165,21 +168,26 @@ def run_train_test(
                     dop[k] = example
             ws.dropoff_locations = dop
 
-    # Build a simple all-active mask (edit if you randomize)
-    s_mask = [1] * 15
+    # Per-episode randomized active mask to match eval distribution
+    def sample_mask():
+        mask = [0] * n_regions
+        for i in rng.choice(n_regions, size=min(active_k, n_regions), replace=False):
+            mask[i] = 1
+        return mask
 
     # ---- RL components --------------------------------------------------------
-    V = ValueBank(ValueNetConfig(s_dim=s_dim))                                  # :contentReference[oaicite:4]{index=4}
-    replay = APReplay(capacity=100_000, seed=seed)                               # :contentReference[oaicite:5]{index=5}
-    trainer = CriticTrainer(V, replay, TrainerCfg(batch_size=64, alpha=1e-3))    # :contentReference[oaicite:6]{index=6}
+    V = ValueBank(ValueNetConfig(s_dim=s_dim))
+    replay = APReplay(capacity=100_000, seed=seed)
+    trainer = CriticTrainer(V, replay, TrainerCfg(batch_size=64, alpha=1e-3))
 
     # Dispatch cache: ap -> (group, q_before, s_vec, t_assign, agent_label)
     dispatch = {}
 
     # ---- Episodes -------------------------------------------------------------
     for ep in range(1, episodes + 1):
-        # Fresh env per episode (reuse your helper)
-        spec, ws, labeler, binding_mgr, allocator, sim = make_env(s_mask, V, eta_weight, dv_weight)  # :contentReference[oaicite:7]{index=7}
+        # Fresh env per episode (random mask to match eval)
+        s_mask = sample_mask()
+        spec, ws, labeler, binding_mgr, allocator, sim = make_env(s_mask, V, eta_weight, dv_weight)
         _pad_ws_indices(ws, n_regions=len(s_mask))  # script-side safety shim
         dispatch.clear()
 
@@ -202,7 +210,7 @@ def run_train_test(
                 if ap not in dispatch:
                     group = binding_mgr.task_to_group.get(ap, None)  # group DFA key
                     q_before = labeler.states.get(group)
-                    s_vec = build_s_vector(ws, ap)                    # :contentReference[oaicite:8]{index=8}
+                    s_vec = build_s_vector(ws, ap)
                     who = getattr(agent, "label", None) or getattr(agent, "name", None) or f"agent_{getattr(agent, 'id', id(agent))}"
                     dispatch[ap] = (group, q_before, s_vec, t_now, who)
                     ep_assigned += 1
@@ -222,31 +230,39 @@ def run_train_test(
 
                 # TD sample for critic
                 replay.push(ap, q_before, q_after, s_vec, tau,
-                            meta={"ep": ep, "step": step, "agent": who, "tid": parse_target_id(ap)})  # :contentReference[oaicite:9]{index=9}
+                            meta={"ep": ep, "step": step, "agent": who, "tid": parse_target_id(ap)})
                 ep_completed += 1
-                trainer.update_online(n_recent=1)  # immediate TD(0) step                      :contentReference[oaicite:10]{index=10}
+                trainer.update_online(n_recent=1)  # immediate TD(0) step
 
             # Optional periodic minibatch updates
             if step % 50 == 0 and len(replay) >= 64:
-                trainer.update()  # sampled batch TD(0)                                        :contentReference[oaicite:11]{index=11}
+                trainer.update()  # sampled batch TD(0)
+
+            # Optional tiny debug trace (comment out if noisy)
+            # from collections import Counter
+            # print(f"[ep={ep} t={t_now:.1f}] unlocked={Counter(a.split('_')[1] for a in unlocked)} "
+            #       f"assigned={[f'{getattr(a,'label',a)}->{ap}' for a, ap in assignments.items()]} "
+            #       f"completed={len(completed)}")
 
             if getattr(sim, "done", False):
                 break
-            
+
             # Check termination
             if labeler.all_completed() and ws.all_mobile_agents_at_base():
                 print(f"[t={t_now:.2f}] Mission completed!")
                 break
 
         # Save critic each episode
-        V.save(model_ckpt)  # value bank checkpoint                                           :contentReference[oaicite:12]{index=12}
+        V.save(model_ckpt)  # value bank checkpoint
         print(f"EP {ep:03d}: assigned={ep_assigned} completed={ep_completed} saved={model_ckpt}")
 
     print("Training finished.")
 
     # ---- Quick eval pass (no learning) ----------------------------------------
     print("Testing learned allocator (no learning)...")
-    spec, ws, labeler, binding_mgr, allocator, sim = make_env(s_mask, V, eta_weight, dv_weight)      # :contentReference[oaicite:13]{index=13}
+    # use the same mask distribution for the quick test as well
+    s_mask = sample_mask()
+    spec, ws, labeler, binding_mgr, allocator, sim = make_env(s_mask, V, eta_weight, dv_weight)
     _pad_ws_indices(ws, n_regions=len(s_mask))
     for step in range(min(steps_per_ep, 2000)):
         out = sim.step(DT, mode="sim", verbose=False)
@@ -267,6 +283,8 @@ def main():
     p.add_argument("--oversight-eta", type=float, default=0.0)
     p.add_argument("--ckpt", type=str, default="checkpoints/value_bank.pt")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--n-regions", type=int, default=15)
+    p.add_argument("--active-k", type=int, default=12)
     args = p.parse_args()
 
     run_train_test(
@@ -278,6 +296,8 @@ def main():
         oversight_eta=args.oversight_eta,
         model_ckpt=args.ckpt,
         seed=args.seed,
+        n_regions=args.n_regions,
+        active_k=args.active_k,
     )
 
 if __name__ == "__main__":
