@@ -12,7 +12,7 @@ from ltl_core.value_fn import ValueBank
 
 # 기존 동작을 1:1로 보장하기 위해, 최종 배포된 단순 할당기를 그대로 사용
 # (당신 프로젝트의 위치에 맞춰 import 경로가 'allocator' 입니다)
-from allocator import RandomAllocator
+from ltl_core.allocator import RandomAllocator
 
 # --- 선택형: value 기반 기능을 나중에 다시 켜고 싶을 때 사용 ---
 # from rl.value_features import build_s_vector
