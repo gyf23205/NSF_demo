@@ -14,12 +14,12 @@ from rl.value_features import build_s_vector
 
 class RLAllocator:
     """
-    RandomAllocator semantics with a value-aware tie-break:
-      - One AP per group per tick (global).
-      - Human symbolic tasks are sticky to the same human.
-      - Physical tasks: NAV/PICKUP are preemptible; SCAN/DROPOFF continue.
-      - Among same-priority preemptible physical tasks, ValueBank is used
-        only to rank tasks; agent choice is still nearest-by-ETA.
+    Random-like allocator with a value-aware tie-break on preemptible physical tasks:
+      - One AP per group per tick.
+      - Humans (symbolic) are sticky; we re-record the same assignment each tick so progress accumulates.
+      - Drones: NAV is preemptible, SCAN continues.
+      - GVs   : PICKUP is preemptible, DROPOFF continues.
+      - Among same-priority preemptible tasks, ValueBank ranks tasks; agent choice remains nearest-by-ETA.
     """
 
     def __init__(
@@ -99,16 +99,18 @@ class RLAllocator:
         assigned_agents: Set[Agent] = set()
         claimed_groups: Set[str] = set()
 
-        # ---- 0) Human symbolic continuation (sticky) ----
+        # ---- 0) Human symbolic continuation (sticky with re-record) ----
         for h in self.agents_by_type.get("humans", []):
             task = getattr(h, "current_symbolic_task", None)
             if not task:
                 continue
-            # assign again only if still unlocked and not yet satisfied this tick
             if (task in unlocked) and (task not in completed_set) and (task not in aps):
                 role = self.spec.get_required_role_by_ap(task)
                 group = getattr(self.binding_manager, "task_to_group", {}).get(task)
                 if group in claimed_groups:
+                    # already satisfied by the group this tick; still add action for timeline
+                    actions[h] = task
+                    assigned_agents.add(h)
                     continue
                 ok = False
                 try:
@@ -120,10 +122,11 @@ class RLAllocator:
                     assigned_agents.add(h)
                     if group:
                         claimed_groups.add(group)
-                else:
-                    # allow reallocation if binding fails
-                    if hasattr(h, "reset_symbolic"):
-                        h.reset_symbolic()
+                # Do not reset symbolic on failure; keep previous progress/state.
+            else:
+                # task no longer eligible → allow reallocation from scratch
+                if hasattr(h, "reset_symbolic"):
+                    h.reset_symbolic()
 
         # ---- 1) Non-preemptible physical continuation (SCAN/DROPOFF) ----
         def _continue_non_preemptible(agent_type: str):
@@ -210,7 +213,7 @@ class RLAllocator:
 
         _sort_preemptible(drone_tasks)   # includes NAV (preemptible)
         _sort_preemptible(gv_pickups)    # PICKUP (preemptible)
-        # gv_dropoffs remain in natural order (typically continuation handles them)
+        # gv_dropoffs remain in natural order (continuation usually covers them)
 
         # ---- 4) Greedy assignment for physical tasks ----
         def _assign_physical(tasks: List[Tuple[int, str, str, str, int, str]], agent_type: str):
@@ -266,12 +269,12 @@ class RLAllocator:
         _assign_physical(gv_pickups, "gvs")
         _assign_physical(gv_dropoffs, "gvs")
 
-        # ---- 5) Assign symbolic tasks (non-sticky start) ----
+        # ---- 5) Assign new symbolic tasks (start) ----
         free_humans: List[Agent] = [h for h in self.agents_by_type.get("humans", []) if h not in assigned_agents]
         for group, t in pending_symb:
             if group in claimed_groups:
                 continue
-            # If already bound human exists and is free, keep them
+            # prefer an already bound human, if free
             bound_h: Optional[Agent] = None
             try:
                 bound_h = self.binding_manager.get_bound_agent_for_group(group, agent_type="humans")
@@ -283,7 +286,6 @@ class RLAllocator:
                 target_h = bound_h
             elif free_humans:
                 target_h = free_humans.pop(0)
-
             if target_h is None:
                 continue
 
