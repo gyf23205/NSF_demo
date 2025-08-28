@@ -1,5 +1,7 @@
 import sys
-sys.path.append('C:/Users/sooyung/Research/NSF_demo')
+from pathlib import Path
+my_path = str(Path(__file__).resolve().parent.parent)
+sys.path.append(my_path)
 import pygame
 import csv, random
 import math
@@ -443,7 +445,7 @@ if __name__ == "__main__":
 
         # === GameMgr for rendering ===
         game_mgr = GameMgr(drones, gvs, humans, ws)
-        set_always_on_top(True)
+        # set_always_on_top(True)
 
         # === Get drone start positions in GUI space ===
         takeoff_positions = [agent.pos[:2] for agent in agents_by_type["drones"]]
