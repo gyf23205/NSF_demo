@@ -12,4 +12,4 @@ python online_data_collector.py --gaze-dir "[YOUR OPENFACE CSV LOCATION]" --ecg-
 
 
 Terminal 3:
-python data_aggregator.py --gaze-csv gaze_cleaned.csv --ecg-csv "[YOUR ECG CSV LOCATION]"
+python data_aggregator_feature.py --gaze-csv gaze_cleaned.csv --ecg-csv "[YOUR ECG CSV LOCATION]"

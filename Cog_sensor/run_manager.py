@@ -7,7 +7,7 @@ scripts = {
     "script2": ["python", "online_data_collector.py", "--gaze-dir",
                 "C:/Users/JW Choi/Desktop/WE_transformer/data_collection/openface", "--ecg-csv",
                 "C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/JW_record/ecg_log.csv"],
-    "script3": ["python", "data_aggregator.py", "--gaze-csv", "C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/gaze_cleaned.csv", 
+    "script3": ["python", "data_aggregator_feature.py", "--gaze-csv", "C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/gaze_cleaned.csv", 
                 "--ecg-csv", "C:/Users/JW Choi/Desktop/NSF_2025_demo/dataset/JW_record/ecg_log.csv"]
             }
 
