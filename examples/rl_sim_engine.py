@@ -88,7 +88,7 @@ class MetricsRecorder:
                 self.ap_first_assign_t[ap] = t
                 self.ap_assigned_to[ap] = agent.label
             # Count symbolic task switches
-            cur = getattr(agent, "current_symbolic_tak", None)
+            cur = getattr(agent, "current_symbolic_task", None)
             prev = self.agent_prev_task.get(agent.label, None)
             if cur is not None and prev is not None and cur != prev:
                 self.agent_switches[agent.label] += 1
